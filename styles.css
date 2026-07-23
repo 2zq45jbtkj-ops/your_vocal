@@ -1,0 +1,273 @@
+/* Домашка по вокалу — фирменная палитра */
+:root {
+  --bg: #F2ECE7;          /* кремовый фон */
+  --primary: #6C91A6;     /* сине-серый */
+  --accent: #AE5F3F;      /* терракотовый */
+  --soft-blue: #B8CCD9;   /* светлая подложка 1 */
+  --soft-terra: #D6A289;  /* светлая подложка 2 */
+  --card: #FBF8F5;
+  --ink: #3B3530;
+  --muted: #8C8378;
+  --line: #E4DCD3;
+  --radius: 14px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.wrap {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: calc(14px + env(safe-area-inset-top)) 16px calc(48px + env(safe-area-inset-bottom));
+}
+
+h1 { font-size: 1.45rem; line-height: 1.25; margin: 0 0 4px; }
+h2 { font-size: 1.1rem; margin: 0; }
+h3 { font-size: 1rem; margin: 18px 0 6px; color: var(--accent); }
+p { margin: 0 0 10px; }
+
+/* ---------- главный экран ---------- */
+.home-head { margin-bottom: 18px; }
+.subtitle { color: var(--muted); margin: 0; font-size: 0.92rem; }
+
+.lesson-list { display: flex; flex-direction: column; gap: 10px; }
+
+.lesson-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 13px 14px;
+  text-decoration: none;
+  color: inherit;
+}
+.lesson-card:active { background: #F5EFE9; }
+.lesson-card.locked { opacity: 0.62; }
+
+.lesson-num {
+  flex: 0 0 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--soft-blue);
+  color: var(--primary);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lesson-card.locked .lesson-num { background: #E7E0D8; color: var(--muted); }
+
+.lesson-info { flex: 1; min-width: 0; }
+.lesson-count { font-size: 0.78rem; color: var(--muted); }
+.lesson-title { font-weight: 600; }
+.lesson-title.muted { color: var(--muted); font-weight: 500; }
+
+.lesson-arrow { color: var(--primary); font-size: 1.4rem; line-height: 1; }
+
+.badge {
+  font-size: 0.72rem;
+  color: var(--accent);
+  background: var(--soft-terra);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-weight: 600;
+}
+
+/* ---------- экран урока ---------- */
+.back-link {
+  display: inline-block;
+  color: var(--primary);
+  text-decoration: none;
+  font-size: 0.92rem;
+  margin-bottom: 10px;
+}
+.lesson-head { margin-bottom: 16px; }
+
+.block {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 14px;
+}
+
+.block-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.block-ico {
+  flex: 0 0 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.block-ico svg { width: 19px; height: 19px; }
+.ico-blue { background: var(--soft-blue); color: var(--primary); }
+.ico-terra { background: var(--soft-terra); color: var(--accent); }
+
+/* ---------- тест ---------- */
+.q { margin-bottom: 16px; }
+.q-text { font-weight: 600; margin-bottom: 8px; }
+.q-opts { display: flex; flex-direction: column; gap: 6px; }
+
+.opt {
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: #fff;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+.opt.sel { border-color: var(--primary); background: #EEF3F6; }
+.opt.right { border-color: var(--primary); background: var(--soft-blue); }
+.opt.wrong { border-color: var(--accent); background: var(--soft-terra); }
+
+.btn {
+  display: block;
+  width: 100%;
+  font: inherit;
+  font-weight: 600;
+  color: #fff;
+  background: var(--primary);
+  border: none;
+  border-radius: 10px;
+  padding: 12px;
+  cursor: pointer;
+  margin-top: 4px;
+}
+.btn:active { opacity: 0.85; }
+.btn.ghost {
+  background: transparent;
+  color: var(--primary);
+  border: 1.5px solid var(--soft-blue);
+}
+
+.quiz-result {
+  margin-top: 10px;
+  background: var(--soft-blue);
+  color: var(--ink);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-weight: 600;
+  text-align: center;
+}
+.hidden { display: none; }
+
+/* ---------- распевки ---------- */
+.chant {
+  display: flex;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.chant:last-of-type { border-bottom: none; padding-bottom: 0; }
+.chant-info { flex: 1; min-width: 0; }
+.chant-topic { font-weight: 600; }
+.chant-desc { font-size: 0.88rem; color: var(--muted); margin-top: 1px; }
+.chant audio { width: 100%; margin-top: 8px; }
+.chant-soon {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  background: #EDE6DE;
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+/* ---------- упражнение с песней ---------- */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 10px 0;
+}
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+
+.mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  margin: 0 2px;
+  vertical-align: baseline;
+}
+.mark-full { background: var(--soft-terra); color: var(--accent); }
+.mark-catch { background: var(--soft-blue); color: var(--primary); }
+
+.song-example {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 8px 0 4px;
+}
+.song-example .x-line { margin-bottom: 4px; }
+
+.excerpt {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-top: 10px;
+}
+.excerpt-title { font-weight: 600; margin-bottom: 8px; }
+
+.x-line { margin-bottom: 6px; line-height: 1.9; }
+.w { display: inline; }
+
+.gap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 22px;
+  margin: 0 1px;
+  padding: 0 2px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #C9BFB4;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  vertical-align: baseline;
+}
+.gap.full { background: var(--soft-terra); color: var(--accent); font-weight: 700; }
+.gap.catch { background: var(--soft-blue); color: var(--primary); font-weight: 700; }
+
+.excerpt .btn.ghost { margin-top: 10px; }
+
+.hint { font-size: 0.85rem; color: var(--muted); margin: 8px 0; }
+
+.error {
+  color: var(--accent);
+  font-weight: 600;
+  text-align: center;
+  padding: 24px 16px;
+}
