@@ -1,0 +1,11 @@
+{
+  "total": 30,
+  "lessons": [
+    {
+      "id": 1,
+      "title": "Дыхание",
+      "ready": true,
+      "file": "data/lesson-01.json"
+    }
+  ]
+}
