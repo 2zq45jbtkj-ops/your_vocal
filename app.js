@@ -1,381 +1,687 @@
-/* Домашка по вокалу — Telegram Mini App (без сборки).
-   Роутинг: #/ — список уроков, #/lesson/1 — урок.
-   Контент лежит в data/, код менять не нужно. */
+/* Курс вокала — Telegram Mini App (без сборки).
+   Экраны и поведение перенесены из дизайн-хэндоффа один в один.
+   Контент урока лежит в data/, код менять не нужно. */
 
 "use strict";
 
 var tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
 var app = document.getElementById("app");
 
-var lessonsIndex = null;
-var lessonCache = {};
+var TOTAL_LESSONS = 30;
+var LESSON = null; // data/lesson-01.json
 
-/* ---------- утилиты ---------- */
+/* ---------- состояние ---------- */
+
+var state = {
+  screen: "tg",
+  tgId: "", firstName: "", lastName: "",
+  quizIndex: 0, quizAnswers: [], quizScore: 0,
+  quizDone: false, warmupsDone: false, songDone: false,
+  warmupFile: null, songFile: null,
+  selectedMark: null, songMarks: {},
+  // transient (не сохраняется):
+  playerIdx: null, playerElapsed: 0, durations: {},
+  cameraStage: "idle", recordSeconds: 0
+};
+
+var audioEls = {};
+var stream = null, recorder = null, recChunks = [], recTimer = null;
+
+function saveState() {
+  try {
+    localStorage.setItem("vocal-app", JSON.stringify({
+      tgId: state.tgId, firstName: state.firstName, lastName: state.lastName,
+      quizIndex: state.quizIndex, quizAnswers: state.quizAnswers,
+      quizScore: state.quizScore, quizDone: state.quizDone,
+      warmupsDone: state.warmupsDone, songDone: state.songDone,
+      warmupFile: state.warmupFile, songFile: state.songFile,
+      songMarks: state.songMarks
+    }));
+  } catch (e) {}
+}
+
+function loadState() {
+  try {
+    var raw = localStorage.getItem("vocal-app");
+    if (!raw) return;
+    var s = JSON.parse(raw);
+    for (var k in s) { if (Object.prototype.hasOwnProperty.call(s, k)) state[k] = s[k]; }
+    if (state.tgId && state.firstName && state.lastName) state.screen = "courses";
+  } catch (e) {}
+}
 
 function esc(s) {
   return String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-function storeGet(key) {
-  try {
-    return JSON.parse(localStorage.getItem(key)) || {};
-  } catch (e) {
-    return {};
-  }
-}
+/* ---------- SVG ---------- */
 
-function storeSet(key, value) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch (e) { /* приватный режим — молча пропускаем */ }
-}
-
-function storeRemove(key) {
-  try { localStorage.removeItem(key); } catch (e) {}
-}
-
-function loadJSON(path) {
-  return fetch(path).then(function (r) {
-    if (!r.ok) throw new Error("HTTP " + r.status + " " + path);
-    return r.json();
-  });
-}
-
-/* ---------- иконки блоков ---------- */
-
-var ICONS = {
-  mic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="10" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="21"/><line x1="9" y1="21" x2="15" y2="21"/></svg>',
-  notes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>',
-  pencil: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-9"/><path d="M17.5 2.5a2.1 2.1 0 0 1 3 3L13 13l-4 1 1-4Z"/></svg>'
+var SVG = {
+  back: '<svg width="11" height="18" viewBox="0 0 11 18" fill="none"><path d="M9 1L2 9l7 8" stroke="#6C91A6" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  telegram: '<svg width="52" height="52" viewBox="0 0 240 240" xmlns="http://www.w3.org/2000/svg"><linearGradient id="tgg" x1="53.72" y1="49" x2="191" y2="186" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#37aee2"/><stop offset="1" stop-color="#1e96c8"/></linearGradient><circle cx="120" cy="120" r="120" fill="url(#tgg)"/><path fill="#c8daea" d="M98 175c-3.888 0-3.227-1.468-4.568-5.17L82 132.207 152.988 87"/><path fill="#a9c9dd" d="M98 175c3 0 4.325-1.372 6-3l16-15.558-19.958-12.035"/><path fill="#fff" d="M100.04 154.41l48.36 35.729c5.519 3.045 9.501 1.468 10.876-5.123l19.685-92.788c1.977-8.085-3.077-11.746-8.359-9.32l-115.59 44.571c-7.891 3.165-7.843 7.567-1.438 9.523l29.663 9.259 68.673-43.325c3.242-1.966 6.218-.909 3.776 1.258"/></svg>',
+  lock: '<svg width="14" height="16" viewBox="0 0 14 16" fill="none"><rect x="1" y="7" width="12" height="8" rx="2" stroke="#AEB6BB" stroke-width="1.5"/><path d="M4 7V4.5a3 3 0 016 0V7" stroke="#AEB6BB" stroke-width="1.5"/></svg>',
+  chevron: '<svg width="8" height="14" viewBox="0 0 8 14" fill="none"><path d="M1 1l6 6-6 6" stroke="#C7CDD1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  stepCheck: '<svg width="13" height="10" viewBox="0 0 13 10" fill="none"><path d="M1 5l4 4 7-8" stroke="#FBEFE8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  doc: '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="2" y="1" width="10" height="12" rx="1.5" stroke="#F2ECE7" stroke-width="1.4"/><path d="M4.5 5h5M4.5 7.5h5M4.5 10h3" stroke="#F2ECE7" stroke-width="1.2" stroke-linecap="round"/></svg>',
+  resultCheck: '<svg width="26" height="20" viewBox="0 0 26 20" fill="none"><path d="M2 10l8 8L24 2" stroke="#1F3A47" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  seekBack: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 4v6h6" stroke="#6C91A6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 15a8 8 0 1 0 2-9.5L4 10" stroke="#6C91A6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><text x="12" y="17.5" font-size="7.5" font-weight="700" fill="#6C91A6" text-anchor="middle">10</text></svg>',
+  seekFwd: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M20 4v6h-6" stroke="#6C91A6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M19.5 15a8 8 0 1 1-2-9.5L20 10" stroke="#6C91A6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><text x="12" y="17.5" font-size="7.5" font-weight="700" fill="#6C91A6" text-anchor="middle">10</text></svg>',
+  play: '<svg width="12" height="14" viewBox="0 0 12 14" fill="none"><path d="M1 1l10 6-10 6V1z" fill="#F2ECE7"/></svg>',
+  pause: '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="1" width="4" height="10" rx="1" fill="#F2ECE7"/><rect x="7" y="1" width="4" height="10" rx="1" fill="#F2ECE7"/></svg>',
+  camera: '<svg width="20" height="16" viewBox="0 0 20 16" fill="none"><rect x="1" y="2" width="13" height="12" rx="2.5" stroke="#F2ECE7" stroke-width="1.5"/><path d="M14 6.5l5-3v9l-5-3" stroke="#F2ECE7" stroke-width="1.5" stroke-linejoin="round"/></svg>',
+  upload: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 11V2m0 0L4.5 5.5M8 2l3.5 3.5" stroke="#3E5866" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12v1a2 2 0 002 2h8a2 2 0 002-2v-1" stroke="#3E5866" stroke-width="1.6" stroke-linecap="round"/></svg>',
+  uploadTerra: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 11V2m0 0L4.5 5.5M8 2l3.5 3.5" stroke="#5A3B26" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12v1a2 2 0 002 2h8a2 2 0 002-2v-1" stroke="#5A3B26" stroke-width="1.6" stroke-linecap="round"/></svg>',
+  hwCheck: '<svg width="15" height="12" viewBox="0 0 15 12" fill="none"><path d="M1 6l4 4 9-9" stroke="#1F3A47" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  micIcon: function (color) { return '<svg width="12" height="16" viewBox="0 0 12 16" fill="none"><rect x="3" y="1" width="6" height="10" rx="3" stroke="' + color + '" stroke-width="1.4"/><path d="M1.5 8.5a4.5 4.5 0 009 0M6 13v2" stroke="' + color + '" stroke-width="1.4" stroke-linecap="round"/></svg>'; },
+  notesIcon: function (color) { return '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="4" cy="11" r="2.2" stroke="' + color + '" stroke-width="1.4"/><circle cx="11" cy="9" r="2.2" stroke="' + color + '" stroke-width="1.4"/><path d="M6.2 11V2.5L13.2 1v6.5" stroke="' + color + '" stroke-width="1.4"/></svg>'; }
 };
 
-function blockHead(iconName, iconClass, title) {
-  return '<div class="block-head">' +
-    '<span class="block-ico ' + iconClass + '">' + ICONS[iconName] + '</span>' +
-    '<h2>' + esc(title) + '</h2>' +
-    '</div>';
+function backBtn(handlerName) {
+  return '<button class="back-btn" data-act="' + handlerName + '">' + SVG.back + "</button>";
 }
 
-/* ---------- данные ---------- */
+/* ---------- навигация ---------- */
 
-function getIndex() {
-  if (lessonsIndex) return Promise.resolve(lessonsIndex);
-  return loadJSON("data/lessons.json").then(function (data) {
-    lessonsIndex = data;
-    return data;
+function go(screen) {
+  state.screen = screen;
+  render();
+}
+
+function backTarget() {
+  switch (state.screen) {
+    case "name": return "tg";
+    case "lesson-home": return "courses";
+    case "lecture": case "warmups": case "song": case "quiz-result": return "lesson-home";
+    case "quiz": return null; // отдельная логика
+    default: return null;
+  }
+}
+
+function handleBack() {
+  if (state.screen === "quiz") {
+    if (state.quizIndex > 0) { state.quizIndex--; render(); }
+    else go("lesson-home");
+    return;
+  }
+  var t = backTarget();
+  if (t) go(t);
+}
+
+/* ---------- экраны ---------- */
+
+function renderTg() {
+  app.innerHTML =
+    '<div class="auth-screen">' +
+      '<div class="auth-logo">' + SVG.telegram + "</div>" +
+      '<div class="auth-title">Вход в курс</div>' +
+      '<div class="auth-sub">Введите ваш Telegram ID — так преподаватель свяжет аккаунт с вашим профилем ученика.</div>' +
+      '<label class="field-label">TELEGRAM ID</label>' +
+      '<input id="tg-input" class="field-input" type="text" placeholder="@username" value="' + esc(state.tgId) + '">' +
+      '<div class="spacer"></div>' +
+      '<button id="tg-next" class="cta"' + (state.tgId.trim() ? "" : " disabled") + ">Продолжить</button>" +
+    "</div>";
+
+  var input = document.getElementById("tg-input");
+  var btn = document.getElementById("tg-next");
+  input.addEventListener("input", function () {
+    state.tgId = input.value;
+    btn.disabled = !state.tgId.trim();
   });
+  btn.addEventListener("click", function () { saveState(); go("name"); });
 }
 
-function getLesson(id) {
-  if (lessonCache[id]) return Promise.resolve(lessonCache[id]);
-  return getIndex().then(function (idx) {
-    var meta = null;
-    for (var i = 0; i < idx.lessons.length; i++) {
-      if (idx.lessons[i].id === id) { meta = idx.lessons[i]; break; }
+function renderName() {
+  app.innerHTML =
+    '<div class="auth-screen">' +
+      backBtn("back") +
+      '<div class="auth-title">Как вас зовут?</div>' +
+      '<div class="auth-sub tight">Укажите имя и фамилию на русском — так вас увидит преподаватель.</div>' +
+      '<label class="field-label">ИМЯ</label>' +
+      '<input id="fn-input" class="field-input mb" type="text" placeholder="Мария" value="' + esc(state.firstName) + '">' +
+      '<label class="field-label">ФАМИЛИЯ</label>' +
+      '<input id="ln-input" class="field-input" type="text" placeholder="Иванова" value="' + esc(state.lastName) + '">' +
+      '<div class="spacer"></div>' +
+      '<button id="name-next" class="cta"' + (state.firstName.trim() && state.lastName.trim() ? "" : " disabled") + ">Начать обучение</button>" +
+    "</div>";
+
+  var fn = document.getElementById("fn-input");
+  var ln = document.getElementById("ln-input");
+  var btn = document.getElementById("name-next");
+  function upd() {
+    state.firstName = fn.value;
+    state.lastName = ln.value;
+    btn.disabled = !(state.firstName.trim() && state.lastName.trim());
+  }
+  fn.addEventListener("input", upd);
+  ln.addEventListener("input", upd);
+  btn.addEventListener("click", function () { saveState(); go("courses"); });
+  wireActs();
+}
+
+function renderCourses() {
+  var items = "";
+  for (var i = 1; i <= TOTAL_LESSONS; i++) {
+    if (i === 1) {
+      items +=
+        '<div class="lesson-card" data-act="open-lesson">' +
+          '<div class="lesson-dot" style="background:#6C91A6;">1</div>' +
+          '<div class="lesson-body">' +
+            '<div class="lesson-name">' + esc(LESSON.title) + "</div>" +
+            '<div class="lesson-sub">' + (state.songDone ? "Пройден" : "В процессе") + "</div>" +
+          "</div>" + SVG.chevron +
+        "</div>";
+    } else {
+      items +=
+        '<div class="lesson-card locked">' +
+          '<div class="lesson-dot" style="background:#F2ECE7;">' + SVG.lock + "</div>" +
+          '<div class="lesson-body">' +
+            '<div class="lesson-name">Урок ' + i + "</div>" +
+            '<div class="lesson-sub">Скоро</div>' +
+          "</div>" +
+        "</div>";
     }
-    if (!meta || !meta.ready) throw new Error("lesson not ready");
-    return loadJSON(meta.file).then(function (data) {
-      lessonCache[id] = data;
-      return data;
+  }
+  app.innerHTML =
+    '<div class="courses-head">' +
+      '<div class="courses-title">Курс вокала</div>' +
+      '<div class="courses-sub">30 уроков · ' + esc(state.lastName) + " " + esc(state.firstName) + "</div>" +
+    "</div>" +
+    '<div class="courses-list">' + items + "</div>";
+  wireActs();
+}
+
+function stepRow(opts) {
+  var dot = '<div class="step-dot" style="background:' + opts.dotBg + ';">' + opts.icon + "</div>";
+  return '<div class="step-row' + (opts.locked ? " locked" : "") + '" data-act="' + opts.act + '">' +
+    '<div class="step-rail">' + dot + (opts.last ? "" : '<div class="step-line"></div>') + "</div>" +
+    '<div class="step-body' + (opts.last ? " last" : "") + '">' +
+      '<div class="step-name' + (opts.lockedText ? " locked" : "") + '">' + opts.name + "</div>" +
+      '<div class="step-sub">' + opts.sub + "</div>" +
+    "</div></div>";
+}
+
+function renderLessonHome() {
+  var s = state;
+  var subs = LESSON.stepSubtitles;
+  app.innerHTML =
+    '<div class="top pb8">' + backBtn("back") +
+      '<div><div class="top-title lg">' + esc(LESSON.title) + '</div><div class="top-sub">Урок 1 из ' + TOTAL_LESSONS + "</div></div>" +
+    "</div>" +
+    '<div class="stepper">' +
+      stepRow({ act: "go-lecture", dotBg: "#AE5F3F", icon: SVG.stepCheck, name: "Лекция «" + esc(LESSON.title) + "»", sub: subs.lecture }) +
+      stepRow({ act: "go-quiz", dotBg: s.quizDone ? "#AE5F3F" : "#6C91A6", icon: s.quizDone ? SVG.stepCheck : SVG.doc, name: "Тест", sub: s.quizDone ? "Пройден · " + s.quizScore + "/" + LESSON.quiz.questions.length : subs.quiz }) +
+      stepRow({ act: "go-warmups", locked: !s.quizDone, lockedText: !(s.quizDone || s.warmupsDone),
+        dotBg: s.warmupsDone ? "#AE5F3F" : (s.quizDone ? "#6C91A6" : "#fff"),
+        icon: s.warmupsDone ? SVG.stepCheck : SVG.micIcon(s.quizDone ? "#F2ECE7" : "#AEB6BB"),
+        name: "Распевки «" + esc(LESSON.title) + "»", sub: subs.warmups }) +
+      stepRow({ act: "go-song", locked: !s.warmupsDone, lockedText: !s.warmupsDone, last: true,
+        dotBg: s.warmupsDone ? "#6C91A6" : "#fff",
+        icon: SVG.notesIcon(s.warmupsDone ? "#F2ECE7" : "#AEB6BB"),
+        name: "Упражнение с песней", sub: subs.song }) +
+    "</div>";
+  wireActs();
+}
+
+function stepHeader(title, stepNum, pct) {
+  return '<div class="top">' + backBtn("back") +
+      "<div><div class=\"top-title\">" + title + '</div><div class="top-sub">' + esc(LESSON.title) + " · шаг " + stepNum + ' из 4</div></div></div>' +
+    '<div class="step-progress-wrap' + (pct === 50 ? " tight" : "") + '"><div class="step-progress"><div style="width:' + pct + '%;"></div></div></div>';
+}
+
+function renderLecture() {
+  var html = stepHeader("Лекция «" + esc(LESSON.title) + "»", 1, 25);
+  html += '<div class="lecture-body">';
+  var num = 0;
+  var first = true;
+  LESSON.lecture.blocks.forEach(function (blk) {
+    if (blk.type === "header") {
+      html += '<div class="section-label' + (first ? "" : " mt") + '">' + esc(blk.text) + "</div>";
+      first = false;
+    } else if (blk.type === "point") {
+      num++;
+      html += '<div class="point"><span class="point-num">' + num + "</span><div><b>" + esc(blk.b) + "</b><p>" + esc(blk.p) + "</p></div></div>";
+    } else if (blk.type === "note") {
+      html += '<div class="lecture-note">' + esc(blk.text) + "</div>";
+    }
+  });
+  html += "</div>";
+  html += '<div class="bottom-cta"><button class="cta" data-act="go-quiz">Пройти тест</button></div>';
+  app.innerHTML = html;
+  wireActs();
+}
+
+function renderQuiz() {
+  var s = state;
+  var questions = LESSON.quiz.questions;
+  var cq = questions[s.quizIndex];
+  var answered = s.quizAnswers[s.quizIndex];
+  var hasAnswer = answered !== null && answered !== undefined;
+  var isLast = s.quizIndex === questions.length - 1;
+
+  var optsHtml = "";
+  cq.opts.forEach(function (text, i) {
+    optsHtml += '<div class="quiz-opt' + (answered === i ? " sel" : "") + '" data-opt="' + i + '">' +
+      '<div class="quiz-radio"></div><span>' + esc(text) + "</span></div>";
+  });
+
+  app.innerHTML =
+    stepHeader("Тест", 2, 50) +
+    '<div class="quiz-body">' +
+      '<div class="quiz-counter-row"><span class="quiz-counter">Вопрос ' + (s.quizIndex + 1) + " из " + questions.length + "</span></div>" +
+      '<div class="quiz-progress"><div style="width:' + Math.round(((s.quizIndex + 1) / questions.length) * 100) + '%;"></div></div>' +
+      '<div class="quiz-card">' +
+        '<div class="quiz-q">' + esc(cq.q) + "</div>" + optsHtml +
+      "</div>" +
+    "</div>" +
+    '<div class="quiz-cta-wrap"><button id="quiz-next" class="cta' + (isLast ? " terra" : "") + '"' + (hasAnswer ? "" : " disabled") + ">" + (isLast ? "Завершить" : "Далее") + "</button></div>";
+
+  Array.prototype.forEach.call(app.querySelectorAll(".quiz-opt"), function (el) {
+    el.addEventListener("click", function () {
+      state.quizAnswers[state.quizIndex] = parseInt(el.getAttribute("data-opt"), 10);
+      saveState();
+      render();
     });
   });
+  document.getElementById("quiz-next").addEventListener("click", function () {
+    if (!hasAnswer) return;
+    if (!isLast) { state.quizIndex++; render(); return; }
+    var score = 0;
+    questions.forEach(function (q, i) { if (state.quizAnswers[i] === q.correct) score++; });
+    state.quizDone = true;
+    state.quizScore = score;
+    saveState();
+    go("quiz-result");
+  });
+  wireActs();
 }
 
-/* ---------- роутер ---------- */
+function renderQuizResult() {
+  app.innerHTML =
+    '<div class="result-screen">' +
+      '<div class="result-badge">' + SVG.resultCheck + "</div>" +
+      '<div class="result-title">Тест пройден</div>' +
+      '<div class="result-sub">Результат: ' + state.quizScore + " из " + LESSON.quiz.questions.length + "</div>" +
+      '<div class="spacer"></div>' +
+      '<button class="cta terra" data-act="go-warmups-free">Продолжить: распевки</button>' +
+    "</div>";
+  wireActs();
+}
 
-function parseRoute() {
-  var h = location.hash.replace(/^#\/?/, "");
-  if (h.indexOf("lesson/") === 0) {
-    var id = parseInt(h.slice(7), 10);
-    if (!isNaN(id)) return { view: "lesson", id: id };
+/* ---------- распевки ---------- */
+
+function fmtTime(sec) {
+  return Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0");
+}
+
+function warmupTimeLabel(ex) {
+  var playing = state.playerIdx === ex.n;
+  var dur = state.durations[ex.n] || 0;
+  if (playing) return fmtTime(state.playerElapsed) + " / " + fmtTime(dur);
+  return dur ? fmtTime(dur) : ex.time;
+}
+
+function renderWarmups() {
+  var cards = "";
+  LESSON.warmups.exercises.forEach(function (ex) {
+    cards +=
+      '<div class="warmup-card">' +
+        '<div class="warmup-row">' +
+          '<button class="seek-btn" data-seek="-10" data-n="' + ex.n + '">' + SVG.seekBack + "</button>" +
+          '<button class="play-btn" id="play-' + ex.n + '" data-n="' + ex.n + '">' + SVG.play + "</button>" +
+          '<button class="seek-btn" data-seek="10" data-n="' + ex.n + '">' + SVG.seekFwd + "</button>" +
+          '<div class="warmup-labels">' +
+            '<div class="warmup-label">' + esc(ex.label1) + "</div>" +
+            (ex.label2 ? '<div class="warmup-label">' + esc(ex.label2) + "</div>" : "") +
+          "</div>" +
+          '<div class="warmup-time" id="time-' + ex.n + '">' + warmupTimeLabel(ex) + "</div>" +
+        "</div>" +
+        '<p class="warmup-sub">' + esc(ex.sub) + "</p>" +
+        '<audio id="audio-' + ex.n + '" src="' + esc(ex.src) + '" preload="metadata" style="display:none;"></audio>' +
+      "</div>";
+  });
+
+  app.innerHTML =
+    stepHeader("Распевки «" + esc(LESSON.title) + "»", 3, 75) +
+    '<div class="warmups-body">' +
+      '<div class="instruction-note">' + LESSON.warmups.instruction + "</div>" +
+      cards +
+      '<div class="tempo-note">' + esc(LESSON.warmups.tempoLinkText) + ' <a href="' + esc(LESSON.warmups.tempoLinkUrl) + '" target="_blank">' + esc(LESSON.warmups.tempoLinkLabel) + "</a></div>" +
+      '<div class="section-label" style="margin:0 0 8px;">Отправка видео</div>' +
+      '<div id="hw-zone"></div>' +
+    "</div>" +
+    '<div class="bottom-cta" style="padding-top:0;"><button class="cta" data-act="finish-warmups">Продолжить: упражнение с песней</button></div>';
+
+  LESSON.warmups.exercises.forEach(function (ex) {
+    var el = document.getElementById("audio-" + ex.n);
+    audioEls[ex.n] = el;
+    el.addEventListener("loadedmetadata", function () {
+      state.durations[ex.n] = Math.round(el.duration) || 0;
+      var t = document.getElementById("time-" + ex.n);
+      if (t) t.textContent = warmupTimeLabel(ex);
+    });
+    el.addEventListener("timeupdate", function () {
+      if (state.playerIdx === ex.n) {
+        state.playerElapsed = Math.floor(el.currentTime);
+        var t = document.getElementById("time-" + ex.n);
+        if (t) t.textContent = warmupTimeLabel(ex);
+      }
+    });
+    el.addEventListener("ended", function () {
+      if (state.playerIdx === ex.n) {
+        state.playerIdx = null;
+        state.playerElapsed = 0;
+        updatePlayBtn(ex);
+      }
+    });
+  });
+
+  Array.prototype.forEach.call(app.querySelectorAll(".play-btn"), function (btn) {
+    btn.addEventListener("click", function () {
+      var n = parseInt(btn.getAttribute("data-n"), 10);
+      toggleAudio(n);
+    });
+  });
+  Array.prototype.forEach.call(app.querySelectorAll(".seek-btn"), function (btn) {
+    btn.addEventListener("click", function () {
+      var n = parseInt(btn.getAttribute("data-n"), 10);
+      var delta = parseInt(btn.getAttribute("data-seek"), 10);
+      var el = audioEls[n];
+      if (!el) return;
+      if (delta < 0) el.currentTime = Math.max(0, el.currentTime + delta);
+      else el.currentTime = Math.min(el.duration || el.currentTime + delta, el.currentTime + delta);
+      if (state.playerIdx === n) {
+        state.playerElapsed = Math.floor(el.currentTime);
+        var ex = LESSON.warmups.exercises[n - 1];
+        var t = document.getElementById("time-" + n);
+        if (t) t.textContent = warmupTimeLabel(ex);
+      }
+    });
+  });
+
+  renderHwZone();
+  wireActs();
+}
+
+function updatePlayBtn(ex) {
+  var btn = document.getElementById("play-" + ex.n);
+  var t = document.getElementById("time-" + ex.n);
+  if (!btn) return;
+  var playing = state.playerIdx === ex.n;
+  btn.className = "play-btn" + (playing ? " playing" : "");
+  btn.innerHTML = playing ? SVG.pause : SVG.play;
+  if (t) t.textContent = warmupTimeLabel(ex);
+}
+
+function toggleAudio(n) {
+  var el = audioEls[n];
+  if (!el) return;
+  var exercises = LESSON.warmups.exercises;
+  if (state.playerIdx === n) {
+    el.pause();
+    state.playerIdx = null;
+    updatePlayBtn(exercises[n - 1]);
+    return;
   }
-  return { view: "home" };
+  var prev = state.playerIdx;
+  Object.keys(audioEls).forEach(function (k) { if (audioEls[k]) audioEls[k].pause(); });
+  el.currentTime = 0;
+  var p = el.play();
+  if (p && p.catch) p.catch(function () {});
+  state.playerIdx = n;
+  state.playerElapsed = 0;
+  if (prev) updatePlayBtn(exercises[prev - 1]);
+  updatePlayBtn(exercises[n - 1]);
+}
+
+/* зона отправки видео (перерисовывается отдельно, не трогая аудио) */
+
+function renderHwZone() {
+  var zone = document.getElementById("hw-zone");
+  if (!zone) return;
+  var s = state;
+
+  if (s.warmupFile) {
+    zone.innerHTML =
+      '<div class="hw-attached">' +
+        '<div class="hw-icon">' + SVG.hwCheck + "</div>" +
+        '<div style="flex:1;">' +
+          '<div class="hw-name">' + esc(s.warmupFile) + "</div>" +
+          '<div class="hw-hint">Видео прикреплено</div>' +
+        "</div>" +
+        '<button class="hw-replace" id="hw-retake">Заменить</button>' +
+      "</div>";
+    document.getElementById("hw-retake").addEventListener("click", function () {
+      state.warmupFile = null;
+      state.cameraStage = "idle";
+      saveState();
+      renderHwZone();
+    });
+    return;
+  }
+
+  if (s.cameraStage === "ready" || s.cameraStage === "recording") {
+    var recording = s.cameraStage === "recording";
+    zone.innerHTML =
+      '<div class="camera-frame">' +
+        '<video id="cam-video" autoplay muted playsinline></video>' +
+        (recording ? '<div class="rec-indicator"><span></span><em id="rec-time" style="font-style:normal;">' + fmtTime(s.recordSeconds) + "</em></div>" : "") +
+      "</div>" +
+      (recording
+        ? '<button class="camera-stop" id="cam-stop">Остановить запись</button>'
+        : '<div class="camera-btns">' +
+            '<button class="camera-cancel" id="cam-cancel">Отмена</button>' +
+            '<button class="camera-start" id="cam-start">Начать запись</button>' +
+          "</div>");
+    var video = document.getElementById("cam-video");
+    if (stream) video.srcObject = stream;
+    if (recording) {
+      document.getElementById("cam-stop").addEventListener("click", stopRecording);
+    } else {
+      document.getElementById("cam-cancel").addEventListener("click", cancelCamera);
+      document.getElementById("cam-start").addEventListener("click", beginRecording);
+    }
+    return;
+  }
+
+  zone.innerHTML =
+    '<div class="hw-choice">' +
+      '<button class="hw-record" id="hw-camera">' + SVG.camera + "Записать в приложении</button>" +
+      '<label class="hw-upload"><input type="file" accept="video/*" id="hw-file" style="display:none;">' + SVG.upload + "Загрузить готовое</label>" +
+    "</div>";
+  document.getElementById("hw-camera").addEventListener("click", startCamera);
+  document.getElementById("hw-file").addEventListener("change", function (e) {
+    var f = e.target.files[0];
+    if (f) { state.warmupFile = f.name; saveState(); renderHwZone(); }
+  });
+}
+
+function startCamera() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    alert("Не удалось получить доступ к камере. Проверьте разрешения браузера.");
+    return;
+  }
+  navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(function (s) {
+    stream = s;
+    state.cameraStage = "ready";
+    renderHwZone();
+  }).catch(function () {
+    alert("Не удалось получить доступ к камере. Проверьте разрешения браузера.");
+  });
+}
+
+function beginRecording() {
+  recChunks = [];
+  try {
+    recorder = new MediaRecorder(stream);
+  } catch (e) {
+    alert("Запись не поддерживается в этом браузере.");
+    return;
+  }
+  recorder.ondataavailable = function (e) { if (e.data.size > 0) recChunks.push(e.data); };
+  recorder.onstop = function () {
+    if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
+    stream = null;
+    clearInterval(recTimer);
+    state.cameraStage = "idle";
+    state.warmupFile = "Видео из приложения";
+    saveState();
+    renderHwZone();
+  };
+  recorder.start();
+  state.cameraStage = "recording";
+  state.recordSeconds = 0;
+  renderHwZone();
+  recTimer = setInterval(function () {
+    state.recordSeconds++;
+    var t = document.getElementById("rec-time");
+    if (t) t.textContent = fmtTime(state.recordSeconds);
+  }, 1000);
+}
+
+function stopRecording() { if (recorder) recorder.stop(); }
+
+function cancelCamera() {
+  if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
+  stream = null;
+  clearInterval(recTimer);
+  state.cameraStage = "idle";
+  state.recordSeconds = 0;
+  renderHwZone();
+}
+
+function stopAllMedia() {
+  Object.keys(audioEls).forEach(function (k) { if (audioEls[k]) audioEls[k].pause(); });
+  audioEls = {};
+  state.playerIdx = null;
+  state.playerElapsed = 0;
+  if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; }
+  clearInterval(recTimer);
+  state.cameraStage = "idle";
+}
+
+/* ---------- упражнение с песней ---------- */
+
+function markCircle(mark, cls) {
+  return '<span class="' + cls + " " + (mark === "V" ? "deep" : "short") + '">' + mark + "</span>";
+}
+
+function renderSong() {
+  var s = state;
+  var song = LESSON.song;
+
+  var exampleHtml = "";
+  song.example.forEach(function (part) {
+    if (part.t !== undefined) exampleHtml += esc(part.t);
+    else exampleHtml += '<span class="marked-word">' + markCircle(part.mark, "word-mark") + esc(part.word) + "</span>";
+  });
+
+  var linesHtml = "";
+  song.lines.forEach(function (line) {
+    var mark = s.songMarks[line.id] || null;
+    var cls = "blank-mark" + (mark ? " set-" + mark : (s.selectedMark ? " armed" : ""));
+    linesHtml +=
+      '<div class="song-line-card mb10">' +
+        esc(line.before) + ' <span class="marked-word">' +
+        '<span class="' + cls + '" data-line="' + line.id + '">' + (mark || "") + "</span>" +
+        esc(line.word) + "</span> " + esc(line.after) +
+      "</div>";
+  });
+
+  app.innerHTML =
+    stepHeader("Упражнение с песней", 4, 100) +
+    '<div class="song-body">' +
+      '<div class="legend-row">' +
+        '<div class="legend-item">' + markCircle("V", "mark-circle") + "глубокий вдох</div>" +
+        '<div class="legend-item">' + markCircle("v", "mark-circle") + "короткий вдох</div>" +
+      "</div>" +
+      '<div class="song-hint">' + esc(song.hint) + "</div>" +
+      '<div class="section-label" style="margin-top:0;">Пример разметки</div>' +
+      '<div class="song-line-card">' + exampleHtml + "</div>" +
+      '<div class="section-label" style="margin-top:0;">Твоя очередь</div>' +
+      '<div class="turn-hint">1. Выбери значок ниже → 2. коснись места в строке, где нужен вдох</div>' +
+      '<div class="chips-row">' +
+        '<div class="chip' + (s.selectedMark === "V" ? " sel-V" : "") + '" id="chip-V">' + markCircle("V", "mark-circle") + "глубокий</div>" +
+        '<div class="chip' + (s.selectedMark === "v" ? " sel-v" : "") + '" id="chip-v">' + markCircle("v", "mark-circle") + "короткий</div>" +
+      "</div>" +
+      linesHtml +
+      '<label class="photo-upload"><input type="file" accept="image/*" id="song-file" style="display:none;">' +
+        '<div class="hw-icon terra">' + SVG.uploadTerra + "</div>" +
+        '<div style="flex:1;">' +
+          '<div class="hw-name">' + esc(s.songFile || "Загрузить фото разметки") + "</div>" +
+          '<div class="hw-hint">' + (s.songFile ? "Файл выбран ✓" : "JPG, PNG — фото листа с разметкой") + "</div>" +
+        "</div>" +
+      "</label>" +
+    "</div>" +
+    '<div class="final-cta-wrap"><button class="cta terra" data-act="finish-lesson">Завершить урок</button></div>';
+
+  document.getElementById("chip-V").addEventListener("click", function () {
+    state.selectedMark = state.selectedMark === "V" ? null : "V";
+    render();
+  });
+  document.getElementById("chip-v").addEventListener("click", function () {
+    state.selectedMark = state.selectedMark === "v" ? null : "v";
+    render();
+  });
+  Array.prototype.forEach.call(app.querySelectorAll(".blank-mark"), function (el) {
+    el.addEventListener("click", function () {
+      if (!state.selectedMark) return;
+      var id = el.getAttribute("data-line");
+      state.songMarks[id] = state.songMarks[id] === state.selectedMark ? null : state.selectedMark;
+      saveState();
+      render();
+    });
+  });
+  document.getElementById("song-file").addEventListener("change", function (e) {
+    var f = e.target.files[0];
+    if (f) { state.songFile = f.name; saveState(); render(); }
+  });
+  wireActs();
+}
+
+/* ---------- обвязка ---------- */
+
+var ACTS = {
+  "back": handleBack,
+  "open-lesson": function () { go("lesson-home"); },
+  "go-lecture": function () { go("lecture"); },
+  "go-quiz": function () { go("quiz"); },
+  "go-warmups": function () { if (state.quizDone) go("warmups"); },
+  "go-warmups-free": function () { go("warmups"); },
+  "go-song": function () { if (state.warmupsDone) go("song"); },
+  "finish-warmups": function () { state.warmupsDone = true; saveState(); go("song"); },
+  "finish-lesson": function () { state.songDone = true; saveState(); go("lesson-home"); }
+};
+
+function wireActs() {
+  Array.prototype.forEach.call(app.querySelectorAll("[data-act]"), function (el) {
+    el.addEventListener("click", function () {
+      var fn = ACTS[el.getAttribute("data-act")];
+      if (fn) fn();
+    });
+  });
 }
 
 function render() {
-  var route = parseRoute();
+  stopAllMedia();
   window.scrollTo(0, 0);
   if (tg) {
-    if (route.view === "lesson") tg.BackButton.show();
-    else tg.BackButton.hide();
+    if (state.screen === "tg" || state.screen === "courses") tg.BackButton.hide();
+    else tg.BackButton.show();
   }
-  var task = route.view === "lesson" ? renderLesson(route.id) : renderHome();
-  task.catch(function () {
-    app.innerHTML = '<div class="wrap"><div class="error">Не удалось загрузить данные.<br>Проверь соединение и открой заново.</div></div>';
-  });
-}
-
-/* ---------- главный экран ---------- */
-
-function renderHome() {
-  return getIndex().then(function (idx) {
-    var byId = {};
-    idx.lessons.forEach(function (l) { byId[l.id] = l; });
-    var items = "";
-    for (var i = 1; i <= idx.total; i++) {
-      var meta = byId[i];
-      if (meta && meta.ready) {
-        items +=
-          '<a class="lesson-card" href="#/lesson/' + i + '">' +
-            '<div class="lesson-num">' + i + '</div>' +
-            '<div class="lesson-info">' +
-              '<div class="lesson-count">Урок ' + i + ' из ' + idx.total + '</div>' +
-              '<div class="lesson-title">' + esc(meta.title) + '</div>' +
-            '</div>' +
-            '<div class="lesson-arrow">&rsaquo;</div>' +
-          '</a>';
-      } else {
-        items +=
-          '<div class="lesson-card locked">' +
-            '<div class="lesson-num">' + i + '</div>' +
-            '<div class="lesson-info">' +
-              '<div class="lesson-count">Урок ' + i + ' из ' + idx.total + '</div>' +
-              '<div class="lesson-title muted">Скоро</div>' +
-            '</div>' +
-            '<div class="badge">скоро</div>' +
-          '</div>';
-      }
-    }
-    app.innerHTML =
-      '<div class="wrap">' +
-        '<header class="home-head">' +
-          '<h1>Домашка по вокалу</h1>' +
-          '<p class="subtitle">Задания к урокам — проходи блоки по порядку</p>' +
-        '</header>' +
-        '<div class="lesson-list">' + items + '</div>' +
-      '</div>';
-  });
-}
-
-/* ---------- экран урока ---------- */
-
-function renderLesson(id) {
-  return getIndex().then(function (idx) {
-    return getLesson(id).then(function (data) {
-      var b = data.blocks;
-      app.innerHTML =
-        '<div class="wrap">' +
-          '<a class="back-link" href="#/">&lsaquo; Все уроки</a>' +
-          '<header class="lesson-head">' +
-            '<div class="lesson-count">Урок ' + id + ' из ' + idx.total + '</div>' +
-            '<h1>' + esc(data.title) + '</h1>' +
-          '</header>' +
-          '<section class="block">' + lectureHTML(b.lecture) + '</section>' +
-          '<section class="block">' +
-            blockHead("pencil", "ico-terra", b.quiz.title) +
-            '<div id="quiz-main"></div>' +
-          '</section>' +
-          '<section class="block">' + chantsHTML(b.chants) + '</section>' +
-          '<section class="block">' + songworkShellHTML(b.songwork) + '</section>' +
-        '</div>';
-
-      buildQuiz(document.getElementById("quiz-main"), b.quiz.questions, null);
-      buildQuiz(
-        document.getElementById("song-practice"),
-        b.songwork.practice.questions,
-        markedLine
-      );
-      b.songwork.excerpts.forEach(function (ex, i) {
-        renderExcerpt(
-          document.getElementById("excerpt-" + i),
-          ex,
-          "vocal-marks-l" + id + "-e" + i
-        );
-      });
-    });
-  });
-}
-
-/* ---------- блок: лекция ---------- */
-
-function lectureHTML(lecture) {
-  var html = blockHead("pencil", "ico-blue", lecture.title);
-  lecture.sections.forEach(function (s) {
-    html += "<h3>" + esc(s.heading) + "</h3>";
-    s.paragraphs.forEach(function (p) {
-      html += "<p>" + esc(p) + "</p>";
-    });
-  });
-  return html;
-}
-
-/* ---------- блок: тест (универсальный) ---------- */
-
-function buildQuiz(root, questions, optionRenderer) {
-  var renderOption = optionRenderer || function (t) { return esc(t); };
-  var answers = [];
-  var checked = false;
-
-  var html = "";
-  questions.forEach(function (q, qi) {
-    answers.push(null);
-    html += '<div class="q">' +
-      '<div class="q-text">' + (qi + 1) + ". " + esc(q.q) + "</div>" +
-      '<div class="q-opts">';
-    q.options.forEach(function (o, oi) {
-      html += '<button type="button" class="opt" data-qi="' + qi + '" data-oi="' + oi + '">' +
-        renderOption(o) + "</button>";
-    });
-    html += "</div></div>";
-  });
-  html += '<button type="button" class="btn check">Показать результат</button>' +
-    '<div class="quiz-result hidden"></div>';
-  root.innerHTML = html;
-
-  var opts = root.querySelectorAll(".opt");
-  Array.prototype.forEach.call(opts, function (btn) {
-    btn.addEventListener("click", function () {
-      if (checked) return;
-      var qi = parseInt(btn.getAttribute("data-qi"), 10);
-      answers[qi] = parseInt(btn.getAttribute("data-oi"), 10);
-      var siblings = root.querySelectorAll('.opt[data-qi="' + qi + '"]');
-      Array.prototype.forEach.call(siblings, function (b) { b.classList.remove("sel"); });
-      btn.classList.add("sel");
-    });
-  });
-
-  var checkBtn = root.querySelector(".btn.check");
-  var resultEl = root.querySelector(".quiz-result");
-  checkBtn.addEventListener("click", function () {
-    if (!checked) {
-      checked = true;
-      var score = 0;
-      questions.forEach(function (q, qi) {
-        var siblings = root.querySelectorAll('.opt[data-qi="' + qi + '"]');
-        Array.prototype.forEach.call(siblings, function (b) {
-          var oi = parseInt(b.getAttribute("data-oi"), 10);
-          if (oi === q.correct) b.classList.add("right");
-          else if (answers[qi] === oi) b.classList.add("wrong");
-        });
-        if (answers[qi] === q.correct) score++;
-      });
-      var text = "Результат: " + score + " из " + questions.length;
-      if (score === questions.length) text += " — отлично!";
-      else if (score >= questions.length / 2) text += " — хорошо, просмотри ошибки.";
-      else text += " — перечитай материал и попробуй ещё раз.";
-      resultEl.textContent = text;
-      resultEl.classList.remove("hidden");
-      checkBtn.textContent = "Пройти ещё раз";
-    } else {
-      buildQuiz(root, questions, optionRenderer);
-    }
-  });
-}
-
-/* ---------- блок: распевки ---------- */
-
-function chantsHTML(chants) {
-  var html = blockHead("mic", "ico-blue", chants.title);
-  chants.items.forEach(function (it) {
-    html += '<div class="chant">' +
-      '<span class="block-ico ico-blue">' + ICONS.mic + "</span>" +
-      '<div class="chant-info">' +
-        '<div class="chant-topic">' + esc(it.topic) + "</div>" +
-        (it.description ? '<div class="chant-desc">' + esc(it.description) + "</div>" : "") +
-        (it.audio
-          ? '<audio controls preload="none" src="' + esc(it.audio) + '"></audio>'
-          : '<div class="chant-soon">аудио появится позже</div>') +
-      "</div></div>";
-  });
-  return html;
-}
-
-/* ---------- блок: упражнение с песней ---------- */
-
-/* В текстах используются пометки [В] — полный вдох и [д] — добор */
-function markedLine(line) {
-  return esc(line)
-    .split("[В]").join('<span class="mark mark-full" title="полный вдох">&#8744;</span>')
-    .split("[д]").join('<span class="mark mark-catch" title="добор">&rsquo;</span>');
-}
-
-function legendHTML() {
-  return '<div class="legend">' +
-    '<span><span class="mark mark-full">&#8744;</span> полный вдох</span>' +
-    '<span><span class="mark mark-catch">&rsquo;</span> добор</span>' +
-    "</div>";
-}
-
-function songworkShellHTML(sw) {
-  var html = blockHead("notes", "ico-terra", sw.title);
-  sw.lecture.paragraphs.forEach(function (p) {
-    html += "<p>" + esc(p) + "</p>";
-  });
-  html += legendHTML();
-  html += "<p><strong>" + esc(sw.example.intro) + "</strong></p>";
-  html += '<div class="song-example">';
-  sw.example.lines.forEach(function (line) {
-    html += '<div class="x-line">' + markedLine(line) + "</div>";
-  });
-  html += "</div>";
-  html += "<h3>Проверь себя</h3>";
-  html += '<div id="song-practice"></div>';
-  html += "<h3>Теперь сам</h3>";
-  html += '<p class="hint">Нажимай на точки между словами: один раз — полный вдох, два раза — добор, три — убрать пометку. Разметка сохраняется на твоём устройстве.</p>';
-  sw.excerpts.forEach(function (ex, i) {
-    html += '<div class="excerpt">' +
-      '<div class="excerpt-title">' + esc(ex.title) + "</div>" +
-      '<div id="excerpt-' + i + '"></div>' +
-      "</div>";
-  });
-  return html;
-}
-
-/* интерактивная разметка дыхания в отрывке */
-
-function gapChar(state) {
-  if (state === "full") return "∨";
-  if (state === "catch") return "’";
-  return "·";
-}
-
-function gapHTML(id, state) {
-  return '<button type="button" class="gap' + (state ? " " + state : "") +
-    '" data-id="' + id + '" data-state="' + (state || "") + '">' +
-    gapChar(state) + "</button>";
-}
-
-function renderExcerpt(root, excerpt, storageKey) {
-  var saved = storeGet(storageKey);
-  var html = "";
-  excerpt.lines.forEach(function (line, li) {
-    var words = line.split(" ");
-    html += '<div class="x-line">';
-    words.forEach(function (w, wi) {
-      html += '<span class="w">' + esc(w) + "</span>";
-      var gapId = li + "-" + wi;
-      if (wi < words.length - 1) html += gapHTML(gapId, saved[gapId]);
-    });
-    html += gapHTML(li + "-end", saved[li + "-end"]);
-    html += "</div>";
-  });
-  html += '<button type="button" class="btn ghost reset">Сбросить разметку</button>';
-  root.innerHTML = html;
-
-  var gaps = root.querySelectorAll(".gap");
-  Array.prototype.forEach.call(gaps, function (g) {
-    g.addEventListener("click", function () {
-      var id = g.getAttribute("data-id");
-      var cur = g.getAttribute("data-state") || "";
-      var next = cur === "" ? "full" : (cur === "full" ? "catch" : "");
-      g.setAttribute("data-state", next);
-      g.className = "gap" + (next ? " " + next : "");
-      g.textContent = gapChar(next);
-      var marks = storeGet(storageKey);
-      if (next) marks[id] = next;
-      else delete marks[id];
-      storeSet(storageKey, marks);
-    });
-  });
-
-  root.querySelector(".reset").addEventListener("click", function () {
-    storeRemove(storageKey);
-    renderExcerpt(root, excerpt, storageKey);
-  });
+  switch (state.screen) {
+    case "tg": renderTg(); break;
+    case "name": renderName(); break;
+    case "courses": renderCourses(); break;
+    case "lesson-home": renderLessonHome(); break;
+    case "lecture": renderLecture(); break;
+    case "quiz": renderQuiz(); break;
+    case "quiz-result": renderQuizResult(); break;
+    case "warmups": renderWarmups(); break;
+    case "song": renderSong(); break;
+    default: renderTg();
+  }
 }
 
 /* ---------- запуск ---------- */
@@ -387,10 +693,26 @@ if (tg) {
     tg.setHeaderColor("#F2ECE7");
     tg.setBackgroundColor("#F2ECE7");
   } catch (e) {}
-  tg.BackButton.onClick(function () {
-    location.hash = "#/";
-  });
+  tg.BackButton.onClick(handleBack);
 }
 
-window.addEventListener("hashchange", render);
-render();
+fetch("data/lesson-01.json")
+  .then(function (r) {
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return r.json();
+  })
+  .then(function (data) {
+    LESSON = data;
+    state.quizAnswers = new Array(data.quiz.questions.length).fill(null);
+    data.song.lines.forEach(function (l) { state.songMarks[l.id] = null; });
+    loadState();
+    // подставляем Telegram-username, если открыто внутри Telegram
+    if (!state.tgId && tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
+      var u = tg.initDataUnsafe.user;
+      state.tgId = u.username ? "@" + u.username : String(u.id || "");
+    }
+    render();
+  })
+  .catch(function () {
+    app.innerHTML = '<div style="padding:40px 24px;text-align:center;color:#AE5F3F;font-weight:600;">Не удалось загрузить данные урока.<br>Проверь соединение и открой заново.</div>';
+  });
