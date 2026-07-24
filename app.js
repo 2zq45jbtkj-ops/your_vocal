@@ -10,6 +10,10 @@ var app = document.getElementById("app");
 var TOTAL_LESSONS = 30;
 var LESSON = null; // data/lesson-01.json
 
+// Vercel режет тело запроса примерно на уровне ~4.5 МБ — держим запас.
+var MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
+var MAX_RECORD_SECONDS = 60;
+
 /* ---------- состояние ---------- */
 
 var state = {
@@ -547,12 +551,13 @@ function renderHwZone() {
     if (s.warmupStatus === "sending") hint = "Отправляю преподавателю…";
     else if (s.warmupStatus === "sent") hint = "Отправлено преподавателю ✓";
     else if (s.warmupStatus === "error") hint = "Не отправилось — нажми «Повторить»";
+    else if (s.warmupStatus === "toolarge") hint = "Файл больше 4 МБ, Telegram не примет — запиши заново в приложении или отправь это видео преподавателю прямо в чат с ботом";
     zone.innerHTML =
       '<div class="hw-attached">' +
         '<div class="hw-icon">' + SVG.hwCheck + "</div>" +
         '<div style="flex:1;">' +
           '<div class="hw-name">' + esc(s.warmupFile) + "</div>" +
-          '<div class="hw-hint' + (s.warmupStatus === "error" ? " error" : "") + '">' + hint + "</div>" +
+          '<div class="hw-hint' + (s.warmupStatus === "error" || s.warmupStatus === "toolarge" ? " error" : "") + '">' + hint + "</div>" +
         "</div>" +
         (s.warmupStatus === "error" ? '<button class="hw-replace" id="hw-retry">Повторить</button>' : "") +
         '<button class="hw-replace" id="hw-retake">Заменить</button>' +
@@ -614,8 +619,14 @@ function renderHwZone() {
     if (!f) return;
     state.warmupFile = f.name;
     state.warmupBlob = f;
-    state.warmupStatus = "sending";
     saveState();
+    if (f.size > MAX_UPLOAD_BYTES) {
+      state.warmupStatus = "toolarge";
+      renderHwZone();
+      maybeCelebrate();
+      return;
+    }
+    state.warmupStatus = "sending";
     renderHwZone();
     maybeCelebrate();
     submitFile("warmup", f, function (status) {
@@ -630,7 +641,12 @@ function startCamera() {
     alert("Не удалось получить доступ к камере. Проверьте разрешения браузера.");
     return;
   }
-  navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(function (s) {
+  // Разрешение занижаем специально: держим готовый файл маленьким, чтобы он
+  // гарантированно прошёл через сервер преподавателю (см. MAX_UPLOAD_BYTES).
+  navigator.mediaDevices.getUserMedia({
+    video: { width: { ideal: 480 }, height: { ideal: 640 } },
+    audio: true
+  }).then(function (s) {
     stream = s;
     state.cameraStage = "ready";
     renderHwZone();
@@ -639,13 +655,28 @@ function startCamera() {
   });
 }
 
+function pickRecorderMime() {
+  var candidates = ["video/webm;codecs=vp8,opus", "video/webm"];
+  for (var i = 0; i < candidates.length; i++) {
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(candidates[i])) {
+      return candidates[i];
+    }
+  }
+  return "";
+}
+
 function beginRecording() {
   recChunks = [];
+  var mime = pickRecorderMime();
   try {
-    recorder = new MediaRecorder(stream);
+    recorder = mime
+      ? new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 250000, audioBitsPerSecond: 48000 })
+      : new MediaRecorder(stream);
   } catch (e) {
-    alert("Запись не поддерживается в этом браузере.");
-    return;
+    try { recorder = new MediaRecorder(stream); } catch (e2) {
+      alert("Запись не поддерживается в этом браузере.");
+      return;
+    }
   }
   recorder.ondataavailable = function (e) { if (e.data.size > 0) recChunks.push(e.data); };
   recorder.onstop = function () {
@@ -654,10 +685,16 @@ function beginRecording() {
     clearInterval(recTimer);
     state.cameraStage = "idle";
     state.warmupFile = "Видео из приложения";
-    var blob = new Blob(recChunks, { type: "video/webm" });
+    var blob = new Blob(recChunks, { type: mime || "video/webm" });
     state.warmupBlob = blob;
-    state.warmupStatus = "sending";
     saveState();
+    if (blob.size > MAX_UPLOAD_BYTES) {
+      state.warmupStatus = "toolarge";
+      renderHwZone();
+      maybeCelebrate();
+      return;
+    }
+    state.warmupStatus = "sending";
     renderHwZone();
     maybeCelebrate();
     submitFile("warmup", blob, function (status) {
@@ -672,7 +709,8 @@ function beginRecording() {
   recTimer = setInterval(function () {
     state.recordSeconds++;
     var t = document.getElementById("rec-time");
-    if (t) t.textContent = fmtTime(state.recordSeconds);
+    if (t) t.textContent = fmtTime(state.recordSeconds) + " / " + fmtTime(MAX_RECORD_SECONDS);
+    if (state.recordSeconds >= MAX_RECORD_SECONDS) stopRecording();
   }, 1000);
 }
 
@@ -708,6 +746,7 @@ function songHint(s) {
   if (s.songStatus === "sending") return "Отправляю преподавателю…";
   if (s.songStatus === "sent") return "Отправлено преподавателю ✓";
   if (s.songStatus === "error") return "Не отправилось — нажми «Повторить отправку»";
+  if (s.songStatus === "toolarge") return "Фото больше 4 МБ, Telegram не примет — сделай фото поменьше или отправь его преподавателю прямо в чат с ботом";
   return "Файл выбран ✓";
 }
 
@@ -783,6 +822,12 @@ function renderSong() {
     if (!f) return;
     state.songFile = f.name;
     state.songBlob = f;
+    saveState();
+    if (f.size > MAX_UPLOAD_BYTES) {
+      state.songStatus = "toolarge";
+      render();
+      return;
+    }
     state.songStatus = "sending";
     saveState();
     render();
