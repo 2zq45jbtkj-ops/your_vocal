@@ -219,6 +219,7 @@ button { font-family: inherit; }
 .hw-icon.terra { background: var(--soft-terra); }
 .hw-name { font-size: 13px; font-weight: 600; color: var(--ink); }
 .hw-hint { font-size: 11px; color: var(--gray); margin-top: 1px; }
+.hw-hint.error { color: var(--terra); font-weight: 600; }
 .hw-replace { border: none; background: none; color: var(--terra); font-size: 12px; font-weight: 600; cursor: pointer; }
 
 .hw-choice { display: flex; gap: 10px; margin-bottom: 16px; }

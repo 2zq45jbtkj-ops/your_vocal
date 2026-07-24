@@ -22,7 +22,8 @@ var state = {
   selectedMark: null, songMarks: {},
   // transient (не сохраняется):
   playerIdx: null, playerElapsed: 0, durations: {},
-  cameraStage: "idle", recordSeconds: 0
+  cameraStage: "idle", recordSeconds: 0,
+  warmupStatus: "idle", songStatus: "idle"
 };
 
 var audioEls = {};
@@ -115,6 +116,36 @@ function maybeCelebrate() {
     saveState();
     showConfetti();
   }
+}
+
+/* ---------- отправка домашки преподавателю в Telegram ---------- */
+
+function baseSubmitFields() {
+  var f = new FormData();
+  f.append("firstName", state.firstName || "");
+  f.append("lastName", state.lastName || "");
+  f.append("tgId", state.tgId || "");
+  f.append("lessonTitle", LESSON ? LESSON.title : "");
+  return f;
+}
+
+function submitFile(kind, file, onStatus) {
+  onStatus("sending");
+  var f = baseSubmitFields();
+  f.append("kind", kind);
+  f.append("file", file, file.name || (kind + ".webm"));
+  fetch("/api/submit", { method: "POST", body: f })
+    .then(function (r) { return r.json().catch(function () { return { ok: false }; }); })
+    .then(function (data) { onStatus(data.ok ? "sent" : "error"); })
+    .catch(function () { onStatus("error"); });
+}
+
+function submitQuizResult(score, total) {
+  var f = baseSubmitFields();
+  f.append("kind", "quiz");
+  f.append("score", score);
+  f.append("total", total);
+  fetch("/api/submit", { method: "POST", body: f }).catch(function () {});
 }
 
 /* ---------- SVG ---------- */
@@ -360,6 +391,7 @@ function renderQuiz() {
     state.quizDone = true;
     state.quizScore = score;
     saveState();
+    submitQuizResult(score, questions.length);
     go("quiz-result");
   });
   wireActs();
@@ -511,17 +543,35 @@ function renderHwZone() {
   var s = state;
 
   if (s.warmupFile) {
+    var hint = "Видео прикреплено";
+    if (s.warmupStatus === "sending") hint = "Отправляю преподавателю…";
+    else if (s.warmupStatus === "sent") hint = "Отправлено преподавателю ✓";
+    else if (s.warmupStatus === "error") hint = "Не отправилось — нажми «Повторить»";
     zone.innerHTML =
       '<div class="hw-attached">' +
         '<div class="hw-icon">' + SVG.hwCheck + "</div>" +
         '<div style="flex:1;">' +
           '<div class="hw-name">' + esc(s.warmupFile) + "</div>" +
-          '<div class="hw-hint">Видео прикреплено</div>' +
+          '<div class="hw-hint' + (s.warmupStatus === "error" ? " error" : "") + '">' + hint + "</div>" +
         "</div>" +
+        (s.warmupStatus === "error" ? '<button class="hw-replace" id="hw-retry">Повторить</button>' : "") +
         '<button class="hw-replace" id="hw-retake">Заменить</button>' +
       "</div>";
+    if (s.warmupStatus === "error") {
+      document.getElementById("hw-retry").addEventListener("click", function () {
+        if (!state.warmupBlob) { state.warmupStatus = "error"; renderHwZone(); return; }
+        submitFile("warmup", state.warmupBlob, function (status) {
+          state.warmupStatus = status;
+          renderHwZone();
+        });
+        state.warmupStatus = "sending";
+        renderHwZone();
+      });
+    }
     document.getElementById("hw-retake").addEventListener("click", function () {
       state.warmupFile = null;
+      state.warmupBlob = null;
+      state.warmupStatus = "idle";
       state.cameraStage = "idle";
       saveState();
       renderHwZone();
@@ -561,7 +611,17 @@ function renderHwZone() {
   document.getElementById("hw-camera").addEventListener("click", startCamera);
   document.getElementById("hw-file").addEventListener("change", function (e) {
     var f = e.target.files[0];
-    if (f) { state.warmupFile = f.name; saveState(); renderHwZone(); maybeCelebrate(); }
+    if (!f) return;
+    state.warmupFile = f.name;
+    state.warmupBlob = f;
+    state.warmupStatus = "sending";
+    saveState();
+    renderHwZone();
+    maybeCelebrate();
+    submitFile("warmup", f, function (status) {
+      state.warmupStatus = status;
+      renderHwZone();
+    });
   });
 }
 
@@ -594,9 +654,16 @@ function beginRecording() {
     clearInterval(recTimer);
     state.cameraStage = "idle";
     state.warmupFile = "Видео из приложения";
+    var blob = new Blob(recChunks, { type: "video/webm" });
+    state.warmupBlob = blob;
+    state.warmupStatus = "sending";
     saveState();
     renderHwZone();
     maybeCelebrate();
+    submitFile("warmup", blob, function (status) {
+      state.warmupStatus = status;
+      renderHwZone();
+    });
   };
   recorder.start();
   state.cameraStage = "recording";
@@ -634,6 +701,14 @@ function stopAllMedia() {
 
 function markCircle(mark, cls) {
   return '<span class="' + cls + " " + (mark === "V" ? "deep" : "short") + '">' + mark + "</span>";
+}
+
+function songHint(s) {
+  if (!s.songFile) return "JPG, PNG — фото листа с разметкой";
+  if (s.songStatus === "sending") return "Отправляю преподавателю…";
+  if (s.songStatus === "sent") return "Отправлено преподавателю ✓";
+  if (s.songStatus === "error") return "Не отправилось — нажми «Повторить отправку»";
+  return "Файл выбран ✓";
 }
 
 function renderSong() {
@@ -679,9 +754,10 @@ function renderSong() {
         '<div class="hw-icon terra">' + SVG.uploadTerra + "</div>" +
         '<div style="flex:1;">' +
           '<div class="hw-name">' + esc(s.songFile || "Загрузить фото разметки") + "</div>" +
-          '<div class="hw-hint">' + (s.songFile ? "Файл выбран ✓" : "JPG, PNG — фото листа с разметкой") + "</div>" +
+          '<div class="hw-hint">' + songHint(s) + "</div>" +
         "</div>" +
       "</label>" +
+      (s.songStatus === "error" ? '<button class="hw-replace" id="song-retry" style="margin:-10px 0 16px;">Повторить отправку</button>' : "") +
     "</div>" +
     '<div class="final-cta-wrap"><button class="cta terra" data-act="finish-lesson">Завершить урок</button></div>';
 
@@ -704,8 +780,29 @@ function renderSong() {
   });
   document.getElementById("song-file").addEventListener("change", function (e) {
     var f = e.target.files[0];
-    if (f) { state.songFile = f.name; saveState(); render(); }
+    if (!f) return;
+    state.songFile = f.name;
+    state.songBlob = f;
+    state.songStatus = "sending";
+    saveState();
+    render();
+    submitFile("song", f, function (status) {
+      state.songStatus = status;
+      if (state.screen === "song") render();
+    });
   });
+  var songRetry = document.getElementById("song-retry");
+  if (songRetry) {
+    songRetry.addEventListener("click", function () {
+      if (!state.songBlob) return;
+      state.songStatus = "sending";
+      render();
+      submitFile("song", state.songBlob, function (status) {
+        state.songStatus = status;
+        if (state.screen === "song") render();
+      });
+    });
+  }
   wireActs();
 }
 
