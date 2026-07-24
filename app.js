@@ -133,15 +133,48 @@ function baseSubmitFields() {
   return f;
 }
 
-function submitFile(kind, file, onStatus) {
+function submitFile(kind, file, onStatus, filename) {
   onStatus("sending");
   var f = baseSubmitFields();
   f.append("kind", kind);
-  f.append("file", file, file.name || (kind + ".webm"));
+  f.append("file", file, filename || file.name || (kind + "-upload"));
   fetch("/api/submit", { method: "POST", body: f })
     .then(function (r) { return r.json().catch(function () { return { ok: false }; }); })
     .then(function (data) { onStatus(data.ok ? "sent" : "error"); })
     .catch(function () { onStatus("error"); });
+}
+
+/* ---------- конвертация записанного видео в mp4 (ffmpeg.wasm, без сборки) ---------- */
+
+var ffmpegInstance = null;
+
+function getFFmpeg() {
+  if (!window.FFmpeg) return null;
+  if (!ffmpegInstance) {
+    ffmpegInstance = window.FFmpeg.createFFmpeg({
+      corePath: "https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js",
+      log: false
+    });
+  }
+  return ffmpegInstance;
+}
+
+function convertToMp4(webmBlob) {
+  var ff = getFFmpeg();
+  if (!ff) return Promise.reject(new Error("ffmpeg недоступен"));
+  var fetchFile = window.FFmpeg.fetchFile;
+  var loadStep = ff.isLoaded() ? Promise.resolve() : ff.load();
+  return loadStep
+    .then(function () { return fetchFile(webmBlob); })
+    .then(function (data) {
+      ff.FS("writeFile", "input.webm", data);
+      return ff.run("-i", "input.webm", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "30", "-c:a", "aac", "-movflags", "+faststart", "output.mp4");
+    })
+    .then(function () {
+      var out = ff.FS("readFile", "output.mp4");
+      try { ff.FS("unlink", "input.webm"); ff.FS("unlink", "output.mp4"); } catch (e) {}
+      return new Blob([out.buffer], { type: "video/mp4" });
+    });
 }
 
 function submitQuizResult(score, total) {
@@ -548,7 +581,8 @@ function renderHwZone() {
 
   if (s.warmupFile) {
     var hint = "Видео прикреплено";
-    if (s.warmupStatus === "sending") hint = "Отправляю преподавателю…";
+    if (s.warmupStatus === "converting") hint = "Конвертирую в mp4…";
+    else if (s.warmupStatus === "sending") hint = "Отправляю преподавателю…";
     else if (s.warmupStatus === "sent") hint = "Отправлено преподавателю ✓";
     else if (s.warmupStatus === "error") hint = "Не отправилось — нажми «Повторить»";
     else if (s.warmupStatus === "toolarge") hint = "Файл больше 4 МБ, Telegram не примет — запиши заново в приложении или отправь это видео преподавателю прямо в чат с ботом";
@@ -568,7 +602,7 @@ function renderHwZone() {
         submitFile("warmup", state.warmupBlob, function (status) {
           state.warmupStatus = status;
           renderHwZone();
-        });
+        }, state.warmupFile);
         state.warmupStatus = "sending";
         renderHwZone();
       });
@@ -617,22 +651,7 @@ function renderHwZone() {
   document.getElementById("hw-file").addEventListener("change", function (e) {
     var f = e.target.files[0];
     if (!f) return;
-    state.warmupFile = f.name;
-    state.warmupBlob = f;
-    saveState();
-    if (f.size > MAX_UPLOAD_BYTES) {
-      state.warmupStatus = "toolarge";
-      renderHwZone();
-      maybeCelebrate();
-      return;
-    }
-    state.warmupStatus = "sending";
-    renderHwZone();
-    maybeCelebrate();
-    submitFile("warmup", f, function (status) {
-      state.warmupStatus = status;
-      renderHwZone();
-    });
+    finalizeWarmupUpload(f, f.name);
   });
 }
 
@@ -656,13 +675,33 @@ function startCamera() {
 }
 
 function pickRecorderMime() {
-  var candidates = ["video/webm;codecs=vp8,opus", "video/webm"];
+  // mp4 в приоритете — на iPhone/Safari он пишется нативно и конвертация не нужна.
+  var candidates = ["video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp8,opus", "video/webm"];
   for (var i = 0; i < candidates.length; i++) {
     if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(candidates[i])) {
       return candidates[i];
     }
   }
   return "";
+}
+
+function finalizeWarmupUpload(blob, filename) {
+  state.warmupFile = filename;
+  state.warmupBlob = blob;
+  saveState();
+  if (blob.size > MAX_UPLOAD_BYTES) {
+    state.warmupStatus = "toolarge";
+    renderHwZone();
+    maybeCelebrate();
+    return;
+  }
+  state.warmupStatus = "sending";
+  renderHwZone();
+  maybeCelebrate();
+  submitFile("warmup", blob, function (status) {
+    state.warmupStatus = status;
+    renderHwZone();
+  }, filename);
 }
 
 function beginRecording() {
@@ -684,22 +723,23 @@ function beginRecording() {
     stream = null;
     clearInterval(recTimer);
     state.cameraStage = "idle";
-    state.warmupFile = "Видео из приложения";
-    var blob = new Blob(recChunks, { type: mime || "video/webm" });
-    state.warmupBlob = blob;
-    saveState();
-    if (blob.size > MAX_UPLOAD_BYTES) {
-      state.warmupStatus = "toolarge";
-      renderHwZone();
-      maybeCelebrate();
+    var rawBlob = new Blob(recChunks, { type: mime || "video/webm" });
+
+    if (mime && mime.indexOf("mp4") !== -1) {
+      // Уже записано в mp4 нативно (обычно Safari/iPhone) — конвертация не нужна.
+      finalizeWarmupUpload(rawBlob, "video.mp4");
       return;
     }
-    state.warmupStatus = "sending";
+
+    state.warmupFile = "видео (конвертирую в mp4…)";
+    state.warmupStatus = "converting";
+    saveState();
     renderHwZone();
-    maybeCelebrate();
-    submitFile("warmup", blob, function (status) {
-      state.warmupStatus = status;
-      renderHwZone();
+    convertToMp4(rawBlob).then(function (mp4Blob) {
+      finalizeWarmupUpload(mp4Blob, "video.mp4");
+    }).catch(function () {
+      // Конвертация не удалась (старый браузер/мало памяти) — не теряем запись, шлём как есть.
+      finalizeWarmupUpload(rawBlob, "video.webm");
     });
   };
   recorder.start();
@@ -834,7 +874,7 @@ function renderSong() {
     submitFile("song", f, function (status) {
       state.songStatus = status;
       if (state.screen === "song") render();
-    });
+    }, f.name);
   });
   var songRetry = document.getElementById("song-retry");
   if (songRetry) {
@@ -845,7 +885,7 @@ function renderSong() {
       submitFile("song", state.songBlob, function (status) {
         state.songStatus = status;
         if (state.screen === "song") render();
-      });
+      }, state.songFile);
     });
   }
   wireActs();
