@@ -17,6 +17,7 @@ var state = {
   tgId: "", firstName: "", lastName: "",
   quizIndex: 0, quizAnswers: [], quizScore: 0,
   quizDone: false, warmupsDone: false, songDone: false,
+  lectureViewed: false, celebrated: false,
   warmupFile: null, songFile: null,
   selectedMark: null, songMarks: {},
   // transient (не сохраняется):
@@ -34,6 +35,7 @@ function saveState() {
       quizIndex: state.quizIndex, quizAnswers: state.quizAnswers,
       quizScore: state.quizScore, quizDone: state.quizDone,
       warmupsDone: state.warmupsDone, songDone: state.songDone,
+      lectureViewed: state.lectureViewed, celebrated: state.celebrated,
       warmupFile: state.warmupFile, songFile: state.songFile,
       songMarks: state.songMarks
     }));
@@ -54,6 +56,65 @@ function esc(s) {
   return String(s)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;")
     .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+/* ---------- прогресс урока и празднование 100% ---------- */
+
+function progressPercent() {
+  var n = 0;
+  if (state.lectureViewed) n++;
+  if (state.quizDone) n++;
+  if (state.warmupFile) n++;
+  if (state.songFile) n++;
+  return n * 25;
+}
+
+var CONFETTI_COLORS = ["#E8B84B", "#C1503F", "#D98B4A", "#6C91A6", "#7A9B6E"];
+
+function showConfetti() {
+  var overlay = document.createElement("div");
+  overlay.id = "confetti-overlay";
+
+  var count = 60;
+  for (var i = 0; i < count; i++) {
+    var p = document.createElement("div");
+    p.className = "confetti-piece";
+    var color = CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)];
+    var size = 6 + Math.random() * 7;
+    var round = Math.random() > 0.5;
+    p.style.background = color;
+    p.style.width = size + "px";
+    p.style.height = (round ? size : size * 1.6) + "px";
+    p.style.borderRadius = round ? "50%" : "2px";
+    p.style.left = Math.random() * 100 + "%";
+    var duration = 2.4 + Math.random() * 1.6;
+    var delay = Math.random() * 0.3;
+    p.style.animationDuration = duration + "s";
+    p.style.animationDelay = delay + "s";
+    overlay.appendChild(p);
+  }
+
+  var card = document.createElement("div");
+  card.className = "celebrate-card";
+  card.innerHTML =
+    '<div class="celebrate-badge">' + SVG.resultCheck + "</div>" +
+    '<div class="celebrate-title">Готово на 100%!</div>' +
+    '<div class="celebrate-sub">Все материалы урока выполнены</div>';
+  overlay.appendChild(card);
+
+  document.body.appendChild(overlay);
+  setTimeout(function () {
+    if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+  }, 3000);
+}
+
+function maybeCelebrate() {
+  if (!LESSON) return;
+  if (progressPercent() === 100 && !state.celebrated) {
+    state.celebrated = true;
+    saveState();
+    showConfetti();
+  }
 }
 
 /* ---------- SVG ---------- */
@@ -164,12 +225,13 @@ function renderCourses() {
   var items = "";
   for (var i = 1; i <= TOTAL_LESSONS; i++) {
     if (i === 1) {
+      var pct = progressPercent();
       items +=
         '<div class="lesson-card" data-act="open-lesson">' +
           '<div class="lesson-dot" style="background:#6C91A6;">1</div>' +
           '<div class="lesson-body">' +
             '<div class="lesson-name">' + esc(LESSON.title) + "</div>" +
-            '<div class="lesson-sub">' + (state.songDone ? "Пройден" : "В процессе") + "</div>" +
+            '<div class="lesson-sub">' + (pct === 100 ? "Пройден · 100%" : pct + "% выполнено") + "</div>" +
           "</div>" + SVG.chevron +
         "</div>";
     } else {
@@ -205,20 +267,25 @@ function stepRow(opts) {
 function renderLessonHome() {
   var s = state;
   var subs = LESSON.stepSubtitles;
+  var pct = progressPercent();
   app.innerHTML =
     '<div class="top pb8">' + backBtn("back") +
       '<div><div class="top-title lg">' + esc(LESSON.title) + '</div><div class="top-sub">Урок 1 из ' + TOTAL_LESSONS + "</div></div>" +
     "</div>" +
+    '<div class="lesson-progress-wrap">' +
+      '<div class="lesson-progress-label">Прогресс урока · ' + pct + '%</div>' +
+      '<div class="lesson-progress-bar"><div style="width:' + pct + '%;"></div></div>' +
+    "</div>" +
     '<div class="stepper">' +
       stepRow({ act: "go-lecture", dotBg: "#AE5F3F", icon: SVG.stepCheck, name: "Лекция «" + esc(LESSON.title) + "»", sub: subs.lecture }) +
       stepRow({ act: "go-quiz", dotBg: s.quizDone ? "#AE5F3F" : "#6C91A6", icon: s.quizDone ? SVG.stepCheck : SVG.doc, name: "Тест", sub: s.quizDone ? "Пройден · " + s.quizScore + "/" + LESSON.quiz.questions.length : subs.quiz }) +
-      stepRow({ act: "go-warmups", locked: !s.quizDone, lockedText: !(s.quizDone || s.warmupsDone),
+      stepRow({ act: "go-warmups", locked: false, lockedText: false,
         dotBg: s.warmupsDone ? "#AE5F3F" : (s.quizDone ? "#6C91A6" : "#fff"),
         icon: s.warmupsDone ? SVG.stepCheck : SVG.micIcon(s.quizDone ? "#F2ECE7" : "#AEB6BB"),
         name: "Распевки «" + esc(LESSON.title) + "»", sub: subs.warmups }) +
-      stepRow({ act: "go-song", locked: !s.warmupsDone, lockedText: !s.warmupsDone, last: true,
-        dotBg: s.warmupsDone ? "#6C91A6" : "#fff",
-        icon: SVG.notesIcon(s.warmupsDone ? "#F2ECE7" : "#AEB6BB"),
+      stepRow({ act: "go-song", locked: false, lockedText: false, last: true,
+        dotBg: s.songDone ? "#AE5F3F" : (s.warmupsDone ? "#6C91A6" : "#fff"),
+        icon: s.songDone ? SVG.stepCheck : SVG.notesIcon(s.warmupsDone ? "#F2ECE7" : "#AEB6BB"),
         name: "Упражнение с песней", sub: subs.song }) +
     "</div>";
   wireActs();
@@ -231,6 +298,7 @@ function stepHeader(title, stepNum, pct) {
 }
 
 function renderLecture() {
+  if (!state.lectureViewed) { state.lectureViewed = true; saveState(); }
   var html = stepHeader("Лекция «" + esc(LESSON.title) + "»", 1, 25);
   html += '<div class="lecture-body">';
   var num = 0;
@@ -493,7 +561,7 @@ function renderHwZone() {
   document.getElementById("hw-camera").addEventListener("click", startCamera);
   document.getElementById("hw-file").addEventListener("change", function (e) {
     var f = e.target.files[0];
-    if (f) { state.warmupFile = f.name; saveState(); renderHwZone(); }
+    if (f) { state.warmupFile = f.name; saveState(); renderHwZone(); maybeCelebrate(); }
   });
 }
 
@@ -528,6 +596,7 @@ function beginRecording() {
     state.warmupFile = "Видео из приложения";
     saveState();
     renderHwZone();
+    maybeCelebrate();
   };
   recorder.start();
   state.cameraStage = "recording";
@@ -647,9 +716,9 @@ var ACTS = {
   "open-lesson": function () { go("lesson-home"); },
   "go-lecture": function () { go("lecture"); },
   "go-quiz": function () { go("quiz"); },
-  "go-warmups": function () { if (state.quizDone) go("warmups"); },
+  "go-warmups": function () { go("warmups"); },
   "go-warmups-free": function () { go("warmups"); },
-  "go-song": function () { if (state.warmupsDone) go("song"); },
+  "go-song": function () { go("song"); },
   "finish-warmups": function () { state.warmupsDone = true; saveState(); go("song"); },
   "finish-lesson": function () { state.songDone = true; saveState(); go("lesson-home"); }
 };
@@ -682,6 +751,7 @@ function render() {
     case "song": renderSong(); break;
     default: renderTg();
   }
+  maybeCelebrate();
 }
 
 /* ---------- запуск ---------- */
