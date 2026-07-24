@@ -4,6 +4,11 @@
 
 "use strict";
 
+// ?reset=1 в адресе — чистит локальный прогресс/данные ученика на этом устройстве.
+if (location.search.indexOf("reset=1") !== -1) {
+  try { localStorage.removeItem("vocal-app"); } catch (e) {}
+}
+
 var tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
 var app = document.getElementById("app");
 
@@ -11,8 +16,11 @@ var TOTAL_LESSONS = 30;
 var LESSON = null; // data/lesson-01.json
 
 // Vercel режет тело запроса примерно на уровне ~4.5 МБ — держим запас.
+// Видео сверх этого лимита (по умолчанию — снятое обычной камерой телефона,
+// без ограничений по качеству/длительности) уходит преподавателю не через
+// сервер, а напрямую в Telegram-чат с ботом.
 var MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
-var MAX_RECORD_SECONDS = 60;
+var TEACHER_BOT_USERNAME = "your_vocal_teacher_bot";
 
 /* ---------- состояние ---------- */
 
@@ -26,12 +34,10 @@ var state = {
   selectedMark: null, songMarks: {},
   // transient (не сохраняется):
   playerIdx: null, playerElapsed: 0, durations: {},
-  cameraStage: "idle", recordSeconds: 0,
   warmupStatus: "idle", songStatus: "idle"
 };
 
 var audioEls = {};
-var stream = null, recorder = null, recChunks = [], recTimer = null;
 
 function saveState() {
   try {
@@ -144,45 +150,18 @@ function submitFile(kind, file, onStatus, filename) {
     .catch(function () { onStatus("error"); });
 }
 
-/* ---------- конвертация записанного видео в mp4 (ffmpeg.wasm, без сборки) ---------- */
-
-var ffmpegInstance = null;
-
-function getFFmpeg() {
-  if (!window.FFmpeg) return null;
-  if (!ffmpegInstance) {
-    ffmpegInstance = window.FFmpeg.createFFmpeg({
-      corePath: "https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js",
-      log: false
-    });
-  }
-  return ffmpegInstance;
-}
-
-function convertToMp4(webmBlob) {
-  var ff = getFFmpeg();
-  if (!ff) return Promise.reject(new Error("ffmpeg недоступен"));
-  var fetchFile = window.FFmpeg.fetchFile;
-  var loadStep = ff.isLoaded() ? Promise.resolve() : ff.load();
-  return loadStep
-    .then(function () { return fetchFile(webmBlob); })
-    .then(function (data) {
-      ff.FS("writeFile", "input.webm", data);
-      return ff.run("-i", "input.webm", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "30", "-c:a", "aac", "-movflags", "+faststart", "output.mp4");
-    })
-    .then(function () {
-      var out = ff.FS("readFile", "output.mp4");
-      try { ff.FS("unlink", "input.webm"); ff.FS("unlink", "output.mp4"); } catch (e) {}
-      return new Blob([out.buffer], { type: "video/mp4" });
-    });
-}
-
 function submitQuizResult(score, total) {
   var f = baseSubmitFields();
   f.append("kind", "quiz");
   f.append("score", score);
   f.append("total", total);
   fetch("/api/submit", { method: "POST", body: f }).catch(function () {});
+}
+
+function openTeacherChat() {
+  var url = "https://t.me/" + TEACHER_BOT_USERNAME;
+  if (tg && tg.openTelegramLink) tg.openTelegramLink(url);
+  else window.open(url, "_blank");
 }
 
 /* ---------- SVG ---------- */
@@ -199,7 +178,6 @@ var SVG = {
   seekFwd: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M20 4v6h-6" stroke="#6C91A6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M19.5 15a8 8 0 1 1-2-9.5L20 10" stroke="#6C91A6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><text x="12" y="17.5" font-size="7.5" font-weight="700" fill="#6C91A6" text-anchor="middle">10</text></svg>',
   play: '<svg width="12" height="14" viewBox="0 0 12 14" fill="none"><path d="M1 1l10 6-10 6V1z" fill="#F2ECE7"/></svg>',
   pause: '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="1" width="4" height="10" rx="1" fill="#F2ECE7"/><rect x="7" y="1" width="4" height="10" rx="1" fill="#F2ECE7"/></svg>',
-  camera: '<svg width="20" height="16" viewBox="0 0 20 16" fill="none"><rect x="1" y="2" width="13" height="12" rx="2.5" stroke="#F2ECE7" stroke-width="1.5"/><path d="M14 6.5l5-3v9l-5-3" stroke="#F2ECE7" stroke-width="1.5" stroke-linejoin="round"/></svg>',
   upload: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 11V2m0 0L4.5 5.5M8 2l3.5 3.5" stroke="#3E5866" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12v1a2 2 0 002 2h8a2 2 0 002-2v-1" stroke="#3E5866" stroke-width="1.6" stroke-linecap="round"/></svg>',
   uploadTerra: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 11V2m0 0L4.5 5.5M8 2l3.5 3.5" stroke="#5A3B26" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12v1a2 2 0 002 2h8a2 2 0 002-2v-1" stroke="#5A3B26" stroke-width="1.6" stroke-linecap="round"/></svg>',
   hwCheck: '<svg width="15" height="12" viewBox="0 0 15 12" fill="none"><path d="M1 6l4 4 9-9" stroke="#1F3A47" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -317,6 +295,7 @@ function renderCourses() {
     '<div class="courses-head">' +
       '<div class="courses-title">Курс вокала</div>' +
       '<div class="courses-sub">30 уроков · ' + esc(state.lastName) + " " + esc(state.firstName) + "</div>" +
+      '<button class="reset-link" data-act="reset-progress">Сбросить и войти как другой ученик</button>' +
     "</div>" +
     '<div class="courses-list">' + items + "</div>";
   wireActs();
@@ -574,117 +553,6 @@ function toggleAudio(n) {
 
 /* зона отправки видео (перерисовывается отдельно, не трогая аудио) */
 
-function renderHwZone() {
-  var zone = document.getElementById("hw-zone");
-  if (!zone) return;
-  var s = state;
-
-  if (s.warmupFile) {
-    var hint = "Видео прикреплено";
-    if (s.warmupStatus === "converting") hint = "Конвертирую в mp4…";
-    else if (s.warmupStatus === "sending") hint = "Отправляю преподавателю…";
-    else if (s.warmupStatus === "sent") hint = "Отправлено преподавателю ✓";
-    else if (s.warmupStatus === "error") hint = "Не отправилось — нажми «Повторить»";
-    else if (s.warmupStatus === "toolarge") hint = "Файл больше 4 МБ, Telegram не примет — запиши заново в приложении или отправь это видео преподавателю прямо в чат с ботом";
-    zone.innerHTML =
-      '<div class="hw-attached">' +
-        '<div class="hw-icon">' + SVG.hwCheck + "</div>" +
-        '<div style="flex:1;">' +
-          '<div class="hw-name">' + esc(s.warmupFile) + "</div>" +
-          '<div class="hw-hint' + (s.warmupStatus === "error" || s.warmupStatus === "toolarge" ? " error" : "") + '">' + hint + "</div>" +
-        "</div>" +
-        (s.warmupStatus === "error" ? '<button class="hw-replace" id="hw-retry">Повторить</button>' : "") +
-        '<button class="hw-replace" id="hw-retake">Заменить</button>' +
-      "</div>";
-    if (s.warmupStatus === "error") {
-      document.getElementById("hw-retry").addEventListener("click", function () {
-        if (!state.warmupBlob) { state.warmupStatus = "error"; renderHwZone(); return; }
-        submitFile("warmup", state.warmupBlob, function (status) {
-          state.warmupStatus = status;
-          renderHwZone();
-        }, state.warmupFile);
-        state.warmupStatus = "sending";
-        renderHwZone();
-      });
-    }
-    document.getElementById("hw-retake").addEventListener("click", function () {
-      state.warmupFile = null;
-      state.warmupBlob = null;
-      state.warmupStatus = "idle";
-      state.cameraStage = "idle";
-      saveState();
-      renderHwZone();
-    });
-    return;
-  }
-
-  if (s.cameraStage === "ready" || s.cameraStage === "recording") {
-    var recording = s.cameraStage === "recording";
-    zone.innerHTML =
-      '<div class="camera-frame">' +
-        '<video id="cam-video" autoplay muted playsinline></video>' +
-        (recording ? '<div class="rec-indicator"><span></span><em id="rec-time" style="font-style:normal;">' + fmtTime(s.recordSeconds) + "</em></div>" : "") +
-      "</div>" +
-      (recording
-        ? '<button class="camera-stop" id="cam-stop">Остановить запись</button>'
-        : '<div class="camera-btns">' +
-            '<button class="camera-cancel" id="cam-cancel">Отмена</button>' +
-            '<button class="camera-start" id="cam-start">Начать запись</button>' +
-          "</div>");
-    var video = document.getElementById("cam-video");
-    if (stream) video.srcObject = stream;
-    if (recording) {
-      document.getElementById("cam-stop").addEventListener("click", stopRecording);
-    } else {
-      document.getElementById("cam-cancel").addEventListener("click", cancelCamera);
-      document.getElementById("cam-start").addEventListener("click", beginRecording);
-    }
-    return;
-  }
-
-  zone.innerHTML =
-    '<div class="hw-choice">' +
-      '<button class="hw-record" id="hw-camera">' + SVG.camera + "Записать в приложении</button>" +
-      '<label class="hw-upload"><input type="file" accept="video/*" id="hw-file" style="display:none;">' + SVG.upload + "Загрузить готовое</label>" +
-    "</div>";
-  document.getElementById("hw-camera").addEventListener("click", startCamera);
-  document.getElementById("hw-file").addEventListener("change", function (e) {
-    var f = e.target.files[0];
-    if (!f) return;
-    finalizeWarmupUpload(f, f.name);
-  });
-}
-
-function startCamera() {
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    alert("Не удалось получить доступ к камере. Проверьте разрешения браузера.");
-    return;
-  }
-  // Разрешение занижаем специально: держим готовый файл маленьким, чтобы он
-  // гарантированно прошёл через сервер преподавателю (см. MAX_UPLOAD_BYTES).
-  navigator.mediaDevices.getUserMedia({
-    video: { width: { ideal: 480 }, height: { ideal: 640 } },
-    audio: true
-  }).then(function (s) {
-    stream = s;
-    state.cameraStage = "ready";
-    renderHwZone();
-  }).catch(function () {
-    alert("Не удалось получить доступ к камере. Проверьте разрешения браузера.");
-  });
-}
-
-function pickRecorderMime() {
-  // mp4 в приоритете — на iPhone/Safari он пишется нативно и конвертация не нужна.
-  var candidates = ["video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp8,opus", "video/webm"];
-  for (var i = 0; i < candidates.length; i++) {
-    if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(candidates[i])) {
-      return candidates[i];
-    }
-  }
-  return "";
-}
-
 function finalizeWarmupUpload(blob, filename) {
   state.warmupFile = filename;
   state.warmupBlob = blob;
@@ -704,65 +572,62 @@ function finalizeWarmupUpload(blob, filename) {
   }, filename);
 }
 
-function beginRecording() {
-  recChunks = [];
-  var mime = pickRecorderMime();
-  try {
-    recorder = mime
-      ? new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 250000, audioBitsPerSecond: 48000 })
-      : new MediaRecorder(stream);
-  } catch (e) {
-    try { recorder = new MediaRecorder(stream); } catch (e2) {
-      alert("Запись не поддерживается в этом браузере.");
-      return;
-    }
-  }
-  recorder.ondataavailable = function (e) { if (e.data.size > 0) recChunks.push(e.data); };
-  recorder.onstop = function () {
-    if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
-    stream = null;
-    clearInterval(recTimer);
-    state.cameraStage = "idle";
-    var rawBlob = new Blob(recChunks, { type: mime || "video/webm" });
+function renderHwZone() {
+  var zone = document.getElementById("hw-zone");
+  if (!zone) return;
+  var s = state;
 
-    if (mime && mime.indexOf("mp4") !== -1) {
-      // Уже записано в mp4 нативно (обычно Safari/iPhone) — конвертация не нужна.
-      finalizeWarmupUpload(rawBlob, "video.mp4");
-      return;
+  if (s.warmupFile) {
+    var hint = "Видео прикреплено";
+    if (s.warmupStatus === "sending") hint = "Отправляю преподавателю…";
+    else if (s.warmupStatus === "sent") hint = "Отправлено преподавателю ✓";
+    else if (s.warmupStatus === "error") hint = "Не отправилось — нажми «Повторить»";
+    else if (s.warmupStatus === "toolarge") hint = "Файл большой — сервер такое не пропустит. Отправь это видео преподавателю прямо в чат с ботом (кнопка ниже)";
+    zone.innerHTML =
+      '<div class="hw-attached">' +
+        '<div class="hw-icon">' + SVG.hwCheck + "</div>" +
+        '<div style="flex:1;">' +
+          '<div class="hw-name">' + esc(s.warmupFile) + "</div>" +
+          '<div class="hw-hint' + (s.warmupStatus === "error" || s.warmupStatus === "toolarge" ? " error" : "") + '">' + hint + "</div>" +
+        "</div>" +
+        (s.warmupStatus === "error" ? '<button class="hw-replace" id="hw-retry">Повторить</button>' : "") +
+        '<button class="hw-replace" id="hw-retake">Заменить</button>' +
+      "</div>" +
+      (s.warmupStatus === "toolarge" ? '<button class="cta" id="hw-open-tg" style="margin-top:10px;">Открыть чат с ботом в Telegram</button>' : "");
+    if (s.warmupStatus === "error") {
+      document.getElementById("hw-retry").addEventListener("click", function () {
+        if (!state.warmupBlob) { state.warmupStatus = "error"; renderHwZone(); return; }
+        submitFile("warmup", state.warmupBlob, function (status) {
+          state.warmupStatus = status;
+          renderHwZone();
+        }, state.warmupFile);
+        state.warmupStatus = "sending";
+        renderHwZone();
+      });
     }
-
-    state.warmupFile = "видео (конвертирую в mp4…)";
-    state.warmupStatus = "converting";
-    saveState();
-    renderHwZone();
-    convertToMp4(rawBlob).then(function (mp4Blob) {
-      finalizeWarmupUpload(mp4Blob, "video.mp4");
-    }).catch(function () {
-      // Конвертация не удалась (старый браузер/мало памяти) — не теряем запись, шлём как есть.
-      finalizeWarmupUpload(rawBlob, "video.webm");
+    if (s.warmupStatus === "toolarge") {
+      document.getElementById("hw-open-tg").addEventListener("click", openTeacherChat);
+    }
+    document.getElementById("hw-retake").addEventListener("click", function () {
+      state.warmupFile = null;
+      state.warmupBlob = null;
+      state.warmupStatus = "idle";
+      saveState();
+      renderHwZone();
     });
-  };
-  recorder.start();
-  state.cameraStage = "recording";
-  state.recordSeconds = 0;
-  renderHwZone();
-  recTimer = setInterval(function () {
-    state.recordSeconds++;
-    var t = document.getElementById("rec-time");
-    if (t) t.textContent = fmtTime(state.recordSeconds) + " / " + fmtTime(MAX_RECORD_SECONDS);
-    if (state.recordSeconds >= MAX_RECORD_SECONDS) stopRecording();
-  }, 1000);
-}
+    return;
+  }
 
-function stopRecording() { if (recorder) recorder.stop(); }
-
-function cancelCamera() {
-  if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
-  stream = null;
-  clearInterval(recTimer);
-  state.cameraStage = "idle";
-  state.recordSeconds = 0;
-  renderHwZone();
+  zone.innerHTML =
+    '<div class="instruction-note">Сними видео обычной камерой телефона — без ограничений по качеству (Full HD 1080p и выше) и по длительности.</div>' +
+    '<div class="hw-choice">' +
+      '<label class="hw-upload wide"><input type="file" accept="video/*" id="hw-file" style="display:none;">' + SVG.upload + "Прикрепить снятое видео</label>" +
+    "</div>";
+  document.getElementById("hw-file").addEventListener("change", function (e) {
+    var f = e.target.files[0];
+    if (!f) return;
+    finalizeWarmupUpload(f, f.name);
+  });
 }
 
 function stopAllMedia() {
@@ -770,9 +635,6 @@ function stopAllMedia() {
   audioEls = {};
   state.playerIdx = null;
   state.playerElapsed = 0;
-  if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; }
-  clearInterval(recTimer);
-  state.cameraStage = "idle";
 }
 
 /* ---------- упражнение с песней ---------- */
@@ -786,7 +648,7 @@ function songHint(s) {
   if (s.songStatus === "sending") return "Отправляю преподавателю…";
   if (s.songStatus === "sent") return "Отправлено преподавателю ✓";
   if (s.songStatus === "error") return "Не отправилось — нажми «Повторить отправку»";
-  if (s.songStatus === "toolarge") return "Фото больше 4 МБ, Telegram не примет — сделай фото поменьше или отправь его преподавателю прямо в чат с ботом";
+  if (s.songStatus === "toolarge") return "Файл большой — сервер такое не пропустит. Отправь фото преподавателю прямо в чат с ботом";
   return "Файл выбран ✓";
 }
 
@@ -837,6 +699,7 @@ function renderSong() {
         "</div>" +
       "</label>" +
       (s.songStatus === "error" ? '<button class="hw-replace" id="song-retry" style="margin:-10px 0 16px;">Повторить отправку</button>' : "") +
+      (s.songStatus === "toolarge" ? '<button class="cta" id="song-open-tg" style="margin:-10px 0 16px;">Открыть чат с ботом в Telegram</button>' : "") +
     "</div>" +
     '<div class="final-cta-wrap"><button class="cta terra" data-act="finish-lesson">Завершить урок</button></div>';
 
@@ -888,10 +751,18 @@ function renderSong() {
       }, state.songFile);
     });
   }
+  var songOpenTg = document.getElementById("song-open-tg");
+  if (songOpenTg) songOpenTg.addEventListener("click", openTeacherChat);
   wireActs();
 }
 
 /* ---------- обвязка ---------- */
+
+function resetProgress() {
+  if (!confirm("Сбросить весь прогресс и данные ученика на этом устройстве?")) return;
+  try { localStorage.removeItem("vocal-app"); } catch (e) {}
+  location.href = location.pathname;
+}
 
 var ACTS = {
   "back": handleBack,
@@ -902,7 +773,8 @@ var ACTS = {
   "go-warmups-free": function () { go("warmups"); },
   "go-song": function () { go("song"); },
   "finish-warmups": function () { state.warmupsDone = true; saveState(); go("song"); },
-  "finish-lesson": function () { state.songDone = true; saveState(); go("lesson-home"); }
+  "finish-lesson": function () { state.songDone = true; saveState(); go("lesson-home"); },
+  "reset-progress": resetProgress
 };
 
 function wireActs() {
