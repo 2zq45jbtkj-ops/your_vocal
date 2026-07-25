@@ -454,6 +454,10 @@ function renderWarmups() {
           '<div class="warmup-time" id="time-' + ex.n + '">' + warmupTimeLabel(ex) + "</div>" +
         "</div>" +
         '<p class="warmup-sub">' + esc(ex.sub) + "</p>" +
+        '<div class="tempo-row">' +
+          '<span class="tempo-label" id="tempo-label-' + ex.n + '">Скорость: 100%</span>' +
+          '<input type="range" class="tempo-slider" id="tempo-' + ex.n + '" min="50" max="100" step="5" value="100">' +
+        "</div>" +
         '<audio id="audio-' + ex.n + '" src="' + esc(ex.src) + '" preload="metadata" style="display:none;"></audio>' +
       "</div>";
   });
@@ -472,6 +476,10 @@ function renderWarmups() {
   LESSON.warmups.exercises.forEach(function (ex) {
     var el = document.getElementById("audio-" + ex.n);
     audioEls[ex.n] = el;
+    // Замедление без "плывущего" питча — держим исходную тональность упражнения.
+    el.preservesPitch = true;
+    el.mozPreservesPitch = true;
+    el.webkitPreservesPitch = true;
     el.addEventListener("loadedmetadata", function () {
       state.durations[ex.n] = Math.round(el.duration) || 0;
       var t = document.getElementById("time-" + ex.n);
@@ -490,6 +498,13 @@ function renderWarmups() {
         state.playerElapsed = 0;
         updatePlayBtn(ex);
       }
+    });
+    var slider = document.getElementById("tempo-" + ex.n);
+    slider.addEventListener("input", function () {
+      var pct = parseInt(slider.value, 10);
+      el.playbackRate = pct / 100;
+      var lbl = document.getElementById("tempo-label-" + ex.n);
+      if (lbl) lbl.textContent = "Скорость: " + pct + "%";
     });
   });
 

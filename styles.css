@@ -213,6 +213,25 @@ button { font-family: inherit; }
 .tempo-note { font-size: 11.5px; color: var(--gray); line-height: 1.5; margin: 2px 0 16px; }
 .tempo-note a { color: var(--terra); }
 
+.tempo-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.tempo-label {
+  font-size: 11px; color: var(--gray); font-weight: 600; white-space: nowrap;
+  min-width: 78px; font-variant-numeric: tabular-nums;
+}
+.tempo-slider {
+  -webkit-appearance: none; appearance: none; flex: 1; height: 4px;
+  border-radius: 2px; background: var(--line); outline: none; cursor: pointer;
+}
+.tempo-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 16px; height: 16px;
+  border-radius: 50%; background: var(--blue); cursor: pointer;
+  border: 2px solid #fff; box-shadow: 0 1px 3px rgba(62,88,102,0.3);
+}
+.tempo-slider::-moz-range-thumb {
+  width: 16px; height: 16px; border-radius: 50%; background: var(--blue);
+  cursor: pointer; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(62,88,102,0.3);
+}
+
 .hw-attached {
   display: flex; align-items: center; gap: 10px; background: #fff;
   border: 0.5px solid var(--line); border-radius: 14px; padding: 14px 16px; margin-bottom: 16px;
