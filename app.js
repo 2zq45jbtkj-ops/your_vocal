@@ -431,6 +431,14 @@ function fmtTime(sec) {
   return Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0");
 }
 
+function tempoLabelText(ex, pct) {
+  if (ex.bpm) {
+    var cur = Math.round(ex.bpm * pct / 100);
+    return cur + " / " + ex.bpm + " BPM";
+  }
+  return "Скорость: " + pct + "%";
+}
+
 function warmupTimeLabel(ex) {
   var playing = state.playerIdx === ex.n;
   var dur = state.durations[ex.n] || 0;
@@ -455,7 +463,7 @@ function renderWarmups() {
         "</div>" +
         '<p class="warmup-sub">' + esc(ex.sub) + "</p>" +
         '<div class="tempo-row">' +
-          '<span class="tempo-label" id="tempo-label-' + ex.n + '">Скорость: 100%</span>' +
+          '<span class="tempo-label" id="tempo-label-' + ex.n + '">' + tempoLabelText(ex, 100) + "</span>" +
           '<input type="range" class="tempo-slider" id="tempo-' + ex.n + '" min="50" max="100" step="5" value="100">' +
         "</div>" +
         '<audio id="audio-' + ex.n + '" src="' + esc(ex.src) + '" preload="metadata" style="display:none;"></audio>' +
@@ -504,7 +512,7 @@ function renderWarmups() {
       var pct = parseInt(slider.value, 10);
       el.playbackRate = pct / 100;
       var lbl = document.getElementById("tempo-label-" + ex.n);
-      if (lbl) lbl.textContent = "Скорость: " + pct + "%";
+      if (lbl) lbl.textContent = tempoLabelText(ex, pct);
     });
   });
 
