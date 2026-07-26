@@ -293,7 +293,11 @@ button { font-family: inherit; }
 }
 .song-track-title { font-size: 14px; font-weight: 700; color: var(--ink); margin-bottom: 10px; }
 .song-player-row { margin-bottom: 8px; }
-.song-seek { margin-bottom: 14px; }
+.song-seek {
+  display: block; width: 100%; margin-bottom: 14px; height: 6px;
+}
+.song-seek::-webkit-slider-thumb { width: 22px; height: 22px; }
+.song-seek::-moz-range-thumb { width: 22px; height: 22px; }
 .drag-chip { cursor: grab; }
 .drag-chip:active { cursor: grabbing; }
 
