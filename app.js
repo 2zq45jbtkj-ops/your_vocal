@@ -142,22 +142,51 @@ function baseSubmitFields() {
   return f;
 }
 
-function submitFile(kind, file, onStatus, filename) {
+function submitFile(kind, file, onStatus, filename, meta) {
   onStatus("sending");
   var f = baseSubmitFields();
   f.append("kind", kind);
   f.append("file", file, filename || file.name || (kind + "-upload"));
+  if (meta) {
+    if (meta.width) f.append("width", meta.width);
+    if (meta.height) f.append("height", meta.height);
+    if (meta.duration) f.append("duration", meta.duration);
+  }
   fetch("/api/submit", { method: "POST", body: f })
     .then(function (r) { return r.json().catch(function () { return { ok: false }; }); })
     .then(function (data) { onStatus(data.ok ? "sent" : "error"); })
     .catch(function () { onStatus("error"); });
 }
 
-function submitQuizResult(score, total) {
+/* читаем реальные width/height/duration видео перед отправкой —
+   без этого Telegram иногда растягивает картинку в квадрат */
+function readVideoMeta(file) {
+  return new Promise(function (resolve) {
+    var url;
+    try { url = URL.createObjectURL(file); } catch (e) { resolve(null); return; }
+    var v = document.createElement("video");
+    v.preload = "metadata";
+    var done = function (meta) { URL.revokeObjectURL(url); resolve(meta); };
+    v.onloadedmetadata = function () {
+      done({ width: v.videoWidth, height: v.videoHeight, duration: Math.round(v.duration) || 0 });
+    };
+    v.onerror = function () { done(null); };
+    setTimeout(function () { done(null); }, 4000); // не ждём вечно на странных файлах
+    v.src = url;
+  });
+}
+
+function submitQuizResult(score, total, wrongDetails) {
   var f = baseSubmitFields();
   f.append("kind", "quiz");
   f.append("score", score);
   f.append("total", total);
+  if (wrongDetails && wrongDetails.length) {
+    var lines = wrongDetails.map(function (w, i) {
+      return (i + 1) + ". " + w.q + "\n   Ответ ученика: " + w.chosen + "\n   Правильный: " + w.correct;
+    });
+    f.append("details", lines.join("\n"));
+  }
   fetch("/api/submit", { method: "POST", body: f }).catch(function () {});
 }
 
@@ -408,11 +437,23 @@ function renderQuiz() {
     if (!hasAnswer) return;
     if (!isLast) { state.quizIndex++; render(); return; }
     var score = 0;
-    questions.forEach(function (q, i) { if (state.quizAnswers[i] === q.correct) score++; });
+    var wrongDetails = [];
+    questions.forEach(function (q, i) {
+      var chosen = state.quizAnswers[i];
+      if (chosen === q.correct) {
+        score++;
+      } else {
+        wrongDetails.push({
+          q: q.q,
+          chosen: (chosen === null || chosen === undefined) ? "(не отвечено)" : q.opts[chosen],
+          correct: q.opts[q.correct]
+        });
+      }
+    });
     state.quizDone = true;
     state.quizScore = score;
     saveState();
-    submitQuizResult(score, questions.length);
+    submitQuizResult(score, questions.length, wrongDetails);
     go("quiz-result");
   });
   wireActs();
@@ -596,10 +637,12 @@ function finalizeWarmupUpload(blob, filename) {
   state.warmupStatus = "sending";
   renderHwZone();
   maybeCelebrate();
-  submitFile("warmup", blob, function (status) {
-    state.warmupStatus = status;
-    renderHwZone();
-  }, filename);
+  readVideoMeta(blob).then(function (meta) {
+    submitFile("warmup", blob, function (status) {
+      state.warmupStatus = status;
+      renderHwZone();
+    }, filename, meta);
+  });
 }
 
 function renderHwZone() {
@@ -627,12 +670,14 @@ function renderHwZone() {
     if (s.warmupStatus === "error") {
       document.getElementById("hw-retry").addEventListener("click", function () {
         if (!state.warmupBlob) { state.warmupStatus = "error"; renderHwZone(); return; }
-        submitFile("warmup", state.warmupBlob, function (status) {
-          state.warmupStatus = status;
-          renderHwZone();
-        }, state.warmupFile);
         state.warmupStatus = "sending";
         renderHwZone();
+        readVideoMeta(state.warmupBlob).then(function (meta) {
+          submitFile("warmup", state.warmupBlob, function (status) {
+            state.warmupStatus = status;
+            renderHwZone();
+          }, state.warmupFile, meta);
+        });
       });
     }
     if (s.warmupStatus === "toolarge") {
