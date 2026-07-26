@@ -26,7 +26,7 @@ var TEACHER_BOT_USERNAME = "your_vocal_teacher_bot";
 
 var state = {
   screen: "tg",
-  tgId: "", firstName: "", lastName: "",
+  tgId: "", chatId: null, firstName: "", lastName: "",
   quizIndex: 0, quizAnswers: [], quizScore: 0,
   quizDone: false, warmupsDone: false, songDone: false,
   lectureViewed: false, celebrated: false,
@@ -45,7 +45,7 @@ var songAudioEls = {};
 function saveState() {
   try {
     localStorage.setItem("vocal-app", JSON.stringify({
-      tgId: state.tgId, firstName: state.firstName, lastName: state.lastName,
+      tgId: state.tgId, chatId: state.chatId, firstName: state.firstName, lastName: state.lastName,
       quizIndex: state.quizIndex, quizAnswers: state.quizAnswers,
       quizScore: state.quizScore, quizDone: state.quizDone,
       warmupsDone: state.warmupsDone, songDone: state.songDone,
@@ -138,6 +138,7 @@ function baseSubmitFields() {
   f.append("firstName", state.firstName || "");
   f.append("lastName", state.lastName || "");
   f.append("tgId", state.tgId || "");
+  f.append("chatId", state.chatId || "");
   f.append("lessonTitle", LESSON ? LESSON.title : "");
   return f;
 }
@@ -1169,9 +1170,10 @@ fetch("data/lesson-01.json")
     state.quizAnswers = new Array(data.quiz.questions.length).fill(null);
     loadState();
     // подставляем Telegram-username, если открыто внутри Telegram
-    if (!state.tgId && tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
+    if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
       var u = tg.initDataUnsafe.user;
-      state.tgId = u.username ? "@" + u.username : String(u.id || "");
+      state.chatId = u.id || state.chatId;
+      if (!state.tgId) state.tgId = u.username ? "@" + u.username : String(u.id || "");
     }
     render();
   })
