@@ -69,6 +69,13 @@ export default async function handler(req) {
       return json({ ok: true });
     }
 
+    if (kind === "song-marks") {
+      var text = (form.get("text") || "").toString();
+      var r2 = await tgSendMessage(token, chatId, "🎼 Разметка дыхания (песни)\n" + head + "\n\n" + text);
+      if (!r2.ok) return json({ ok: false, error: r2.description || "Telegram отклонил сообщение" }, 502);
+      return json({ ok: true });
+    }
+
     var file = form.get("file");
     if (!file) return json({ ok: false, error: "Файл не передан" }, 400);
 
