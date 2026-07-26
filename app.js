@@ -1126,9 +1126,19 @@ function wireActs() {
   });
 }
 
+var lastRenderedScreen = null;
+var lastRenderedQuizIndex = null;
+
 function render() {
   stopAllMedia();
-  window.scrollTo(0, 0);
+  // Прокручиваем наверх только при переходе на другой шаг/вопрос — не при
+  // мелких действиях на том же экране (ответ в тесте, метка в песне и
+  // т.п.), иначе страница дёргалась вверх при каждом клике.
+  var screenChanged = lastRenderedScreen !== state.screen;
+  var quizIndexChanged = state.screen === "quiz" && lastRenderedQuizIndex !== state.quizIndex;
+  if (screenChanged || quizIndexChanged) window.scrollTo(0, 0);
+  lastRenderedScreen = state.screen;
+  lastRenderedQuizIndex = state.quizIndex;
   if (tg) {
     if (state.screen === "tg" || state.screen === "courses") tg.BackButton.hide();
     else tg.BackButton.show();
