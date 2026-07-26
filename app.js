@@ -31,11 +31,11 @@ var state = {
   quizDone: false, warmupsDone: false, songDone: false,
   lectureViewed: false, celebrated: false,
   warmupFile: null, songFile: null,
-  selectedMark: null, songAnswers: {},
+  songPlacements: {}, // "ti-li" -> [{type:"V"|"v", index:Number}]
   // transient (не сохраняется):
   playerIdx: null, playerElapsed: 0, durations: {},
   songPlayerKey: null, songPlayerElapsed: 0, songDurations: {},
-  songRevealed: {},
+  songRevealed: {}, songSelectedMark: {},
   warmupStatus: "idle", songStatus: "idle"
 };
 
@@ -51,7 +51,7 @@ function saveState() {
       warmupsDone: state.warmupsDone, songDone: state.songDone,
       lectureViewed: state.lectureViewed, celebrated: state.celebrated,
       warmupFile: state.warmupFile, songFile: state.songFile,
-      songAnswers: state.songAnswers
+      songPlacements: state.songPlacements
     }));
   } catch (e) {}
 }
@@ -686,30 +686,16 @@ function songHint(s) {
   return "Файл выбран ✓";
 }
 
-/* сегменты строки: {t:"текст"} или {mark:"V"|"v"} */
-function renderLineSegments(segments, opts) {
+/* сегменты для статичного примера: {t:"текст"} или {mark:"V"|"v"} */
+function renderLineSegments(segments) {
   var html = "";
-  var markIdx = 0;
   segments.forEach(function (seg) {
-    if (seg.t !== undefined) {
-      html += esc(seg.t);
-      return;
-    }
-    if (opts.reveal) {
-      html += markCircle(seg.mark, "mark-circle");
-    } else {
-      var key = opts.keyPrefix + "-" + markIdx;
-      var placed = state.songAnswers[key] || null;
-      var cls = "mark-circle song-blank" +
-        (placed ? " " + (placed === "V" ? "deep" : "short") : " empty" + (state.selectedMark ? " armed" : ""));
-      html += '<span class="' + cls + '" data-key="' + key + '">' + (placed || "") + "</span>";
-    }
-    markIdx++;
+    html += seg.t !== undefined ? esc(seg.t) : markCircle(seg.mark, "mark-circle");
   });
   return html;
 }
 
-function songTimeLabel(track, idx) {
+function songTimeLabel(idx) {
   var playing = state.songPlayerKey === idx;
   var dur = state.songDurations[idx] || 0;
   if (playing) return fmtTime(state.songPlayerElapsed) + " / " + fmtTime(dur);
@@ -723,7 +709,7 @@ function updateSongPlayBtn(idx) {
   var playing = state.songPlayerKey === idx;
   btn.className = "play-btn" + (playing ? " playing" : "");
   btn.innerHTML = playing ? SVG.pause : SVG.play;
-  if (t) t.textContent = songTimeLabel(null, idx);
+  if (t) t.textContent = songTimeLabel(idx);
 }
 
 function toggleSongAudio(idx) {
@@ -738,40 +724,137 @@ function toggleSongAudio(idx) {
   var prev = state.songPlayerKey;
   Object.keys(songAudioEls).forEach(function (k) { if (songAudioEls[k]) songAudioEls[k].pause(); });
   Object.keys(audioEls).forEach(function (k) { if (audioEls[k]) audioEls[k].pause(); });
-  el.currentTime = 0;
   var p = el.play();
   if (p && p.catch) p.catch(function () {});
   state.songPlayerKey = idx;
-  state.songPlayerElapsed = 0;
+  state.songPlayerElapsed = Math.floor(el.currentTime);
   if (prev !== null && prev !== undefined) updateSongPlayBtn(prev);
   updateSongPlayBtn(idx);
+}
+
+/* ---- посимвольная разметка (свободная расстановка меток) ---- */
+
+function lineKey(ti, li) { return ti + "-" + li; }
+
+function getLineMarks(ti, li) {
+  var key = lineKey(ti, li);
+  if (!state.songPlacements[key]) state.songPlacements[key] = [];
+  return state.songPlacements[key];
+}
+
+function trackAttempted(ti, track) {
+  return track.lines.every(function (line, li) { return getLineMarks(ti, li).length > 0; });
+}
+
+function trackCorrectness(ti, track) {
+  return track.lines.map(function (line, li) {
+    var placed = getLineMarks(ti, li).map(function (m) { return m.type + ":" + m.index; }).sort();
+    var correct = line.correct.map(function (m) { return m.type + ":" + m.index; }).sort();
+    return placed.length === correct.length && placed.every(function (v, i) { return v === correct[i]; });
+  });
+}
+
+function renderChars(text, from, to, ti, li) {
+  var html = "";
+  for (var i = from; i < to; i++) {
+    html += '<span class="song-char" data-ti="' + ti + '" data-li="' + li + '" data-pos="' + i + '">' + esc(text[i]) + "</span>";
+  }
+  return html;
+}
+
+function renderInteractiveLine(ti, li, text) {
+  var marks = getLineMarks(ti, li);
+  var sorted = marks.map(function (m, i) { return { type: m.type, index: m.index, _idx: i }; })
+    .sort(function (a, b) { return a.index - b.index; });
+  var html = '<div class="song-text-line">';
+  var pos = 0;
+  sorted.forEach(function (m) {
+    html += renderChars(text, pos, m.index, ti, li);
+    html += '<span class="song-mark-badge ' + (m.type === "V" ? "deep" : "short") +
+      '" draggable="true" data-ti="' + ti + '" data-li="' + li + '" data-idx="' + m._idx + '">' + m.type + "</span>";
+    pos = m.index;
+  });
+  html += renderChars(text, pos, text.length, ti, li);
+  html += '<span class="song-char song-end" data-ti="' + ti + '" data-li="' + li + '" data-pos="' + text.length + '">&nbsp;</span>';
+  html += "</div>";
+  return html;
+}
+
+function renderReferenceLine(text, correct) {
+  var sorted = correct.slice().sort(function (a, b) { return a.index - b.index; });
+  var html = "";
+  var pos = 0;
+  sorted.forEach(function (m) {
+    html += esc(text.slice(pos, m.index)) + markCircle(m.type, "mark-circle");
+    pos = m.index;
+  });
+  html += esc(text.slice(pos));
+  return html;
+}
+
+function placeMark(ti, li, index, type) {
+  getLineMarks(ti, li).push({ type: type, index: index });
+  saveState();
+  render();
+}
+
+function submitSongMarks() {
+  var lines = [];
+  LESSON.song.tracks.forEach(function (track, ti) {
+    if (!trackAttempted(ti, track)) {
+      lines.push(track.title + ": попытка не завершена");
+      return;
+    }
+    var correctness = trackCorrectness(ti, track);
+    var ok = correctness.filter(Boolean).length;
+    lines.push(track.title + ": " + ok + "/" + correctness.length + " строк совпадает");
+  });
+  var f = baseSubmitFields();
+  f.append("kind", "song-marks");
+  f.append("text", lines.join("\n"));
+  fetch("/api/submit", { method: "POST", body: f }).catch(function () {});
 }
 
 function renderSong() {
   var s = state;
   var song = LESSON.song;
 
-  var exampleHtml = renderLineSegments(song.example, { reveal: true });
+  var exampleHtml = renderLineSegments(song.example);
 
   var tracksHtml = "";
   song.tracks.forEach(function (track, ti) {
+    var attempted = trackAttempted(ti, track);
+    var revealed = !!s.songRevealed[ti];
+    var correctness = revealed ? trackCorrectness(ti, track) : null;
+    var sel = s.songSelectedMark[ti];
+
     var linesHtml = "";
-    track.lines.forEach(function (segments, li) {
-      linesHtml +=
-        '<div class="song-line-card mb10">' +
-          renderLineSegments(segments, { reveal: !!s.songRevealed[ti], keyPrefix: ti + "-" + li }) +
-        "</div>";
+    track.lines.forEach(function (line, li) {
+      var cls = "song-line-card mb10";
+      if (correctness) cls += correctness[li] ? " line-correct" : " line-wrong";
+      linesHtml += '<div class="' + cls + '">' + renderInteractiveLine(ti, li, line.text) + "</div>";
+      if (revealed) {
+        linesHtml += '<div class="song-reference">Правильно: ' + renderReferenceLine(line.text, line.correct) + "</div>";
+      }
     });
+
     tracksHtml +=
       '<div class="song-track">' +
         '<div class="song-track-title">' + esc(track.title) + "</div>" +
         '<div class="warmup-row song-player-row">' +
           '<button class="play-btn" id="song-play-' + ti + '" data-ti="' + ti + '">' + SVG.play + "</button>" +
-          '<div class="warmup-time" id="song-time-' + ti + '">' + songTimeLabel(track, ti) + "</div>" +
-          '<audio id="song-audio-' + ti + '" src="' + esc(track.audio) + '" preload="metadata" style="display:none;"></audio>' +
+          '<div class="warmup-time" id="song-time-' + ti + '">' + songTimeLabel(ti) + "</div>" +
+        "</div>" +
+        '<input type="range" class="tempo-slider song-seek" id="song-seek-' + ti + '" data-ti="' + ti + '" min="0" max="1000" value="0">' +
+        '<audio id="song-audio-' + ti + '" src="' + esc(track.audio) + '" preload="metadata" style="display:none;"></audio>' +
+        '<div class="chips-row">' +
+          '<div class="chip drag-chip' + (sel === "V" ? " sel-V" : "") + '" id="chip-V-' + ti + '" draggable="true" data-ti="' + ti + '" data-mark="V">' + markCircle("V", "mark-circle") + "глубокий</div>" +
+          '<div class="chip drag-chip' + (sel === "v" ? " sel-v" : "") + '" id="chip-v-' + ti + '" draggable="true" data-ti="' + ti + '" data-mark="v">' + markCircle("v", "mark-circle") + "короткий</div>" +
         "</div>" +
         linesHtml +
-        '<button class="reveal-link" data-ti="' + ti + '">' + (s.songRevealed[ti] ? "Скрыть правильный вариант" : "Показать правильный вариант") + "</button>" +
+        (attempted
+          ? '<button class="reveal-link" data-ti="' + ti + '">' + (revealed ? "Скрыть правильный вариант" : "Показать правильный вариант") + "</button>"
+          : '<div class="reveal-locked">Расставь метки во всех строках, чтобы открыть правильный вариант</div>') +
       "</div>";
   });
 
@@ -785,11 +868,7 @@ function renderSong() {
       '<div class="song-hint">' + esc(song.hint) + "</div>" +
       '<div class="section-label" style="margin-top:0;">Пример разметки</div>' +
       '<div class="song-line-card">' + exampleHtml + "</div>" +
-      '<div class="song-hint">' + esc(song.practiceHint) + "</div>" +
-      '<div class="chips-row">' +
-        '<div class="chip' + (s.selectedMark === "V" ? " sel-V" : "") + '" id="chip-V">' + markCircle("V", "mark-circle") + "глубокий</div>" +
-        '<div class="chip' + (s.selectedMark === "v" ? " sel-v" : "") + '" id="chip-v">' + markCircle("v", "mark-circle") + "короткий</div>" +
-      "</div>" +
+      '<div class="song-hint">' + esc(song.practiceHint) + " Значок можно перетащить (на компьютере) или выбрать и коснуться места в тексте (на телефоне) — в любую точку, даже внутри слова." + "</div>" +
       tracksHtml +
       '<div class="section-label" style="margin:8px 0;">Отправка разметки</div>' +
       '<label class="photo-upload"><input type="file" accept="image/*" id="song-file" style="display:none;">' +
@@ -804,23 +883,90 @@ function renderSong() {
     "</div>" +
     '<div class="final-cta-wrap"><button class="cta terra" data-act="finish-lesson">Завершить урок</button></div>';
 
-  document.getElementById("chip-V").addEventListener("click", function () {
-    state.selectedMark = state.selectedMark === "V" ? null : "V";
-    render();
+  /* палитра: тап-выбор (мобильный сценарий) + перетаскивание (десктоп) */
+  var justDragged = {};
+  song.tracks.forEach(function (track, ti) {
+    ["V", "v"].forEach(function (mark) {
+      var chip = document.getElementById("chip-" + mark + "-" + ti);
+      if (!chip) return;
+      chip.addEventListener("click", function () {
+        if (justDragged[ti]) { justDragged[ti] = false; return; }
+        state.songSelectedMark[ti] = state.songSelectedMark[ti] === mark ? null : mark;
+        render();
+      });
+      chip.addEventListener("dragstart", function (e) {
+        justDragged[ti] = true;
+        e.dataTransfer.setData("text/plain", "new:" + mark);
+      });
+      chip.addEventListener("dragend", function () {
+        setTimeout(function () { justDragged[ti] = false; }, 50);
+      });
+    });
   });
-  document.getElementById("chip-v").addEventListener("click", function () {
-    state.selectedMark = state.selectedMark === "v" ? null : "v";
-    render();
+
+  /* места вставки метки — посимвольная сетка */
+  Array.prototype.forEach.call(app.querySelectorAll(".song-char"), function (el) {
+    el.addEventListener("click", function (e) {
+      var ti = parseInt(el.getAttribute("data-ti"), 10);
+      var sel = state.songSelectedMark[ti];
+      if (!sel) return;
+      var li = parseInt(el.getAttribute("data-li"), 10);
+      var pos = parseInt(el.getAttribute("data-pos"), 10);
+      var insertAt = pos;
+      if (!el.classList.contains("song-end")) {
+        var rect = el.getBoundingClientRect();
+        insertAt = (e.clientX - rect.left) < rect.width / 2 ? pos : pos + 1;
+      }
+      placeMark(ti, li, insertAt, sel);
+    });
+    el.addEventListener("dragover", function (e) { e.preventDefault(); });
+    el.addEventListener("drop", function (e) {
+      e.preventDefault();
+      var data = e.dataTransfer.getData("text/plain");
+      var ti = parseInt(el.getAttribute("data-ti"), 10);
+      var li = parseInt(el.getAttribute("data-li"), 10);
+      var pos = parseInt(el.getAttribute("data-pos"), 10);
+      var insertAt = pos;
+      if (!el.classList.contains("song-end")) {
+        var rect = el.getBoundingClientRect();
+        insertAt = (e.clientX - rect.left) < rect.width / 2 ? pos : pos + 1;
+      }
+      if (data.indexOf("new:") === 0) {
+        placeMark(ti, li, insertAt, data.slice(4));
+      } else if (data.indexOf("move:") === 0) {
+        var parts = data.split(":");
+        var fArr = getLineMarks(parseInt(parts[1], 10), parseInt(parts[2], 10));
+        var fIdx = parseInt(parts[3], 10);
+        var m = fArr[fIdx];
+        if (m) {
+          fArr.splice(fIdx, 1);
+          getLineMarks(ti, li).push({ type: m.type, index: insertAt });
+          saveState();
+          render();
+        }
+      }
+    });
   });
-  Array.prototype.forEach.call(app.querySelectorAll(".song-blank"), function (el) {
-    el.addEventListener("click", function () {
-      if (!state.selectedMark) return;
-      var key = el.getAttribute("data-key");
-      state.songAnswers[key] = state.songAnswers[key] === state.selectedMark ? null : state.selectedMark;
+
+  /* удаление / перетаскивание уже поставленной метки */
+  Array.prototype.forEach.call(app.querySelectorAll(".song-mark-badge"), function (el) {
+    el.addEventListener("click", function (e) {
+      e.stopPropagation();
+      var ti = parseInt(el.getAttribute("data-ti"), 10);
+      var li = parseInt(el.getAttribute("data-li"), 10);
+      var idx = parseInt(el.getAttribute("data-idx"), 10);
+      getLineMarks(ti, li).splice(idx, 1);
       saveState();
       render();
     });
+    el.addEventListener("dragstart", function (e) {
+      var ti = el.getAttribute("data-ti");
+      var li = el.getAttribute("data-li");
+      var idx = el.getAttribute("data-idx");
+      e.dataTransfer.setData("text/plain", "move:" + ti + ":" + li + ":" + idx);
+    });
   });
+
   Array.prototype.forEach.call(app.querySelectorAll(".reveal-link"), function (btn) {
     btn.addEventListener("click", function () {
       var ti = btn.getAttribute("data-ti");
@@ -832,16 +978,18 @@ function renderSong() {
   song.tracks.forEach(function (track, ti) {
     var el = document.getElementById("song-audio-" + ti);
     songAudioEls[ti] = el;
+    var seek = document.getElementById("song-seek-" + ti);
     el.addEventListener("loadedmetadata", function () {
       state.songDurations[ti] = Math.round(el.duration) || 0;
       var t = document.getElementById("song-time-" + ti);
-      if (t) t.textContent = songTimeLabel(track, ti);
+      if (t) t.textContent = songTimeLabel(ti);
     });
     el.addEventListener("timeupdate", function () {
+      if (el.duration) seek.value = Math.round((el.currentTime / el.duration) * 1000);
       if (state.songPlayerKey === ti) {
         state.songPlayerElapsed = Math.floor(el.currentTime);
         var t = document.getElementById("song-time-" + ti);
-        if (t) t.textContent = songTimeLabel(track, ti);
+        if (t) t.textContent = songTimeLabel(ti);
       }
     });
     el.addEventListener("ended", function () {
@@ -850,6 +998,13 @@ function renderSong() {
         state.songPlayerElapsed = 0;
         updateSongPlayBtn(ti);
       }
+    });
+    seek.addEventListener("input", function () {
+      if (!el.duration) return;
+      el.currentTime = (seek.value / 1000) * el.duration;
+      state.songPlayerElapsed = Math.floor(el.currentTime);
+      var t = document.getElementById("song-time-" + ti);
+      if (t) t.textContent = songTimeLabel(ti);
     });
   });
   Array.prototype.forEach.call(app.querySelectorAll(".song-player-row .play-btn"), function (btn) {
@@ -912,7 +1067,7 @@ var ACTS = {
   "go-warmups-free": function () { go("warmups"); },
   "go-song": function () { go("song"); },
   "finish-warmups": function () { state.warmupsDone = true; saveState(); go("song"); },
-  "finish-lesson": function () { state.songDone = true; saveState(); go("lesson-home"); },
+  "finish-lesson": function () { state.songDone = true; saveState(); submitSongMarks(); go("lesson-home"); },
   "reset-progress": resetProgress
 };
 
