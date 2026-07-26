@@ -148,6 +148,7 @@ button { font-family: inherit; }
   background: var(--soft-terra); border-radius: 12px; padding: 10px 14px;
   font-size: 12.5px; color: #5A3B26; margin: 6px 0 16px; font-weight: 600;
 }
+.lecture-para { font-size: 12.5px; color: var(--ink); line-height: 1.6; margin: 0 0 14px; }
 .bottom-cta { padding: 14px 20px 24px; }
 .bottom-cta .cta { height: 50px; font-size: 15px; }
 
@@ -210,6 +211,13 @@ button { font-family: inherit; }
 }
 .warmup-time { font-size: 12px; color: var(--gray); font-variant-numeric: tabular-nums; }
 .warmup-sub { margin: 10px 0 0; font-size: 12px; color: var(--ink); line-height: 1.5; }
+.warmup-how { margin: 8px 0 0; font-size: 12px; color: var(--ink); line-height: 1.5; }
+.warmup-how b { color: var(--blue); }
+.warmup-mistake {
+  margin: 8px 0 0; font-size: 12px; color: #5A3B26; line-height: 1.5;
+  background: var(--soft-terra); border-radius: 10px; padding: 8px 12px;
+}
+.warmup-mistake b { color: #5A3B26; }
 .tempo-note { font-size: 11.5px; color: var(--gray); line-height: 1.5; margin: 2px 0 16px; }
 .tempo-note a { color: var(--terra); }
 
@@ -263,35 +271,32 @@ button { font-family: inherit; }
 }
 .mark-circle.deep { background: var(--terra); font-size: 12px; }
 .mark-circle.short { background: var(--blue); font-size: 11px; }
+.mark-circle.empty {
+  background: transparent; color: transparent; cursor: default;
+  border: 1.5px dashed var(--disabled); margin: 0 2px;
+}
+.mark-circle.empty.armed { border-color: var(--terra); cursor: pointer; }
+.mark-circle.deep, .mark-circle.short { margin: 0 2px; }
+.song-blank.deep, .song-blank.short { cursor: pointer; }
 .song-hint {
   font-size: 12px; color: var(--ink); line-height: 1.55; background: #fff;
   border: 0.5px solid var(--line); border-radius: 14px; padding: 12px 16px; margin: 0 0 16px;
 }
 .song-line-card {
   background: #fff; border: 0.5px solid var(--line); border-radius: 14px;
-  padding: 16px; font-size: 13.5px; line-height: 2.6; color: var(--ink); margin-bottom: 16px;
+  padding: 14px 16px; font-size: 13.5px; line-height: 2.1; color: var(--ink); margin-bottom: 16px;
 }
 .song-line-card.mb10 { margin-bottom: 10px; }
-.marked-word { position: relative; display: inline-block; }
-.word-mark {
-  position: absolute; top: -20px; left: 50%; transform: translateX(-50%);
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 22px; height: 22px; border-radius: 50%; font-weight: 700; color: var(--bg);
+.chips-row { display: flex; gap: 10px; padding: 0 0 12px; }
+.song-track {
+  border-top: 1px solid var(--line); padding: 16px 0 4px; margin-bottom: 4px;
 }
-.word-mark.deep { background: var(--terra); font-size: 12px; }
-.word-mark.short { background: var(--blue); font-size: 11px; }
-.blank-mark {
-  position: absolute; top: -20px; left: 50%; transform: translateX(-50%);
-  width: 20px; height: 20px; border-radius: 50%; cursor: default;
-  display: flex; align-items: center; justify-content: center;
-  font-weight: 700; color: var(--bg); background: transparent;
-  border: 1.5px dashed var(--disabled); font-size: 11px;
+.song-track-title { font-size: 14px; font-weight: 700; color: var(--ink); margin-bottom: 10px; }
+.song-player-row { margin-bottom: 12px; }
+.reveal-link {
+  border: none; background: none; padding: 4px 0 14px; color: var(--terra);
+  font-size: 12px; font-weight: 600; cursor: pointer;
 }
-.blank-mark.armed { border-color: var(--terra); cursor: pointer; }
-.blank-mark.set-V { background: var(--terra); border: none; font-size: 12px; cursor: pointer; }
-.blank-mark.set-v { background: var(--blue); border: none; font-size: 11px; cursor: pointer; }
-.turn-hint { font-size: 12px; color: var(--gray); margin: 0 0 10px; }
-.chips-row { display: flex; gap: 10px; padding: 0 0 16px; }
 .chip {
   display: flex; align-items: center; gap: 6px; background: #fff;
   border: 1.5px solid var(--line); border-radius: 20px; padding: 7px 14px;

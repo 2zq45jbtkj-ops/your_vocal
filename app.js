@@ -31,13 +31,16 @@ var state = {
   quizDone: false, warmupsDone: false, songDone: false,
   lectureViewed: false, celebrated: false,
   warmupFile: null, songFile: null,
-  selectedMark: null, songMarks: {},
+  selectedMark: null, songAnswers: {},
   // transient (не сохраняется):
   playerIdx: null, playerElapsed: 0, durations: {},
+  songPlayerKey: null, songPlayerElapsed: 0, songDurations: {},
+  songRevealed: {},
   warmupStatus: "idle", songStatus: "idle"
 };
 
 var audioEls = {};
+var songAudioEls = {};
 
 function saveState() {
   try {
@@ -48,7 +51,7 @@ function saveState() {
       warmupsDone: state.warmupsDone, songDone: state.songDone,
       lectureViewed: state.lectureViewed, celebrated: state.celebrated,
       warmupFile: state.warmupFile, songFile: state.songFile,
-      songMarks: state.songMarks
+      songAnswers: state.songAnswers
     }));
   } catch (e) {}
 }
@@ -359,6 +362,8 @@ function renderLecture() {
       html += '<div class="point"><span class="point-num">' + num + "</span><div><b>" + esc(blk.b) + "</b><p>" + esc(blk.p) + "</p></div></div>";
     } else if (blk.type === "note") {
       html += '<div class="lecture-note">' + esc(blk.text) + "</div>";
+    } else if (blk.type === "para") {
+      html += '<p class="lecture-para">' + esc(blk.text) + "</p>";
     }
   });
   html += "</div>";
@@ -462,6 +467,8 @@ function renderWarmups() {
           '<div class="warmup-time" id="time-' + ex.n + '">' + warmupTimeLabel(ex) + "</div>" +
         "</div>" +
         '<p class="warmup-sub">' + esc(ex.sub) + "</p>" +
+        (ex.how ? '<p class="warmup-how"><b>Как выполнять:</b> ' + esc(ex.how) + "</p>" : "") +
+        (ex.mistake ? '<p class="warmup-mistake"><b>Частая ошибка:</b> ' + esc(ex.mistake) + "</p>" : "") +
         '<div class="tempo-row">' +
           '<span class="tempo-label" id="tempo-label-' + ex.n + '">' + tempoLabelText(ex, 100) + "</span>" +
           '<input type="range" class="tempo-slider" id="tempo-' + ex.n + '" min="50" max="100" step="5" value="100">' +
@@ -658,6 +665,10 @@ function stopAllMedia() {
   audioEls = {};
   state.playerIdx = null;
   state.playerElapsed = 0;
+  Object.keys(songAudioEls).forEach(function (k) { if (songAudioEls[k]) songAudioEls[k].pause(); });
+  songAudioEls = {};
+  state.songPlayerKey = null;
+  state.songPlayerElapsed = 0;
 }
 
 /* ---------- упражнение с песней ---------- */
@@ -675,25 +686,92 @@ function songHint(s) {
   return "Файл выбран ✓";
 }
 
+/* сегменты строки: {t:"текст"} или {mark:"V"|"v"} */
+function renderLineSegments(segments, opts) {
+  var html = "";
+  var markIdx = 0;
+  segments.forEach(function (seg) {
+    if (seg.t !== undefined) {
+      html += esc(seg.t);
+      return;
+    }
+    if (opts.reveal) {
+      html += markCircle(seg.mark, "mark-circle");
+    } else {
+      var key = opts.keyPrefix + "-" + markIdx;
+      var placed = state.songAnswers[key] || null;
+      var cls = "mark-circle song-blank" +
+        (placed ? " " + (placed === "V" ? "deep" : "short") : " empty" + (state.selectedMark ? " armed" : ""));
+      html += '<span class="' + cls + '" data-key="' + key + '">' + (placed || "") + "</span>";
+    }
+    markIdx++;
+  });
+  return html;
+}
+
+function songTimeLabel(track, idx) {
+  var playing = state.songPlayerKey === idx;
+  var dur = state.songDurations[idx] || 0;
+  if (playing) return fmtTime(state.songPlayerElapsed) + " / " + fmtTime(dur);
+  return dur ? fmtTime(dur) : "";
+}
+
+function updateSongPlayBtn(idx) {
+  var btn = document.getElementById("song-play-" + idx);
+  var t = document.getElementById("song-time-" + idx);
+  if (!btn) return;
+  var playing = state.songPlayerKey === idx;
+  btn.className = "play-btn" + (playing ? " playing" : "");
+  btn.innerHTML = playing ? SVG.pause : SVG.play;
+  if (t) t.textContent = songTimeLabel(null, idx);
+}
+
+function toggleSongAudio(idx) {
+  var el = songAudioEls[idx];
+  if (!el) return;
+  if (state.songPlayerKey === idx) {
+    el.pause();
+    state.songPlayerKey = null;
+    updateSongPlayBtn(idx);
+    return;
+  }
+  var prev = state.songPlayerKey;
+  Object.keys(songAudioEls).forEach(function (k) { if (songAudioEls[k]) songAudioEls[k].pause(); });
+  Object.keys(audioEls).forEach(function (k) { if (audioEls[k]) audioEls[k].pause(); });
+  el.currentTime = 0;
+  var p = el.play();
+  if (p && p.catch) p.catch(function () {});
+  state.songPlayerKey = idx;
+  state.songPlayerElapsed = 0;
+  if (prev !== null && prev !== undefined) updateSongPlayBtn(prev);
+  updateSongPlayBtn(idx);
+}
+
 function renderSong() {
   var s = state;
   var song = LESSON.song;
 
-  var exampleHtml = "";
-  song.example.forEach(function (part) {
-    if (part.t !== undefined) exampleHtml += esc(part.t);
-    else exampleHtml += '<span class="marked-word">' + markCircle(part.mark, "word-mark") + esc(part.word) + "</span>";
-  });
+  var exampleHtml = renderLineSegments(song.example, { reveal: true });
 
-  var linesHtml = "";
-  song.lines.forEach(function (line) {
-    var mark = s.songMarks[line.id] || null;
-    var cls = "blank-mark" + (mark ? " set-" + mark : (s.selectedMark ? " armed" : ""));
-    linesHtml +=
-      '<div class="song-line-card mb10">' +
-        esc(line.before) + ' <span class="marked-word">' +
-        '<span class="' + cls + '" data-line="' + line.id + '">' + (mark || "") + "</span>" +
-        esc(line.word) + "</span> " + esc(line.after) +
+  var tracksHtml = "";
+  song.tracks.forEach(function (track, ti) {
+    var linesHtml = "";
+    track.lines.forEach(function (segments, li) {
+      linesHtml +=
+        '<div class="song-line-card mb10">' +
+          renderLineSegments(segments, { reveal: !!s.songRevealed[ti], keyPrefix: ti + "-" + li }) +
+        "</div>";
+    });
+    tracksHtml +=
+      '<div class="song-track">' +
+        '<div class="song-track-title">' + esc(track.title) + "</div>" +
+        '<div class="warmup-row song-player-row">' +
+          '<button class="play-btn" id="song-play-' + ti + '" data-ti="' + ti + '">' + SVG.play + "</button>" +
+          '<div class="warmup-time" id="song-time-' + ti + '">' + songTimeLabel(track, ti) + "</div>" +
+          '<audio id="song-audio-' + ti + '" src="' + esc(track.audio) + '" preload="metadata" style="display:none;"></audio>' +
+        "</div>" +
+        linesHtml +
+        '<button class="reveal-link" data-ti="' + ti + '">' + (s.songRevealed[ti] ? "Скрыть правильный вариант" : "Показать правильный вариант") + "</button>" +
       "</div>";
   });
 
@@ -707,13 +785,13 @@ function renderSong() {
       '<div class="song-hint">' + esc(song.hint) + "</div>" +
       '<div class="section-label" style="margin-top:0;">Пример разметки</div>' +
       '<div class="song-line-card">' + exampleHtml + "</div>" +
-      '<div class="section-label" style="margin-top:0;">Твоя очередь</div>' +
-      '<div class="turn-hint">1. Выбери значок ниже → 2. коснись места в строке, где нужен вдох</div>' +
+      '<div class="song-hint">' + esc(song.practiceHint) + "</div>" +
       '<div class="chips-row">' +
         '<div class="chip' + (s.selectedMark === "V" ? " sel-V" : "") + '" id="chip-V">' + markCircle("V", "mark-circle") + "глубокий</div>" +
         '<div class="chip' + (s.selectedMark === "v" ? " sel-v" : "") + '" id="chip-v">' + markCircle("v", "mark-circle") + "короткий</div>" +
       "</div>" +
-      linesHtml +
+      tracksHtml +
+      '<div class="section-label" style="margin:8px 0;">Отправка разметки</div>' +
       '<label class="photo-upload"><input type="file" accept="image/*" id="song-file" style="display:none;">' +
         '<div class="hw-icon terra">' + SVG.uploadTerra + "</div>" +
         '<div style="flex:1;">' +
@@ -734,15 +812,53 @@ function renderSong() {
     state.selectedMark = state.selectedMark === "v" ? null : "v";
     render();
   });
-  Array.prototype.forEach.call(app.querySelectorAll(".blank-mark"), function (el) {
+  Array.prototype.forEach.call(app.querySelectorAll(".song-blank"), function (el) {
     el.addEventListener("click", function () {
       if (!state.selectedMark) return;
-      var id = el.getAttribute("data-line");
-      state.songMarks[id] = state.songMarks[id] === state.selectedMark ? null : state.selectedMark;
+      var key = el.getAttribute("data-key");
+      state.songAnswers[key] = state.songAnswers[key] === state.selectedMark ? null : state.selectedMark;
       saveState();
       render();
     });
   });
+  Array.prototype.forEach.call(app.querySelectorAll(".reveal-link"), function (btn) {
+    btn.addEventListener("click", function () {
+      var ti = btn.getAttribute("data-ti");
+      state.songRevealed[ti] = !state.songRevealed[ti];
+      render();
+    });
+  });
+
+  song.tracks.forEach(function (track, ti) {
+    var el = document.getElementById("song-audio-" + ti);
+    songAudioEls[ti] = el;
+    el.addEventListener("loadedmetadata", function () {
+      state.songDurations[ti] = Math.round(el.duration) || 0;
+      var t = document.getElementById("song-time-" + ti);
+      if (t) t.textContent = songTimeLabel(track, ti);
+    });
+    el.addEventListener("timeupdate", function () {
+      if (state.songPlayerKey === ti) {
+        state.songPlayerElapsed = Math.floor(el.currentTime);
+        var t = document.getElementById("song-time-" + ti);
+        if (t) t.textContent = songTimeLabel(track, ti);
+      }
+    });
+    el.addEventListener("ended", function () {
+      if (state.songPlayerKey === ti) {
+        state.songPlayerKey = null;
+        state.songPlayerElapsed = 0;
+        updateSongPlayBtn(ti);
+      }
+    });
+  });
+  Array.prototype.forEach.call(app.querySelectorAll(".song-player-row .play-btn"), function (btn) {
+    btn.addEventListener("click", function () {
+      var ti = parseInt(btn.getAttribute("data-ti"), 10);
+      toggleSongAudio(ti);
+    });
+  });
+
   document.getElementById("song-file").addEventListener("change", function (e) {
     var f = e.target.files[0];
     if (!f) return;
@@ -851,7 +967,6 @@ fetch("data/lesson-01.json")
   .then(function (data) {
     LESSON = data;
     state.quizAnswers = new Array(data.quiz.questions.length).fill(null);
-    data.song.lines.forEach(function (l) { state.songMarks[l.id] = null; });
     loadState();
     // подставляем Telegram-username, если открыто внутри Telegram
     if (!state.tgId && tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
