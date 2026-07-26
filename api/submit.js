@@ -13,6 +13,14 @@ function json(obj, status) {
   });
 }
 
+function studentHashtag(lastName, firstName) {
+  var clean = function (s) {
+    return (s || "").trim().replace(/[^\p{L}\p{N}_]+/gu, "");
+  };
+  var tag = (clean(lastName) + "_" + clean(firstName)).replace(/^_+|_+$/g, "");
+  return tag ? "#" + tag : "#ученик";
+}
+
 async function tgSendMessage(token, chatId, text) {
   var res = await fetch("https://api.telegram.org/bot" + token + "/sendMessage", {
     method: "POST",
@@ -22,11 +30,16 @@ async function tgSendMessage(token, chatId, text) {
   return res.json();
 }
 
-async function tgSendFile(token, chatId, method, fieldName, file, caption) {
+async function tgSendFile(token, chatId, method, fieldName, file, caption, extra) {
   var form = new FormData();
   form.append("chat_id", chatId);
   form.append("caption", caption);
   form.append(fieldName, file, file.name || "upload");
+  if (extra) {
+    Object.keys(extra).forEach(function (k) {
+      if (extra[k]) form.append(k, String(extra[k]));
+    });
+  }
   var res = await fetch("https://api.telegram.org/bot" + token + "/" + method, {
     method: "POST",
     body: form
@@ -52,19 +65,23 @@ export default async function handler(req) {
     return json({ ok: false, error: "Некорректный запрос" }, 400);
   }
 
-  var kind = form.get("kind"); // "quiz" | "warmup" | "song"
+  var kind = form.get("kind"); // "quiz" | "warmup" | "song" | "song-marks"
   var firstName = (form.get("firstName") || "").toString();
   var lastName = (form.get("lastName") || "").toString();
   var tgId = (form.get("tgId") || "").toString();
   var lessonTitle = (form.get("lessonTitle") || "").toString();
   var who = (lastName + " " + firstName).trim() || "Без имени";
-  var head = who + " (" + (tgId || "TG ID не указан") + ")\nУрок: " + lessonTitle;
+  var tag = studentHashtag(lastName, firstName);
+  var head = tag + "\n" + who + " (" + (tgId || "TG ID не указан") + ")\nУрок: " + lessonTitle;
 
   try {
     if (kind === "quiz") {
       var score = form.get("score");
       var total = form.get("total");
-      var r = await tgSendMessage(token, chatId, "📝 Тест пройден\n" + head + "\nРезультат: " + score + "/" + total);
+      var details = (form.get("details") || "").toString();
+      var msg = "📝 Тест пройден\n" + head + "\nРезультат: " + score + "/" + total;
+      if (details) msg += "\n\nОшибки:\n" + details;
+      var r = await tgSendMessage(token, chatId, msg);
       if (!r.ok) return json({ ok: false, error: r.description || "Telegram отклонил сообщение" }, 502);
       return json({ ok: true });
     }
@@ -84,7 +101,16 @@ export default async function handler(req) {
     var method = isSong ? "sendPhoto" : "sendVideo";
     var field = isSong ? "photo" : "video";
 
-    var result = await tgSendFile(token, chatId, method, field, file, label + "\n" + head);
+    // Реальные width/height/duration видео — без них Telegram иногда неверно
+    // угадывает пропорции и растягивает картинку в квадрат.
+    var extra = isSong ? null : {
+      width: form.get("width"),
+      height: form.get("height"),
+      duration: form.get("duration"),
+      supports_streaming: "true"
+    };
+
+    var result = await tgSendFile(token, chatId, method, field, file, label + "\n" + head, extra);
     if (!result.ok) {
       // фолбэк: если Telegram не смог обработать как видео/фото (например формат/размер), шлём документом
       var result2 = await tgSendFile(token, chatId, "sendDocument", "document", file, label + " (файлом)\n" + head);
