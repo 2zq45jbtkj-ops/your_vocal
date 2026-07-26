@@ -1,8 +1,14 @@
 /* Приём домашки от ученика и пересылка в Telegram-чат преподавателя.
    Edge-функция Vercel — без npm-зависимостей и сборки.
    Нужны переменные окружения в Vercel (Project Settings -> Environment Variables):
-     TELEGRAM_BOT_TOKEN — токен бота от @BotFather
-     ADMIN_CHAT_ID      — твой личный chat_id в Telegram (куда слать домашку) */
+     TELEGRAM_BOT_TOKEN  — токен бота от @BotFather
+     ADMIN_CHAT_ID       — твой личный chat_id в Telegram (куда слать домашку)
+     KV_REST_API_URL     — появляется после подключения Upstash Redis / Vercel KV
+     KV_REST_API_TOKEN   — появляется после подключения Upstash Redis / Vercel KV
+   Без KV_REST_API_* всё продолжит работать как раньше (просто не будет
+   быстрых ответов ученику через api/telegram-webhook.js). */
+
+import { kvSet } from "./_lib.js";
 
 export const config = { runtime: "edge" };
 
@@ -18,7 +24,7 @@ function studentHashtag(lastName, firstName) {
     return (s || "").trim().replace(/[^\p{L}\p{N}_]+/gu, "");
   };
   var tag = (clean(lastName) + "_" + clean(firstName)).replace(/^_+|_+$/g, "");
-  return tag ? "#" + tag : "#ученик";
+  return tag || "ученик";
 }
 
 async function tgSendMessage(token, chatId, text) {
@@ -47,6 +53,18 @@ async function tgSendFile(token, chatId, method, fieldName, file, caption, extra
   return res.json();
 }
 
+async function rememberStudent(tagKey, chatIdOfStudent, firstName, lastName, tgId) {
+  if (!chatIdOfStudent) return;
+  await kvSet("student:" + tagKey, JSON.stringify({
+    chatId: chatIdOfStudent, firstName: firstName, lastName: lastName, tgId: tgId
+  }));
+}
+
+async function rememberMessage(messageId, tagKey) {
+  if (!messageId) return;
+  await kvSet("msg:" + messageId, tagKey);
+}
+
 export default async function handler(req) {
   if (req.method !== "POST") {
     return json({ ok: false, error: "Method not allowed" }, 405);
@@ -69,10 +87,14 @@ export default async function handler(req) {
   var firstName = (form.get("firstName") || "").toString();
   var lastName = (form.get("lastName") || "").toString();
   var tgId = (form.get("tgId") || "").toString();
+  var studentChatId = (form.get("chatId") || "").toString();
   var lessonTitle = (form.get("lessonTitle") || "").toString();
   var who = (lastName + " " + firstName).trim() || "Без имени";
-  var tag = studentHashtag(lastName, firstName);
-  var head = tag + "\n" + who + " (" + (tgId || "TG ID не указан") + ")\nУрок: " + lessonTitle;
+  var tagKey = studentHashtag(lastName, firstName);
+  var head = "#" + tagKey + "\n" + who + " (" + (tgId || "TG ID не указан") + ")\nУрок: " + lessonTitle;
+
+  // Запоминаем ученика (для быстрых ответов из бота), не блокируем ответ ученику из-за этого.
+  await rememberStudent(tagKey, studentChatId, firstName, lastName, tgId).catch(function () {});
 
   try {
     if (kind === "quiz") {
@@ -83,6 +105,7 @@ export default async function handler(req) {
       if (details) msg += "\n\nОшибки:\n" + details;
       var r = await tgSendMessage(token, chatId, msg);
       if (!r.ok) return json({ ok: false, error: r.description || "Telegram отклонил сообщение" }, 502);
+      if (r.result) await rememberMessage(r.result.message_id, tagKey).catch(function () {});
       return json({ ok: true });
     }
 
@@ -90,6 +113,7 @@ export default async function handler(req) {
       var text = (form.get("text") || "").toString();
       var r2 = await tgSendMessage(token, chatId, "🎼 Разметка дыхания (песни)\n" + head + "\n\n" + text);
       if (!r2.ok) return json({ ok: false, error: r2.description || "Telegram отклонил сообщение" }, 502);
+      if (r2.result) await rememberMessage(r2.result.message_id, tagKey).catch(function () {});
       return json({ ok: true });
     }
 
@@ -117,7 +141,10 @@ export default async function handler(req) {
       if (!result2.ok) {
         return json({ ok: false, error: result2.description || result.description || "Telegram отклонил файл" }, 502);
       }
+      if (result2.result) await rememberMessage(result2.result.message_id, tagKey).catch(function () {});
+      return json({ ok: true });
     }
+    if (result.result) await rememberMessage(result.result.message_id, tagKey).catch(function () {});
     return json({ ok: true });
   } catch (e) {
     return json({ ok: false, error: String(e && e.message ? e.message : e) }, 500);
