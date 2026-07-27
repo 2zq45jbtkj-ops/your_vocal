@@ -36,6 +36,7 @@ var state = {
   playerIdx: null, playerElapsed: 0, durations: {},
   songPlayerKey: null, songPlayerElapsed: 0, songDurations: {},
   songRevealed: {}, songSelectedMark: {},
+  feedbackMood: null, feedbackText: "", coursesFilter: null,
   warmupStatus: "idle", songStatus: "idle"
 };
 
@@ -83,7 +84,7 @@ function progressPercent() {
   return n * 25;
 }
 
-var CONFETTI_COLORS = ["#E8B84B", "#C1503F", "#D98B4A", "#6C91A6", "#7A9B6E"];
+var CONFETTI_COLORS = ["#E8B84B", "#C1503F", "#D98B4A", "oklch(56% 0.09 235)", "#7A9B6E"];
 
 function showConfetti() {
   var overlay = document.createElement("div");
@@ -117,9 +118,11 @@ function showConfetti() {
   overlay.appendChild(card);
 
   document.body.appendChild(overlay);
+  // Самый долгий кусочек: duration до 4.0с + delay до 0.3с — держим оверлей
+  // дольше этого, иначе конфетти обрывались на середине падения.
   setTimeout(function () {
     if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-  }, 3000);
+  }, 4600);
 }
 
 function maybeCelebrate() {
@@ -200,20 +203,20 @@ function openTeacherChat() {
 /* ---------- SVG ---------- */
 
 var SVG = {
-  back: '<svg width="11" height="18" viewBox="0 0 11 18" fill="none"><path d="M9 1L2 9l7 8" stroke="#6C91A6" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  back: '<svg width="11" height="18" viewBox="0 0 11 18" fill="none"><path d="M9 1L2 9l7 8" stroke="oklch(56% 0.09 235)" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   telegram: '<svg width="52" height="52" viewBox="0 0 240 240" xmlns="http://www.w3.org/2000/svg"><linearGradient id="tgg" x1="53.72" y1="49" x2="191" y2="186" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#37aee2"/><stop offset="1" stop-color="#1e96c8"/></linearGradient><circle cx="120" cy="120" r="120" fill="url(#tgg)"/><path fill="#c8daea" d="M98 175c-3.888 0-3.227-1.468-4.568-5.17L82 132.207 152.988 87"/><path fill="#a9c9dd" d="M98 175c3 0 4.325-1.372 6-3l16-15.558-19.958-12.035"/><path fill="#fff" d="M100.04 154.41l48.36 35.729c5.519 3.045 9.501 1.468 10.876-5.123l19.685-92.788c1.977-8.085-3.077-11.746-8.359-9.32l-115.59 44.571c-7.891 3.165-7.843 7.567-1.438 9.523l29.663 9.259 68.673-43.325c3.242-1.966 6.218-.909 3.776 1.258"/></svg>',
-  lock: '<svg width="14" height="16" viewBox="0 0 14 16" fill="none"><rect x="1" y="7" width="12" height="8" rx="2" stroke="#AEB6BB" stroke-width="1.5"/><path d="M4 7V4.5a3 3 0 016 0V7" stroke="#AEB6BB" stroke-width="1.5"/></svg>',
-  chevron: '<svg width="8" height="14" viewBox="0 0 8 14" fill="none"><path d="M1 1l6 6-6 6" stroke="#C7CDD1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  stepCheck: '<svg width="13" height="10" viewBox="0 0 13 10" fill="none"><path d="M1 5l4 4 7-8" stroke="#FBEFE8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  doc: '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="2" y="1" width="10" height="12" rx="1.5" stroke="#F2ECE7" stroke-width="1.4"/><path d="M4.5 5h5M4.5 7.5h5M4.5 10h3" stroke="#F2ECE7" stroke-width="1.2" stroke-linecap="round"/></svg>',
-  resultCheck: '<svg width="26" height="20" viewBox="0 0 26 20" fill="none"><path d="M2 10l8 8L24 2" stroke="#1F3A47" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  seekBack: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 4v6h6" stroke="#6C91A6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 15a8 8 0 1 0 2-9.5L4 10" stroke="#6C91A6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><text x="12" y="17.5" font-size="7.5" font-weight="700" fill="#6C91A6" text-anchor="middle">10</text></svg>',
-  seekFwd: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M20 4v6h-6" stroke="#6C91A6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M19.5 15a8 8 0 1 1-2-9.5L20 10" stroke="#6C91A6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><text x="12" y="17.5" font-size="7.5" font-weight="700" fill="#6C91A6" text-anchor="middle">10</text></svg>',
-  play: '<svg width="12" height="14" viewBox="0 0 12 14" fill="none"><path d="M1 1l10 6-10 6V1z" fill="#F2ECE7"/></svg>',
-  pause: '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="1" width="4" height="10" rx="1" fill="#F2ECE7"/><rect x="7" y="1" width="4" height="10" rx="1" fill="#F2ECE7"/></svg>',
-  upload: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 11V2m0 0L4.5 5.5M8 2l3.5 3.5" stroke="#3E5866" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12v1a2 2 0 002 2h8a2 2 0 002-2v-1" stroke="#3E5866" stroke-width="1.6" stroke-linecap="round"/></svg>',
-  uploadTerra: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 11V2m0 0L4.5 5.5M8 2l3.5 3.5" stroke="#5A3B26" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12v1a2 2 0 002 2h8a2 2 0 002-2v-1" stroke="#5A3B26" stroke-width="1.6" stroke-linecap="round"/></svg>',
-  hwCheck: '<svg width="15" height="12" viewBox="0 0 15 12" fill="none"><path d="M1 6l4 4 9-9" stroke="#1F3A47" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  lock: '<svg width="14" height="16" viewBox="0 0 14 16" fill="none"><rect x="1" y="7" width="12" height="8" rx="2" stroke="oklch(65% 0.01 70)" stroke-width="1.5"/><path d="M4 7V4.5a3 3 0 016 0V7" stroke="oklch(65% 0.01 70)" stroke-width="1.5"/></svg>',
+  chevron: '<svg width="8" height="14" viewBox="0 0 8 14" fill="none"><path d="M1 1l6 6-6 6" stroke="oklch(75% 0.01 70)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  stepCheck: '<svg width="13" height="10" viewBox="0 0 13 10" fill="none"><path d="M1 5l4 4 7-8" stroke="oklch(97% 0.01 80)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  doc: '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="2" y="1" width="10" height="12" rx="1.5" stroke="oklch(95% 0.014 80)" stroke-width="1.4"/><path d="M4.5 5h5M4.5 7.5h5M4.5 10h3" stroke="oklch(95% 0.014 80)" stroke-width="1.2" stroke-linecap="round"/></svg>',
+  resultCheck: '<svg width="26" height="20" viewBox="0 0 26 20" fill="none"><path d="M2 10l8 8L24 2" stroke="oklch(28% 0.015 70)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  seekBack: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 4v6h6" stroke="oklch(56% 0.09 235)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 15a8 8 0 1 0 2-9.5L4 10" stroke="oklch(56% 0.09 235)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><text x="12" y="17.5" font-size="7.5" font-weight="700" fill="oklch(56% 0.09 235)" text-anchor="middle">10</text></svg>',
+  seekFwd: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M20 4v6h-6" stroke="oklch(56% 0.09 235)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M19.5 15a8 8 0 1 1-2-9.5L20 10" stroke="oklch(56% 0.09 235)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><text x="12" y="17.5" font-size="7.5" font-weight="700" fill="oklch(56% 0.09 235)" text-anchor="middle">10</text></svg>',
+  play: '<svg width="12" height="14" viewBox="0 0 12 14" fill="none"><path d="M1 1l10 6-10 6V1z" fill="oklch(95% 0.014 80)"/></svg>',
+  pause: '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="1" width="4" height="10" rx="1" fill="oklch(95% 0.014 80)"/><rect x="7" y="1" width="4" height="10" rx="1" fill="oklch(95% 0.014 80)"/></svg>',
+  upload: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 11V2m0 0L4.5 5.5M8 2l3.5 3.5" stroke="oklch(28% 0.015 70)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12v1a2 2 0 002 2h8a2 2 0 002-2v-1" stroke="oklch(28% 0.015 70)" stroke-width="1.6" stroke-linecap="round"/></svg>',
+  uploadTerra: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 11V2m0 0L4.5 5.5M8 2l3.5 3.5" stroke="oklch(38% 0.1 38)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12v1a2 2 0 002 2h8a2 2 0 002-2v-1" stroke="oklch(38% 0.1 38)" stroke-width="1.6" stroke-linecap="round"/></svg>',
+  hwCheck: '<svg width="15" height="12" viewBox="0 0 15 12" fill="none"><path d="M1 6l4 4 9-9" stroke="oklch(28% 0.015 70)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   micIcon: function (color) { return '<svg width="12" height="16" viewBox="0 0 12 16" fill="none"><rect x="3" y="1" width="6" height="10" rx="3" stroke="' + color + '" stroke-width="1.4"/><path d="M1.5 8.5a4.5 4.5 0 009 0M6 13v2" stroke="' + color + '" stroke-width="1.4" stroke-linecap="round"/></svg>'; },
   notesIcon: function (color) { return '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="4" cy="11" r="2.2" stroke="' + color + '" stroke-width="1.4"/><circle cx="11" cy="9" r="2.2" stroke="' + color + '" stroke-width="1.4"/><path d="M6.2 11V2.5L13.2 1v6.5" stroke="' + color + '" stroke-width="1.4"/></svg>'; },
   dockPerson: function (c) { return '<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="6.5" r="3.3" stroke="' + c + '" stroke-width="1.6"/><path d="M3.5 17c0-3.5 2.9-6 6.5-6s6.5 2.5 6.5 6" stroke="' + c + '" stroke-width="1.6" stroke-linecap="round"/></svg>'; },
@@ -238,6 +241,7 @@ function backTarget() {
     case "name": return "tg";
     case "lesson-home": return "courses";
     case "lecture": case "warmups": case "song": case "quiz-result": return "lesson-home";
+    case "feedback": return "song";
     case "quiz": return null; // отдельная логика
     default: return null;
   }
@@ -315,42 +319,40 @@ function lessonStats() {
 }
 
 function renderCourses() {
+  var pct = progressPercent();
+  var stats = lessonStats();
+  var filter = state.coursesFilter || (pct === 100 ? "completed" : "inProgress");
+  var lessonMatchesFilter = filter === "completed" ? pct === 100 : pct < 100;
+
   var items = "";
   for (var i = 1; i <= TOTAL_LESSONS; i++) {
     if (i === 1) {
-      var pct = progressPercent();
+      if (!lessonMatchesFilter) continue;
       items +=
-        '<div class="lesson-card" data-act="open-lesson">' +
-          '<div class="lesson-dot" style="background:#6C91A6;">1</div>' +
-          '<div class="lesson-body">' +
-            '<div class="lesson-name">' + esc(LESSON.title) + "</div>" +
-            '<div class="lesson-sub">' + (pct === 100 ? "Пройден · 100%" : pct + "% выполнено") + "</div>" +
-          "</div>" + SVG.chevron +
+        '<div class="lesson-tile" data-act="open-lesson">' +
+          '<div class="lesson-dot" style="background:oklch(56% 0.09 235);">1</div>' +
+          '<div class="lesson-tile-name">' + esc(LESSON.title) + "</div>" +
         "</div>";
     } else {
       items +=
-        '<div class="lesson-card locked">' +
-          '<div class="lesson-dot" style="background:#F2ECE7;">' + SVG.lock + "</div>" +
-          '<div class="lesson-body">' +
-            '<div class="lesson-name">Урок ' + i + "</div>" +
-            '<div class="lesson-sub">Скоро</div>' +
-          "</div>" +
+        '<div class="lesson-tile locked">' +
+          '<div class="lesson-dot" style="background:oklch(95% 0.014 80);">' + SVG.lock + "</div>" +
+          '<div class="lesson-tile-name">Урок ' + i + "</div>" +
         "</div>";
     }
   }
-  var stats = lessonStats();
+
   app.innerHTML =
     '<div class="courses-head">' +
       '<div class="courses-title">Курс вокала</div>' +
       '<div class="courses-sub">30 уроков · ' + esc(state.lastName) + " " + esc(state.firstName) + "</div>" +
-      '<div class="courses-stats">' +
-        '<span><b>' + stats.completed + '</b> завершено</span>' +
-        '<span class="dot">·</span>' +
-        '<span><b>' + stats.inProgress + '</b> в работе</span>' +
-      "</div>" +
       '<button class="reset-link" data-act="reset-progress">Сбросить и войти как другой ученик</button>' +
     "</div>" +
-    '<div class="courses-list">' + items + "</div>";
+    '<div class="filter-row">' +
+      '<button class="filter-btn' + (filter === "inProgress" ? " active" : "") + '" data-act="filter-inprogress">В работе · ' + stats.inProgress + "</button>" +
+      '<button class="filter-btn' + (filter === "completed" ? " active" : "") + '" data-act="filter-completed">✓ Завершено · ' + stats.completed + "</button>" +
+    "</div>" +
+    '<div class="courses-grid">' + items + "</div>";
   wireActs();
 }
 
@@ -379,7 +381,7 @@ function renderDock() {
   var html = '<div class="dock">';
   items.forEach(function (it) {
     var active = state.screen === it.screen;
-    var color = active ? "#AE5F3F" : "#8A9BA5";
+    var color = active ? "oklch(60% 0.13 38)" : "oklch(52% 0.012 70)";
     html += '<button class="dock-item' + (active ? " active" : "") + '" data-act="' + it.act + '">' +
       (it.badge || "") + it.icon(color) + "<span>" + it.label + "</span></button>";
   });
@@ -416,15 +418,15 @@ function renderLessonHome() {
       '<div class="lesson-progress-bar"><div style="width:' + pct + '%;"></div></div>' +
     "</div>" +
     '<div class="stepper">' +
-      stepRow({ act: "go-lecture", dotBg: "#AE5F3F", icon: SVG.stepCheck, name: "Лекция «" + esc(LESSON.title) + "»", sub: subs.lecture }) +
-      stepRow({ act: "go-quiz", dotBg: s.quizDone ? "#AE5F3F" : "#6C91A6", icon: s.quizDone ? SVG.stepCheck : SVG.doc, name: "Тест", sub: s.quizDone ? "Пройден · " + s.quizScore + "/" + LESSON.quiz.questions.length : subs.quiz }) +
+      stepRow({ act: "go-lecture", dotBg: "oklch(60% 0.13 38)", icon: SVG.stepCheck, name: "Лекция «" + esc(LESSON.title) + "»", sub: subs.lecture }) +
+      stepRow({ act: "go-quiz", dotBg: s.quizDone ? "oklch(60% 0.13 38)" : "oklch(56% 0.09 235)", icon: s.quizDone ? SVG.stepCheck : SVG.doc, name: "Тест", sub: s.quizDone ? "Пройден · " + s.quizScore + "/" + LESSON.quiz.questions.length : subs.quiz }) +
       stepRow({ act: "go-warmups", locked: false, lockedText: false,
-        dotBg: s.warmupsDone ? "#AE5F3F" : (s.quizDone ? "#6C91A6" : "#fff"),
-        icon: s.warmupsDone ? SVG.stepCheck : SVG.micIcon(s.quizDone ? "#F2ECE7" : "#AEB6BB"),
+        dotBg: s.warmupsDone ? "oklch(60% 0.13 38)" : (s.quizDone ? "oklch(56% 0.09 235)" : "#fff"),
+        icon: s.warmupsDone ? SVG.stepCheck : SVG.micIcon(s.quizDone ? "oklch(95% 0.014 80)" : "oklch(65% 0.01 70)"),
         name: "Распевки «" + esc(LESSON.title) + "»", sub: subs.warmups }) +
       stepRow({ act: "go-song", locked: false, lockedText: false, last: true,
-        dotBg: s.songDone ? "#AE5F3F" : (s.warmupsDone ? "#6C91A6" : "#fff"),
-        icon: s.songDone ? SVG.stepCheck : SVG.notesIcon(s.warmupsDone ? "#F2ECE7" : "#AEB6BB"),
+        dotBg: s.songDone ? "oklch(60% 0.13 38)" : (s.warmupsDone ? "oklch(56% 0.09 235)" : "#fff"),
+        icon: s.songDone ? SVG.stepCheck : SVG.notesIcon(s.warmupsDone ? "oklch(95% 0.014 80)" : "oklch(65% 0.01 70)"),
         name: "Упражнение с песней", sub: subs.song }) +
     "</div>";
   wireActs();
@@ -920,6 +922,65 @@ function submitSongMarks() {
   fetch("/api/submit", { method: "POST", body: f }).catch(function () {});
 }
 
+/* ---------- обратная связь после урока ---------- */
+
+var MOODS = [
+  { v: 1, emoji: "😞", label: "Было сложно" },
+  { v: 2, emoji: "😐", label: "Не очень" },
+  { v: 3, emoji: "🙂", label: "Нормально" },
+  { v: 4, emoji: "😊", label: "Хорошо" },
+  { v: 5, emoji: "🤩", label: "Отлично" }
+];
+
+function submitFeedback(moodValue, moodLabel, text) {
+  var f = baseSubmitFields();
+  f.append("kind", "feedback");
+  f.append("mood", moodValue);
+  f.append("moodLabel", moodLabel);
+  f.append("text", text || "");
+  fetch("/api/submit", { method: "POST", body: f }).catch(function () {});
+}
+
+function renderFeedback() {
+  var s = state;
+  var moodsHtml = MOODS.map(function (m) {
+    var sel = s.feedbackMood === m.v;
+    return '<button class="mood-btn' + (sel ? " sel" : "") + '" data-mood="' + m.v + '">' + m.emoji + "</button>";
+  }).join("");
+  var label = "";
+  MOODS.forEach(function (m) { if (m.v === s.feedbackMood) label = m.label; });
+
+  app.innerHTML =
+    '<div class="auth-screen" style="padding-top:58px;">' +
+      '<div class="auth-title">Как прошёл урок?</div>' +
+      '<div class="auth-sub">Домашнее задание выполнено. Оцени, как всё прошло — это поможет сделать курс лучше.</div>' +
+      '<div class="mood-row">' + moodsHtml + "</div>" +
+      '<div class="mood-label">' + esc(label) + "</div>" +
+      '<label class="field-label">РЕКОМЕНДАЦИИ И ПОЖЕЛАНИЯ (необязательно)</label>' +
+      '<textarea id="feedback-text" class="feedback-textarea" placeholder="Что понравилось, что было сложно, чего не хватило...">' + esc(s.feedbackText || "") + "</textarea>" +
+      '<div class="spacer"></div>' +
+      '<button class="cta" id="feedback-submit"' + (s.feedbackMood ? "" : " disabled") + ' style="margin-top:16px;">Отправить и завершить</button>' +
+    "</div>";
+
+  Array.prototype.forEach.call(app.querySelectorAll(".mood-btn"), function (btn) {
+    btn.addEventListener("click", function () {
+      state.feedbackMood = parseInt(btn.getAttribute("data-mood"), 10);
+      render();
+    });
+  });
+  var ta = document.getElementById("feedback-text");
+  ta.addEventListener("input", function () { state.feedbackText = ta.value; });
+  document.getElementById("feedback-submit").addEventListener("click", function () {
+    if (!state.feedbackMood) return;
+    var m = MOODS.filter(function (mm) { return mm.v === state.feedbackMood; })[0];
+    submitFeedback(state.feedbackMood, m ? m.label : "", state.feedbackText || "");
+    state.feedbackMood = null;
+    state.feedbackText = "";
+    go("lesson-home");
+  });
+  wireActs();
+}
+
 function renderSong() {
   var s = state;
   var song = LESSON.song;
@@ -1172,12 +1233,14 @@ var ACTS = {
   "go-warmups-free": function () { go("warmups"); },
   "go-song": function () { go("song"); },
   "finish-warmups": function () { state.warmupsDone = true; saveState(); go("song"); },
-  "finish-lesson": function () { state.songDone = true; saveState(); submitSongMarks(); go("lesson-home"); },
+  "finish-lesson": function () { state.songDone = true; saveState(); submitSongMarks(); go("feedback"); },
   "reset-progress": resetProgress,
   "go-profile": function () { go("profile"); },
   "go-courses": function () { go("courses"); },
   "go-questions": function () { go("questions"); },
-  "go-more": function () { go("more"); }
+  "go-more": function () { go("more"); },
+  "filter-inprogress": function () { state.coursesFilter = "inProgress"; render(); },
+  "filter-completed": function () { state.coursesFilter = "completed"; render(); }
 };
 
 function wireActs() {
@@ -1210,15 +1273,16 @@ function render() {
     case "tg": renderTg(); break;
     case "name": renderName(); break;
     case "courses": renderCourses(); break;
-    case "profile": renderComingSoon("Личный кабинет", SVG.dockPerson("#AE5F3F")); break;
-    case "questions": renderComingSoon("Вопросы", SVG.dockQuestion("#AE5F3F")); break;
-    case "more": renderComingSoon("Ещё", SVG.dockMore("#AE5F3F")); break;
+    case "profile": renderComingSoon("Личный кабинет", SVG.dockPerson("oklch(60% 0.13 38)")); break;
+    case "questions": renderComingSoon("Вопросы", SVG.dockQuestion("oklch(60% 0.13 38)")); break;
+    case "more": renderComingSoon("Ещё", SVG.dockMore("oklch(60% 0.13 38)")); break;
     case "lesson-home": renderLessonHome(); break;
     case "lecture": renderLecture(); break;
     case "quiz": renderQuiz(); break;
     case "quiz-result": renderQuizResult(); break;
     case "warmups": renderWarmups(); break;
     case "song": renderSong(); break;
+    case "feedback": renderFeedback(); break;
     default: renderTg();
   }
   renderDock();
@@ -1231,8 +1295,8 @@ if (tg) {
   tg.ready();
   tg.expand();
   try {
-    tg.setHeaderColor("#F2ECE7");
-    tg.setBackgroundColor("#F2ECE7");
+    tg.setHeaderColor("#F1EEE8");
+    tg.setBackgroundColor("#F1EEE8");
   } catch (e) {}
   tg.BackButton.onClick(handleBack);
 }
@@ -1255,5 +1319,5 @@ fetch("data/lesson-01.json")
     render();
   })
   .catch(function () {
-    app.innerHTML = '<div style="padding:40px 24px;text-align:center;color:#AE5F3F;font-weight:600;">Не удалось загрузить данные урока.<br>Проверь соединение и открой заново.</div>';
+    app.innerHTML = '<div style="padding:40px 24px;text-align:center;color:oklch(60% 0.13 38);font-weight:600;">Не удалось загрузить данные урока.<br>Проверь соединение и открой заново.</div>';
   });
