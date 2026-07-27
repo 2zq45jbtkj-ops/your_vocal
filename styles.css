@@ -75,7 +75,34 @@ button { font-family: inherit; }
   font-size: 11.5px; color: var(--gray); text-decoration: underline;
   cursor: pointer;
 }
-.courses-list { padding: 16px 16px 24px; display: flex; flex-direction: column; gap: 8px; }
+.courses-stats {
+  display: flex; align-items: center; gap: 6px; margin-top: 10px;
+  font-size: 12.5px; color: var(--gray);
+}
+.courses-stats b { color: var(--ink); font-weight: 700; }
+.courses-stats .dot { color: var(--disabled); }
+.courses-list { padding: 16px 16px 100px; display: flex; flex-direction: column; gap: 8px; }
+
+/* ---------- нижняя навигация (док) ---------- */
+.dock {
+  position: fixed; left: 50%; bottom: 0; transform: translateX(-50%);
+  width: 100%; max-width: 430px; display: flex;
+  background: #fff; border-top: 0.5px solid var(--line);
+  padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+  z-index: 500;
+}
+.dock-item {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  background: none; border: none; padding: 4px 2px; cursor: pointer;
+  color: var(--gray); font-size: 10px; font-weight: 600; position: relative;
+}
+.dock-item.active { color: var(--terra); }
+.dock-item svg { display: block; }
+.dock-badge {
+  position: absolute; top: -2px; right: 22%; background: var(--terra); color: #fff;
+  font-size: 9px; font-weight: 700; border-radius: 8px; min-width: 15px; height: 15px;
+  display: flex; align-items: center; justify-content: center; padding: 0 3px;
+}
 .lesson-card {
   display: flex; align-items: center; gap: 12px; background: #fff;
   border: 0.5px solid var(--line); border-radius: 14px; padding: 12px 14px;

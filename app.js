@@ -215,7 +215,11 @@ var SVG = {
   uploadTerra: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 11V2m0 0L4.5 5.5M8 2l3.5 3.5" stroke="#5A3B26" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12v1a2 2 0 002 2h8a2 2 0 002-2v-1" stroke="#5A3B26" stroke-width="1.6" stroke-linecap="round"/></svg>',
   hwCheck: '<svg width="15" height="12" viewBox="0 0 15 12" fill="none"><path d="M1 6l4 4 9-9" stroke="#1F3A47" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   micIcon: function (color) { return '<svg width="12" height="16" viewBox="0 0 12 16" fill="none"><rect x="3" y="1" width="6" height="10" rx="3" stroke="' + color + '" stroke-width="1.4"/><path d="M1.5 8.5a4.5 4.5 0 009 0M6 13v2" stroke="' + color + '" stroke-width="1.4" stroke-linecap="round"/></svg>'; },
-  notesIcon: function (color) { return '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="4" cy="11" r="2.2" stroke="' + color + '" stroke-width="1.4"/><circle cx="11" cy="9" r="2.2" stroke="' + color + '" stroke-width="1.4"/><path d="M6.2 11V2.5L13.2 1v6.5" stroke="' + color + '" stroke-width="1.4"/></svg>'; }
+  notesIcon: function (color) { return '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="4" cy="11" r="2.2" stroke="' + color + '" stroke-width="1.4"/><circle cx="11" cy="9" r="2.2" stroke="' + color + '" stroke-width="1.4"/><path d="M6.2 11V2.5L13.2 1v6.5" stroke="' + color + '" stroke-width="1.4"/></svg>'; },
+  dockPerson: function (c) { return '<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="6.5" r="3.3" stroke="' + c + '" stroke-width="1.6"/><path d="M3.5 17c0-3.5 2.9-6 6.5-6s6.5 2.5 6.5 6" stroke="' + c + '" stroke-width="1.6" stroke-linecap="round"/></svg>'; },
+  dockLessons: function (c) { return '<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="14" height="14" rx="3" stroke="' + c + '" stroke-width="1.6"/><path d="M6.5 8h7M6.5 12h4.5" stroke="' + c + '" stroke-width="1.6" stroke-linecap="round"/></svg>'; },
+  dockQuestion: function (c) { return '<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7.3" stroke="' + c + '" stroke-width="1.6"/><path d="M7.8 8a2.2 2.2 0 0 1 4.3.6c0 1.5-2.1 1.6-2.1 3.2" stroke="' + c + '" stroke-width="1.6" stroke-linecap="round"/><circle cx="10" cy="14.3" r="0.9" fill="' + c + '"/></svg>'; },
+  dockMore: function (c) { return '<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="4.5" cy="10" r="1.6" fill="' + c + '"/><circle cx="10" cy="10" r="1.6" fill="' + c + '"/><circle cx="15.5" cy="10" r="1.6" fill="' + c + '"/></svg>'; }
 };
 
 function backBtn(handlerName) {
@@ -300,6 +304,16 @@ function renderName() {
   wireActs();
 }
 
+/* число пройденных/начатых уроков — сейчас есть только урок 1,
+   но логика уже готова к появлению следующих */
+function lessonStats() {
+  var completed = 0, inProgress = 0;
+  var pct = progressPercent();
+  if (pct === 100) completed++;
+  else if (pct > 0) inProgress++;
+  return { completed: completed, inProgress: inProgress };
+}
+
 function renderCourses() {
   var items = "";
   for (var i = 1; i <= TOTAL_LESSONS; i++) {
@@ -324,14 +338,59 @@ function renderCourses() {
         "</div>";
     }
   }
+  var stats = lessonStats();
   app.innerHTML =
     '<div class="courses-head">' +
       '<div class="courses-title">Курс вокала</div>' +
       '<div class="courses-sub">30 уроков · ' + esc(state.lastName) + " " + esc(state.firstName) + "</div>" +
+      '<div class="courses-stats">' +
+        '<span><b>' + stats.completed + '</b> завершено</span>' +
+        '<span class="dot">·</span>' +
+        '<span><b>' + stats.inProgress + '</b> в работе</span>' +
+      "</div>" +
       '<button class="reset-link" data-act="reset-progress">Сбросить и войти как другой ученик</button>' +
     "</div>" +
     '<div class="courses-list">' + items + "</div>";
   wireActs();
+}
+
+function renderComingSoon(title, icon) {
+  app.innerHTML =
+    '<div class="result-screen" style="padding-bottom:110px;">' +
+      '<div class="result-badge">' + icon + "</div>" +
+      '<div class="result-title">' + esc(title) + "</div>" +
+      '<div class="result-sub">Скоро</div>' +
+    "</div>";
+  wireActs();
+}
+
+var DOCK_SCREENS = ["courses", "profile", "questions", "more"];
+
+function renderDock() {
+  if (DOCK_SCREENS.indexOf(state.screen) === -1) return;
+  var stats = lessonStats();
+  var badge = stats.completed ? '<span class="dock-badge">' + stats.completed + "</span>" : "";
+  var items = [
+    { screen: "profile", act: "go-profile", icon: SVG.dockPerson, label: "Кабинет" },
+    { screen: "courses", act: "go-courses", icon: SVG.dockLessons, label: "Уроки", badge: badge },
+    { screen: "questions", act: "go-questions", icon: SVG.dockQuestion, label: "Вопросы" },
+    { screen: "more", act: "go-more", icon: SVG.dockMore, label: "Ещё" }
+  ];
+  var html = '<div class="dock">';
+  items.forEach(function (it) {
+    var active = state.screen === it.screen;
+    var color = active ? "#AE5F3F" : "#8A9BA5";
+    html += '<button class="dock-item' + (active ? " active" : "") + '" data-act="' + it.act + '">' +
+      (it.badge || "") + it.icon(color) + "<span>" + it.label + "</span></button>";
+  });
+  html += "</div>";
+  app.insertAdjacentHTML("beforeend", html);
+  Array.prototype.forEach.call(app.querySelectorAll(".dock [data-act]"), function (el) {
+    el.addEventListener("click", function () {
+      var fn = ACTS[el.getAttribute("data-act")];
+      if (fn) fn();
+    });
+  });
 }
 
 function stepRow(opts) {
@@ -1114,7 +1173,11 @@ var ACTS = {
   "go-song": function () { go("song"); },
   "finish-warmups": function () { state.warmupsDone = true; saveState(); go("song"); },
   "finish-lesson": function () { state.songDone = true; saveState(); submitSongMarks(); go("lesson-home"); },
-  "reset-progress": resetProgress
+  "reset-progress": resetProgress,
+  "go-profile": function () { go("profile"); },
+  "go-courses": function () { go("courses"); },
+  "go-questions": function () { go("questions"); },
+  "go-more": function () { go("more"); }
 };
 
 function wireActs() {
@@ -1140,13 +1203,16 @@ function render() {
   lastRenderedScreen = state.screen;
   lastRenderedQuizIndex = state.quizIndex;
   if (tg) {
-    if (state.screen === "tg" || state.screen === "courses") tg.BackButton.hide();
+    if (DOCK_SCREENS.indexOf(state.screen) !== -1 || state.screen === "tg") tg.BackButton.hide();
     else tg.BackButton.show();
   }
   switch (state.screen) {
     case "tg": renderTg(); break;
     case "name": renderName(); break;
     case "courses": renderCourses(); break;
+    case "profile": renderComingSoon("Личный кабинет", SVG.dockPerson("#AE5F3F")); break;
+    case "questions": renderComingSoon("Вопросы", SVG.dockQuestion("#AE5F3F")); break;
+    case "more": renderComingSoon("Ещё", SVG.dockMore("#AE5F3F")); break;
     case "lesson-home": renderLessonHome(); break;
     case "lecture": renderLecture(); break;
     case "quiz": renderQuiz(); break;
@@ -1155,6 +1221,7 @@ function render() {
     case "song": renderSong(); break;
     default: renderTg();
   }
+  renderDock();
   maybeCelebrate();
 }
 
