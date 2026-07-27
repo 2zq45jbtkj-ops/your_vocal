@@ -109,6 +109,19 @@ export default async function handler(req) {
       return json({ ok: true });
     }
 
+    if (kind === "feedback") {
+      var moodEmoji = ["", "😞", "😐", "🙂", "😊", "🤩"];
+      var moodVal = parseInt(form.get("mood"), 10) || 0;
+      var moodLabel = (form.get("moodLabel") || "").toString();
+      var fbText = (form.get("text") || "").toString();
+      var fbMsg = "💬 Обратная связь по уроку\n" + head + "\nНастроение: " + (moodEmoji[moodVal] || "") + " " + moodLabel;
+      if (fbText) fbMsg += "\n\n" + fbText;
+      var r3 = await tgSendMessage(token, chatId, fbMsg);
+      if (!r3.ok) return json({ ok: false, error: r3.description || "Telegram отклонил сообщение" }, 502);
+      if (r3.result) await rememberMessage(r3.result.message_id, tagKey).catch(function () {});
+      return json({ ok: true });
+    }
+
     if (kind === "song-marks") {
       var text = (form.get("text") || "").toString();
       var r2 = await tgSendMessage(token, chatId, "🎼 Разметка дыхания (песни)\n" + head + "\n\n" + text);
