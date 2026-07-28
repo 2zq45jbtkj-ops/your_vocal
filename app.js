@@ -32,8 +32,12 @@ var state = {
   lectureViewed: false, celebrated: false,
   warmupFiles: [], songFile: null,
   songPlacements: {}, // "ti-li" -> [{type:"V"|"v", index:Number}]
+  // настройки плеера распевок (шестерёнка): темп/тональность/повтор — на упражнение,
+  // автовоспроизведение — общее на весь блок распевок.
+  tempoMap: {}, pitchMap: {}, loopMap: {}, autoplayNext: false,
+  favorites: {}, // "lessonId-n" -> { lessonTitle, label }
   // transient (не сохраняется):
-  playerIdx: null, playerElapsed: 0, durations: {},
+  playerIdx: null, playerElapsed: 0, durations: {}, openSettings: {},
   songPlayerKey: null, songPlayerElapsed: 0, songDurations: {},
   songRevealed: {}, songSelectedMark: {},
   feedbackMood: null, feedbackText: "", coursesFilter: null,
@@ -53,7 +57,9 @@ function saveState() {
       lectureViewed: state.lectureViewed, celebrated: state.celebrated,
       warmupFiles: state.warmupFiles.map(function (f) { return { name: f.name, status: f.status }; }),
       songFile: state.songFile,
-      songPlacements: state.songPlacements
+      songPlacements: state.songPlacements,
+      tempoMap: state.tempoMap, pitchMap: state.pitchMap, loopMap: state.loopMap,
+      autoplayNext: state.autoplayNext, favorites: state.favorites
     }));
   } catch (e) {}
 }
@@ -234,7 +240,13 @@ var SVG = {
   dockPerson: function (c) { return '<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="6.5" r="3.3" stroke="' + c + '" stroke-width="1.6"/><path d="M3.5 17c0-3.5 2.9-6 6.5-6s6.5 2.5 6.5 6" stroke="' + c + '" stroke-width="1.6" stroke-linecap="round"/></svg>'; },
   dockLessons: function (c) { return '<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="14" height="14" rx="3" stroke="' + c + '" stroke-width="1.6"/><path d="M6.5 8h7M6.5 12h4.5" stroke="' + c + '" stroke-width="1.6" stroke-linecap="round"/></svg>'; },
   dockQuestion: function (c) { return '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="5" width="17" height="15" rx="2.5" stroke="' + c + '" stroke-width="1.6"/><path d="M3.5 9.5h17M8 2.5v4M16 2.5v4" stroke="' + c + '" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="13.5" r="1.1" fill="' + c + '"/><circle cx="12" cy="13.5" r="1.1" fill="' + c + '"/></svg>'; },
-  dockMore: function (c) { return '<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="4.5" cy="10" r="1.6" fill="' + c + '"/><circle cx="10" cy="10" r="1.6" fill="' + c + '"/><circle cx="15.5" cy="10" r="1.6" fill="' + c + '"/></svg>'; }
+  dockMore: function (c) { return '<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="4.5" cy="10" r="1.6" fill="' + c + '"/><circle cx="10" cy="10" r="1.6" fill="' + c + '"/><circle cx="15.5" cy="10" r="1.6" fill="' + c + '"/></svg>'; },
+  gear: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 5.2a2.8 2.8 0 100 5.6 2.8 2.8 0 000-5.6z" stroke="oklch(52% 0.012 70)" stroke-width="1.3"/><path d="M8 1.3v1.4M8 13.3v1.4M14.7 8h-1.4M2.7 8H1.3M12.5 3.5l-1 1M4.5 11.5l-1 1M12.5 12.5l-1-1M4.5 4.5l-1-1" stroke="oklch(52% 0.012 70)" stroke-width="1.3" stroke-linecap="round"/></svg>',
+  star: function (filled) {
+    var stroke = filled ? "oklch(60% 0.13 38)" : "oklch(52% 0.012 70)";
+    var fill = filled ? "oklch(60% 0.13 38)" : "none";
+    return '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 1.3l1.9 4.1 4.5.5-3.4 3 .9 4.4L8 11.2l-3.9 2.1.9-4.4-3.4-3 4.5-.5L8 1.3z" stroke="' + stroke + '" fill="' + fill + '" stroke-width="1.2" stroke-linejoin="round"/></svg>';
+  }
 };
 
 function backBtn(handlerName) {
@@ -475,6 +487,11 @@ function renderProfile() {
   if (s.warmupsDone) appHomeworkDone.push("Распевки: " + LESSON.title);
   if (s.songDone) appHomeworkDone.push("Песня: " + LESSON.title);
 
+  var favoritesHtml = Object.keys(s.favorites || {}).map(function (key) {
+    var f = s.favorites[key];
+    return '<span class="chip-tag" data-remove-fav="' + key + '" style="cursor:pointer;">★ ' + esc(f.label) + " (" + esc(f.lessonTitle) + ")</span>";
+  }).join("");
+
   var assessmentsHtml = DEMO_ASSESSMENTS.map(function (a, ai) {
     var metrics = a.metrics.map(function (m) { return { label: m[0], score: m[1], pct: m[1] * 10 }; });
     var lowPoints = metrics.slice().sort(function (x, y) { return x.score - y.score; }).slice(0, 3);
@@ -534,6 +551,10 @@ function renderProfile() {
       '<div class="chips-wrap" style="margin-bottom:22px;">' +
         (appHomeworkDone.length ? chipsHtml(appHomeworkDone) : '<span class="chips-empty">Пока ничего не пройдено</span>') +
       "</div>" +
+      '<div class="section-label">Мои распевки</div>' +
+      '<div class="chips-wrap" style="margin-bottom:22px;">' +
+        (favoritesHtml || '<span class="chips-empty">Пока нет избранных распевок — нажми на звезду в плеере</span>') +
+      "</div>" +
       '<div class="assessments-title">Срезы · колесо баланса</div>' +
       assessmentsHtml +
       '<div class="instruction-note" style="margin-top:6px;">Профиль и срезы выше — пример, один в один с макетом дизайнера. Реальные данные ученика появятся, когда подключим бэкенд личного кабинета.</div>' +
@@ -544,6 +565,13 @@ function renderProfile() {
       var ai = el.getAttribute("data-toggle-assessment");
       state.expandedAssessments = state.expandedAssessments || {};
       state.expandedAssessments[ai] = !state.expandedAssessments[ai];
+      render();
+    });
+  });
+  Array.prototype.forEach.call(app.querySelectorAll("[data-remove-fav]"), function (el) {
+    el.addEventListener("click", function () {
+      delete state.favorites[el.getAttribute("data-remove-fav")];
+      saveState();
       render();
     });
   });
@@ -943,9 +971,157 @@ function warmupTimeLabel(ex) {
   return dur ? fmtTime(dur) : ex.time;
 }
 
+function pitchLabelText(semis) {
+  if (!semis) return "0 полутонов";
+  return (semis > 0 ? "+" : "") + semis + " полут.";
+}
+
+/* ---------- Тональность: реальный питч-шифт через SoundTouchJS (Web Audio) ----------
+   Тёмп (BPM) как и раньше — обычный audio.playbackRate с preservesPitch=true,
+   это лёгкий нативный путь и он не трогается. Питч-шифт — отдельная, более тяжёлая
+   технология (собственный аудио-движок), включается только когда ученик реально
+   сдвинул тональность (не 0). Пока тональность = 0, играет привычный <audio>. */
+
+var STJS_URL = "https://cdn.jsdelivr.net/npm/soundtouchjs@0.1.30/dist/soundtouch.js";
+var stjsModulePromise = null;
+function loadSoundTouch() {
+  if (!stjsModulePromise) stjsModulePromise = import(STJS_URL);
+  return stjsModulePromise;
+}
+
+var sharedAudioCtx = null;
+function getAudioCtx() {
+  if (!sharedAudioCtx) sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (sharedAudioCtx.state === "suspended") sharedAudioCtx.resume();
+  return sharedAudioCtx;
+}
+
+var audioBufferCache = {}; // n -> Promise<AudioBuffer>
+function getAudioBuffer(n, ex) {
+  if (!audioBufferCache[n]) {
+    audioBufferCache[n] = fetch(ex.src)
+      .then(function (r) { return r.arrayBuffer(); })
+      .then(function (buf) { return getAudioCtx().decodeAudioData(buf); });
+  }
+  return audioBufferCache[n];
+}
+
+var activeShifter = null; // { n, shifter }
+function stopShiftedPlayback() {
+  if (activeShifter) {
+    try { activeShifter.shifter.disconnect(); } catch (e) {}
+    activeShifter = null;
+  }
+}
+
+function playShifted(n, ex) {
+  var pct = (state.tempoMap && state.tempoMap[n]) || 100;
+  var semis = (state.pitchMap && state.pitchMap[n]) || 0;
+  getAudioBuffer(n, ex).then(function (buffer) {
+    if (state.playerIdx !== n) return; // пока грузили — ученик успел переключиться
+    loadSoundTouch().then(function (mod) {
+      if (state.playerIdx !== n) return;
+      var ctx = getAudioCtx();
+      var shifter = new mod.PitchShifter(ctx, buffer, 4096, function () {
+        handleExerciseEnded(n);
+      });
+      shifter.tempo = pct / 100;
+      shifter.pitchSemitones = semis;
+      shifter.on("play", function (detail) {
+        if (state.playerIdx !== n) return;
+        setRing(n, (detail.percentagePlayed || 0) / 100);
+        state.playerElapsed = Math.floor(detail.timePlayed || 0);
+        var t = document.getElementById("time-" + n);
+        if (t) t.textContent = warmupTimeLabel(ex);
+      });
+      shifter.connect(ctx.destination);
+      activeShifter = { n: n, shifter: shifter };
+    }).catch(function () { fallbackToNative(n); });
+  }).catch(function () { fallbackToNative(n); });
+}
+
+function fallbackToNative(n) {
+  if (state.playerIdx !== n) return;
+  var el = audioEls[n];
+  if (!el) return;
+  el.currentTime = 0;
+  var p = el.play();
+  if (p && p.catch) p.catch(function () {});
+}
+
+function handleExerciseEnded(n) {
+  var exercises = LESSON.warmups.exercises;
+  var ex = exercises[n - 1];
+  if (activeShifter && activeShifter.n === n) stopShiftedPlayback();
+  if (state.loopMap && state.loopMap[n]) {
+    state.playerIdx = null;
+    toggleAudio(n);
+    return;
+  }
+  setRing(n, 0);
+  state.playerIdx = null;
+  state.playerElapsed = 0;
+  updatePlayBtn(ex);
+  if (state.autoplayNext) {
+    var next = exercises[n]; // n от 1, массив с индекса 0 — exercises[n] это следующий по счёту
+    if (next) toggleAudio(next.n);
+  }
+}
+
+/* ---------- избранные распевки (звезда) ---------- */
+
+function favKey(n) {
+  return (LESSON.id || 1) + "-" + n;
+}
+function toggleFavorite(n, ex) {
+  var key = favKey(n);
+  if (state.favorites[key]) {
+    delete state.favorites[key];
+  } else {
+    state.favorites[key] = {
+      lessonTitle: LESSON.title,
+      label: ex.label1 + (ex.label2 ? " " + ex.label2 : "")
+    };
+  }
+  saveState();
+}
+
+function warmupSettingsPanelHtml(ex) {
+  var pct = (state.tempoMap && state.tempoMap[ex.n]) || 100;
+  var semis = (state.pitchMap && state.pitchMap[ex.n]) || 0;
+  var loopOn = !!(state.loopMap && state.loopMap[ex.n]);
+  var autoOn = !!state.autoplayNext;
+  var open = !!(state.openSettings && state.openSettings[ex.n]);
+  return (
+    '<div class="settings-panel' + (open ? " open" : "") + '" id="settings-' + ex.n + '">' +
+      '<div class="settings-panel-inner">' +
+        '<div class="settings-slider-row">' +
+          '<span class="settings-slider-label">Темп</span>' +
+          '<input type="range" class="tempo-slider" id="tempo-' + ex.n + '" min="50" max="100" step="5" value="' + pct + '">' +
+          '<span class="settings-slider-value" id="tempo-label-' + ex.n + '">' + tempoLabelText(ex, pct) + "</span>" +
+        "</div>" +
+        '<div class="settings-slider-row">' +
+          '<span class="settings-slider-label">Тональность</span>' +
+          '<input type="range" class="pitch-slider" id="pitch-' + ex.n + '" min="-5" max="3" step="0.5" value="' + semis + '">' +
+          '<span class="settings-slider-value" id="pitch-label-' + ex.n + '">' + pitchLabelText(semis) + "</span>" +
+        "</div>" +
+        '<div class="settings-toggle-row" data-toggle-loop="' + ex.n + '">' +
+          '<span>Повтор (loop)</span>' +
+          '<div class="toggle-pill' + (loopOn ? " on" : "") + '"><div class="toggle-dot"></div></div>' +
+        "</div>" +
+        '<div class="settings-toggle-row" data-toggle-autoplay="' + ex.n + '">' +
+          '<span>Автовоспроизведение следующей</span>' +
+          '<div class="toggle-pill' + (autoOn ? " on" : "") + '"><div class="toggle-dot"></div></div>' +
+        "</div>" +
+      "</div>" +
+    "</div>"
+  );
+}
+
 function renderWarmups() {
   var cards = "";
   LESSON.warmups.exercises.forEach(function (ex) {
+    var isFav = !!state.favorites[favKey(ex.n)];
     cards +=
       '<div class="warmup-card">' +
         '<div class="warmup-row">' +
@@ -960,11 +1136,10 @@ function renderWarmups() {
             (ex.label2 ? '<div class="warmup-label">' + esc(ex.label2) + "</div>" : "") +
           "</div>" +
           '<div class="warmup-time" id="time-' + ex.n + '">' + warmupTimeLabel(ex) + "</div>" +
+          '<button class="icon-btn' + (isFav ? " fav-on" : "") + '" data-fav="' + ex.n + '" title="В избранное">' + SVG.star(isFav) + "</button>" +
+          '<button class="icon-btn" data-gear="' + ex.n + '" title="Настройки">' + SVG.gear + "</button>" +
         "</div>" +
-        '<div class="tempo-row">' +
-          '<span class="tempo-label" id="tempo-label-' + ex.n + '">' + tempoLabelText(ex, 100) + "</span>" +
-          '<input type="range" class="tempo-slider" id="tempo-' + ex.n + '" min="50" max="100" step="5" value="100">' +
-        "</div>" +
+        warmupSettingsPanelHtml(ex) +
         '<p class="warmup-sub">' + esc(ex.sub) + "</p>" +
         (ex.how ? '<p class="warmup-how"><b>Как выполнять:</b> ' + esc(ex.how) + "</p>" : "") +
         (ex.mistake ? '<p class="warmup-mistake"><b>Частая ошибка:</b> ' + esc(ex.mistake) + "</p>" : "") +
@@ -989,6 +1164,7 @@ function renderWarmups() {
     el.preservesPitch = true;
     el.mozPreservesPitch = true;
     el.webkitPreservesPitch = true;
+    el.playbackRate = ((state.tempoMap && state.tempoMap[ex.n]) || 100) / 100;
     el.addEventListener("loadedmetadata", function () {
       state.durations[ex.n] = Math.round(el.duration) || 0;
       var t = document.getElementById("time-" + ex.n);
@@ -1002,20 +1178,27 @@ function renderWarmups() {
         if (t) t.textContent = warmupTimeLabel(ex);
       }
     });
-    el.addEventListener("ended", function () {
-      setRing(ex.n, 0);
-      if (state.playerIdx === ex.n) {
-        state.playerIdx = null;
-        state.playerElapsed = 0;
-        updatePlayBtn(ex);
-      }
-    });
-    var slider = document.getElementById("tempo-" + ex.n);
-    slider.addEventListener("input", function () {
-      var pct = parseInt(slider.value, 10);
+    el.addEventListener("ended", function () { handleExerciseEnded(ex.n); });
+
+    var tempoSlider = document.getElementById("tempo-" + ex.n);
+    tempoSlider.addEventListener("input", function () {
+      var pct = parseInt(tempoSlider.value, 10);
+      state.tempoMap[ex.n] = pct;
       el.playbackRate = pct / 100;
+      if (activeShifter && activeShifter.n === ex.n) activeShifter.shifter.tempo = pct / 100;
       var lbl = document.getElementById("tempo-label-" + ex.n);
       if (lbl) lbl.textContent = tempoLabelText(ex, pct);
+      saveState();
+    });
+
+    var pitchSlider = document.getElementById("pitch-" + ex.n);
+    pitchSlider.addEventListener("input", function () {
+      var semis = parseFloat(pitchSlider.value);
+      state.pitchMap[ex.n] = semis;
+      var lbl = document.getElementById("pitch-label-" + ex.n);
+      if (lbl) lbl.textContent = pitchLabelText(semis);
+      if (activeShifter && activeShifter.n === ex.n) activeShifter.shifter.pitchSemitones = semis;
+      saveState();
     });
   });
 
@@ -1029,21 +1212,126 @@ function renderWarmups() {
     btn.addEventListener("click", function () {
       var n = parseInt(btn.getAttribute("data-n"), 10);
       var delta = parseInt(btn.getAttribute("data-seek"), 10);
+      var ex = LESSON.warmups.exercises[n - 1];
+      if (activeShifter && activeShifter.n === n) {
+        var sh = activeShifter.shifter;
+        var dur = sh.duration || 1;
+        var newSec = Math.max(0, Math.min(dur, sh.timePlayed + delta));
+        sh.percentagePlayed = newSec / dur; // сеттер этой библиотеки ждёт долю 0..1, а не проценты
+        if (state.playerIdx === n) {
+          state.playerElapsed = Math.floor(newSec);
+          setRing(n, newSec / dur);
+          var t1 = document.getElementById("time-" + n);
+          if (t1) t1.textContent = warmupTimeLabel(ex);
+        }
+        return;
+      }
       var el = audioEls[n];
       if (!el) return;
       if (delta < 0) el.currentTime = Math.max(0, el.currentTime + delta);
       else el.currentTime = Math.min(el.duration || el.currentTime + delta, el.currentTime + delta);
       if (state.playerIdx === n) {
         state.playerElapsed = Math.floor(el.currentTime);
-        var ex = LESSON.warmups.exercises[n - 1];
-        var t = document.getElementById("time-" + n);
-        if (t) t.textContent = warmupTimeLabel(ex);
+        var t2 = document.getElementById("time-" + n);
+        if (t2) t2.textContent = warmupTimeLabel(ex);
       }
+    });
+  });
+  Array.prototype.forEach.call(app.querySelectorAll("[data-gear]"), function (btn) {
+    btn.addEventListener("click", function () {
+      var n = btn.getAttribute("data-gear");
+      state.openSettings[n] = !state.openSettings[n];
+      var panel = document.getElementById("settings-" + n);
+      if (panel) panel.classList.toggle("open", !!state.openSettings[n]);
+    });
+  });
+  Array.prototype.forEach.call(app.querySelectorAll("[data-fav]"), function (btn) {
+    btn.addEventListener("click", function () {
+      var n = parseInt(btn.getAttribute("data-fav"), 10);
+      var ex = LESSON.warmups.exercises[n - 1];
+      toggleFavorite(n, ex);
+      var isFav = !!state.favorites[favKey(n)];
+      btn.classList.toggle("fav-on", isFav);
+      btn.innerHTML = SVG.star(isFav);
+    });
+  });
+  Array.prototype.forEach.call(app.querySelectorAll("[data-toggle-loop]"), function (row) {
+    row.addEventListener("click", function () {
+      var n = row.getAttribute("data-toggle-loop");
+      state.loopMap[n] = !state.loopMap[n];
+      row.querySelector(".toggle-pill").classList.toggle("on", !!state.loopMap[n]);
+      saveState();
+    });
+  });
+  Array.prototype.forEach.call(app.querySelectorAll("[data-toggle-autoplay]"), function (row) {
+    row.addEventListener("click", function () {
+      state.autoplayNext = !state.autoplayNext;
+      Array.prototype.forEach.call(app.querySelectorAll("[data-toggle-autoplay] .toggle-pill"), function (p) {
+        p.classList.toggle("on", state.autoplayNext);
+      });
+      saveState();
     });
   });
 
   renderHwZone();
   wireActs();
+}
+
+var RING_CIRC = 2 * Math.PI * 19;
+
+function setRing(n, frac) {
+  var ring = document.getElementById("ring-" + n);
+  if (!ring) return;
+  ring.style.strokeDasharray = RING_CIRC;
+  ring.style.strokeDashoffset = RING_CIRC * (1 - Math.max(0, Math.min(1, frac || 0)));
+}
+
+function updatePlayBtn(ex) {
+  var btn = document.getElementById("play-" + ex.n);
+  var t = document.getElementById("time-" + ex.n);
+  if (!btn) return;
+  var playing = state.playerIdx === ex.n;
+  btn.className = "play-btn" + (playing ? " playing" : "");
+  btn.innerHTML = playing ? SVG.pause : SVG.play;
+  if (t) t.textContent = warmupTimeLabel(ex);
+}
+
+function toggleAudio(n) {
+  var exercises = LESSON.warmups.exercises;
+  var ex = exercises[n - 1];
+  if (!ex) return;
+
+  if (state.playerIdx === n) {
+    if (activeShifter && activeShifter.n === n) stopShiftedPlayback();
+    var curEl = audioEls[n];
+    if (curEl) curEl.pause();
+    state.playerIdx = null;
+    updatePlayBtn(ex);
+    return;
+  }
+
+  var prev = state.playerIdx;
+  Object.keys(audioEls).forEach(function (k) { if (audioEls[k]) audioEls[k].pause(); });
+  stopShiftedPlayback();
+
+  state.playerIdx = n;
+  state.playerElapsed = 0;
+
+  var semis = (state.pitchMap && state.pitchMap[n]) || 0;
+  if (semis) {
+    getAudioCtx(); // создаём/резюмируем AudioContext прямо в обработчике клика — так требуют браузеры
+    playShifted(n, ex);
+  } else {
+    var el = audioEls[n];
+    if (el) {
+      el.currentTime = 0;
+      var p = el.play();
+      if (p && p.catch) p.catch(function () {});
+    }
+  }
+
+  if (prev) updatePlayBtn(exercises[prev - 1]);
+  updatePlayBtn(ex);
 }
 
 var RING_CIRC = 2 * Math.PI * 19;

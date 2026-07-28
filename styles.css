@@ -318,12 +318,14 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
   transition: stroke-dashoffset .2s ease;
 }
 .player-ring-wrap .play-btn { position: absolute; top: 3px; left: 3px; }
-.warmup-labels { flex: 1; }
+.warmup-row { flex-wrap: wrap; }
+.warmup-labels { flex: 1; min-width: 0; }
 .warmup-label {
   font-size: 13px; font-weight: 700; color: var(--terra);
   font-family: monospace; letter-spacing: .02em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.warmup-time { font-size: 12px; color: var(--gray); font-variant-numeric: tabular-nums; }
+.warmup-time { font-size: 12px; color: var(--gray); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .warmup-sub { margin: 10px 0 0; font-size: 12px; color: var(--ink); line-height: 1.5; }
 .warmup-how { margin: 8px 0 0; font-size: 12px; color: var(--ink); line-height: 1.5; }
 .warmup-how b { color: var(--blue); }
@@ -335,25 +337,60 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 .tempo-note { font-size: 11.5px; color: var(--gray); line-height: 1.5; margin: 2px 0 16px; }
 .tempo-note a { color: var(--terra); }
 
-.tempo-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
-.tempo-label {
-  font-size: 11px; color: var(--gray); font-weight: 600; white-space: nowrap;
-  min-width: 78px; font-variant-numeric: tabular-nums;
+.icon-btn {
+  width: 26px; height: 26px; border-radius: 50%; border: none; background: var(--bg);
+  box-shadow: var(--raised-sm); display: flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0;
 }
-.tempo-slider {
+.icon-btn.fav-on { box-shadow: var(--inset-sm); }
+
+/* ---------- шестерёнка: выпадающая панель настроек трека ---------- */
+.settings-panel {
+  display: grid; grid-template-rows: 0fr; transition: grid-template-rows .25s ease;
+}
+.settings-panel.open { grid-template-rows: 1fr; }
+.settings-panel-inner { overflow: hidden; min-height: 0; }
+.settings-panel.open .settings-panel-inner { padding-top: 10px; }
+.settings-slider-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.settings-slider-label {
+  font-size: 11px; color: var(--gray); font-weight: 600; white-space: nowrap; min-width: 66px;
+}
+.settings-slider-value {
+  font-size: 11px; color: var(--ink); font-weight: 700; white-space: nowrap;
+  min-width: 74px; text-align: right; font-variant-numeric: tabular-nums;
+}
+.settings-toggle-row {
+  display: flex; align-items: center; justify-content: space-between; margin-top: 10px;
+  background: var(--bg); border-radius: 12px; box-shadow: var(--inset-sm); padding: 10px 12px; cursor: pointer;
+}
+.settings-toggle-row span { font-size: 12px; color: var(--ink); font-weight: 600; }
+.toggle-pill {
+  width: 38px; height: 22px; border-radius: 11px; background: var(--disabled); position: relative;
+  flex-shrink: 0; transition: background .2s;
+}
+.toggle-pill.on { background: var(--blue); }
+.toggle-dot {
+  width: 18px; height: 18px; border-radius: 50%; background: var(--white-text); position: absolute;
+  top: 2px; left: 2px; transition: left .2s; box-shadow: 1px 1px 3px rgba(0,0,0,0.25);
+}
+.toggle-pill.on .toggle-dot { left: 18px; }
+
+.tempo-slider, .pitch-slider {
   -webkit-appearance: none; appearance: none; flex: 1; height: 5px;
   border-radius: 3px; background: var(--line); outline: none; cursor: pointer;
   box-shadow: inset 1px 1px 2px oklch(70% 0.02 80 / 0.3);
 }
-.tempo-slider::-webkit-slider-thumb {
+.tempo-slider::-webkit-slider-thumb, .pitch-slider::-webkit-slider-thumb {
   -webkit-appearance: none; appearance: none; width: 18px; height: 18px;
   border-radius: 50%; background: var(--blue); cursor: pointer;
   border: 2px solid var(--bg); box-shadow: 2px 2px 5px oklch(70% 0.02 80 / 0.4);
 }
-.tempo-slider::-moz-range-thumb {
+.tempo-slider::-moz-range-thumb, .pitch-slider::-moz-range-thumb {
   width: 18px; height: 18px; border-radius: 50%; background: var(--blue);
   cursor: pointer; border: 2px solid var(--bg); box-shadow: 2px 2px 5px oklch(70% 0.02 80 / 0.4);
 }
+.pitch-slider::-webkit-slider-thumb { background: var(--terra); }
+.pitch-slider::-moz-range-thumb { background: var(--terra); }
 
 .hw-attached {
   display: flex; align-items: center; gap: 10px; background: var(--bg);
