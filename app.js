@@ -30,18 +30,19 @@ var state = {
   quizIndex: 0, quizAnswers: [], quizScore: 0,
   quizDone: false, warmupsDone: false, songDone: false,
   lectureViewed: false, celebrated: false,
-  warmupFiles: [], songFile: null,
+  warmupFiles: [], songFiles: [],
   songPlacements: {}, // "ti-li" -> [{type:"V"|"v", index:Number}]
   // настройки плеера распевок (шестерёнка): темп/тональность/повтор — на упражнение,
   // автовоспроизведение — общее на весь блок распевок.
   tempoMap: {}, pitchMap: {}, loopMap: {}, autoplayNext: false,
-  favorites: {}, // "lessonId-n" -> { lessonTitle, label }
+  // то же самое, но для плеера в упражнении с песней — свой набор настроек.
+  songTempoMap: {}, songPitchMap: {}, songLoopMap: {}, songAutoplayNext: false,
+  favorites: {}, // "lessonId-w-n" / "lessonId-s-ti" -> { lessonTitle, label }
   // transient (не сохраняется):
   playerIdx: null, playerElapsed: 0, durations: {}, openSettings: {},
-  songPlayerKey: null, songPlayerElapsed: 0, songDurations: {},
+  songPlayerKey: null, songPlayerElapsed: 0, songDurations: {}, songOpenSettings: {},
   songRevealed: {}, songSelectedMark: {},
-  feedbackMood: null, feedbackText: "", coursesFilter: null,
-  songStatus: "idle"
+  feedbackMood: null, feedbackText: "", coursesFilter: null
 };
 
 var audioEls = {};
@@ -56,10 +57,13 @@ function saveState() {
       warmupsDone: state.warmupsDone, songDone: state.songDone,
       lectureViewed: state.lectureViewed, celebrated: state.celebrated,
       warmupFiles: state.warmupFiles.map(function (f) { return { name: f.name, status: f.status }; }),
-      songFile: state.songFile,
+      songFiles: state.songFiles.map(function (f) { return { name: f.name, status: f.status }; }),
       songPlacements: state.songPlacements,
       tempoMap: state.tempoMap, pitchMap: state.pitchMap, loopMap: state.loopMap,
-      autoplayNext: state.autoplayNext, favorites: state.favorites
+      autoplayNext: state.autoplayNext,
+      songTempoMap: state.songTempoMap, songPitchMap: state.songPitchMap,
+      songLoopMap: state.songLoopMap, songAutoplayNext: state.songAutoplayNext,
+      favorites: state.favorites
     }));
   } catch (e) {}
 }
@@ -87,7 +91,7 @@ function progressPercent() {
   if (state.lectureViewed) n++;
   if (state.quizDone) n++;
   if (state.warmupFiles && state.warmupFiles.length) n++;
-  if (state.songFile) n++;
+  if (state.songFiles && state.songFiles.length) n++;
   return n * 25;
 }
 
@@ -243,8 +247,8 @@ var SVG = {
   dockMore: function (c) { return '<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="4.5" cy="10" r="1.6" fill="' + c + '"/><circle cx="10" cy="10" r="1.6" fill="' + c + '"/><circle cx="15.5" cy="10" r="1.6" fill="' + c + '"/></svg>'; },
   gear: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 5.2a2.8 2.8 0 100 5.6 2.8 2.8 0 000-5.6z" stroke="oklch(52% 0.012 70)" stroke-width="1.3"/><path d="M8 1.3v1.4M8 13.3v1.4M14.7 8h-1.4M2.7 8H1.3M12.5 3.5l-1 1M4.5 11.5l-1 1M12.5 12.5l-1-1M4.5 4.5l-1-1" stroke="oklch(52% 0.012 70)" stroke-width="1.3" stroke-linecap="round"/></svg>',
   star: function (filled) {
-    var stroke = filled ? "oklch(60% 0.13 38)" : "oklch(52% 0.012 70)";
-    var fill = filled ? "oklch(60% 0.13 38)" : "none";
+    var stroke = filled ? "oklch(84% 0.15 92)" : "oklch(52% 0.012 70)";
+    var fill = filled ? "oklch(84% 0.15 92)" : "none";
     return '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 1.3l1.9 4.1 4.5.5-3.4 3 .9 4.4L8 11.2l-3.9 2.1.9-4.4-3.4-3 4.5-.5L8 1.3z" stroke="' + stroke + '" fill="' + fill + '" stroke-width="1.2" stroke-linejoin="round"/></svg>';
   }
 };
@@ -350,7 +354,7 @@ function roadmapCardHtml() {
     { label: "Лекция «" + esc(LESSON.title) + "»", done: s.lectureViewed },
     { label: "Тест", done: s.quizDone },
     { label: "Распевки «" + esc(LESSON.title) + "»", done: !!(s.warmupFiles && s.warmupFiles.length) },
-    { label: "Упражнение с песней", done: !!s.songFile }
+    { label: "Упражнение с песней", done: !!(s.songFiles && s.songFiles.length) }
   ];
   var stepsHtml = steps.map(function (st) {
     return '<div class="roadmap-step">' +
@@ -535,21 +539,23 @@ function renderProfile() {
           '<div class="profile-status">' + p.age + ' лет · <span style="color:var(--terra);font-weight:600;">' + esc(p.status) + "</span></div>" +
         "</div>" +
       "</div>" +
-      '<div class="profile-cards">' +
-        '<div class="profile-card"><div class="profile-card-label">Тип занятий</div><div class="profile-card-value">' + esc(p.lessonType) + "</div></div>" +
-        '<div class="profile-card"><div class="profile-card-label">Диапазон · тембр</div><div class="profile-card-value">' + esc(p.range) + '</div><div class="profile-card-sub">' + esc(p.voiceType) + "</div></div>" +
-      "</div>" +
-      '<div class="section-label">Первичная цель</div>' +
-      '<div class="goal-box goal-primary">' + esc(p.primaryGoal) + "</div>" +
-      '<div class="section-label">Вторичная цель</div>' +
-      '<div class="goal-box goal-secondary">' + esc(p.focus) + "</div>" +
-      '<div class="section-label">Задачи</div>' +
-      '<div class="chips-wrap">' + chipsHtml(p.goals) + "</div>" +
-      '<div class="section-label">Особенности</div>' +
-      '<div class="chips-wrap">' + chipsHtml(p.notes) + "</div>" +
-      '<div class="section-label">Пройдённые ДЗ в приложении</div>' +
-      '<div class="chips-wrap" style="margin-bottom:22px;">' +
-        (appHomeworkDone.length ? chipsHtml(appHomeworkDone) : '<span class="chips-empty">Пока ничего не пройдено</span>') +
+      '<div class="cabinet-inset">' +
+        '<div class="cabinet-grid-2col">' +
+          '<div><div class="profile-card-label">Тип занятий</div><div class="profile-card-value">' + esc(p.lessonType) + "</div></div>" +
+          '<div><div class="profile-card-label">Диапазон · тембр</div><div class="profile-card-value">' + esc(p.range) + '</div><div class="profile-card-sub">' + esc(p.voiceType) + "</div></div>" +
+        "</div>" +
+        '<div class="section-label" style="margin-top:0;">Первичная цель</div>' +
+        '<div class="goal-box goal-primary" style="margin-bottom:16px;">' + esc(p.primaryGoal) + "</div>" +
+        '<div class="section-label">Вторичная цель</div>' +
+        '<div class="goal-box goal-secondary" style="margin-bottom:16px;">' + esc(p.focus) + "</div>" +
+        '<div class="section-label">Задачи</div>' +
+        '<div class="chips-wrap" style="margin-bottom:16px;">' + chipsHtml(p.goals) + "</div>" +
+        '<div class="section-label">Особенности</div>' +
+        '<div class="chips-wrap" style="margin-bottom:16px;">' + chipsHtml(p.notes) + "</div>" +
+        '<div class="section-label">Пройдённые ДЗ в приложении</div>' +
+        '<div class="chips-wrap">' +
+          (appHomeworkDone.length ? chipsHtml(appHomeworkDone) : '<span class="chips-empty">Пока ничего не пройдено</span>') +
+        "</div>" +
       "</div>" +
       '<div class="section-label">Мои распевки</div>' +
       '<div class="chips-wrap" style="margin-bottom:22px;">' +
@@ -1483,10 +1489,12 @@ function renderHwZone() {
 function stopAllMedia() {
   Object.keys(audioEls).forEach(function (k) { if (audioEls[k]) audioEls[k].pause(); });
   audioEls = {};
+  stopShiftedPlayback();
   state.playerIdx = null;
   state.playerElapsed = 0;
   Object.keys(songAudioEls).forEach(function (k) { if (songAudioEls[k]) songAudioEls[k].pause(); });
   songAudioEls = {};
+  stopSongShiftedPlayback();
   state.songPlayerKey = null;
   state.songPlayerElapsed = 0;
 }
@@ -1497,13 +1505,138 @@ function markCircle(mark, cls) {
   return '<span class="' + cls + " " + (mark === "V" ? "deep" : "short") + '">' + mark + "</span>";
 }
 
-function songHint(s) {
-  if (!s.songFile) return "JPG, PNG — фото листа с разметкой";
-  if (s.songStatus === "sending") return "Отправляю преподавателю…";
-  if (s.songStatus === "sent") return "Отправлено преподавателю ✓";
-  if (s.songStatus === "error") return "Не отправилось — нажми «Повторить отправку»";
-  if (s.songStatus === "toolarge") return "Файл большой — сервер такое не пропустит. Отправь фото преподавателю прямо в чат с ботом";
-  return "Файл выбран ✓";
+function songSettingsPanelHtml(ti, track) {
+  var pct = (state.songTempoMap && state.songTempoMap[ti]) || 100;
+  var semis = (state.songPitchMap && state.songPitchMap[ti]) || 0;
+  var loopOn = !!(state.songLoopMap && state.songLoopMap[ti]);
+  var autoOn = !!state.songAutoplayNext;
+  var open = !!(state.songOpenSettings && state.songOpenSettings[ti]);
+  return (
+    '<div class="settings-panel' + (open ? " open" : "") + '" id="song-settings-' + ti + '">' +
+      '<div class="settings-panel-inner">' +
+        '<div class="settings-box">' +
+          '<div class="settings-slider-row">' +
+            '<span class="settings-slider-label">Темп</span>' +
+            '<input type="range" class="tempo-slider" id="song-tempo-' + ti + '" min="50" max="100" step="5" value="' + pct + '">' +
+            '<span class="settings-slider-value" id="song-tempo-label-' + ti + '">' + tempoLabelText(track, pct) + "</span>" +
+          "</div>" +
+          '<div class="settings-slider-row">' +
+            '<span class="settings-slider-label">Тональность</span>' +
+            '<input type="range" class="pitch-slider" id="song-pitch-' + ti + '" min="-5" max="3" step="0.5" value="' + semis + '">' +
+            '<span class="settings-slider-value" id="song-pitch-label-' + ti + '">' + pitchLabelText(semis) + "</span>" +
+          "</div>" +
+          '<div class="settings-toggle-row" data-song-toggle-loop="' + ti + '">' +
+            '<span>Повтор (loop)</span>' +
+            '<div class="toggle-pill' + (loopOn ? " on" : "") + '"><div class="toggle-dot"></div></div>' +
+          "</div>" +
+          '<div class="settings-toggle-row" data-song-toggle-autoplay="' + ti + '">' +
+            '<span>Автовоспроизведение следующего трека</span>' +
+            '<div class="toggle-pill' + (autoOn ? " on" : "") + '"><div class="toggle-dot"></div></div>' +
+          "</div>" +
+        "</div>" +
+      "</div>" +
+    "</div>"
+  );
+}
+
+/* ---------- фото ДЗ упражнения с песней: до 5 файлов, как в распевках ---------- */
+
+var MAX_PHOTOS = 5;
+
+function songPhotoHint(item) {
+  if (item.status === "sending") return "Отправляю преподавателю…";
+  if (item.status === "sent") return "Отправлено преподавателю ✓";
+  if (item.status === "error") return "Не отправилось — нажми «Повторить»";
+  if (item.status === "toolarge") return "Файл большой — сервер такое не пропустит. Отправь это фото преподавателю прямо в чат с ботом";
+  return "Фото прикреплено";
+}
+
+function finalizeSongPhotoUpload(blob, filename) {
+  if (state.songFiles.length >= MAX_PHOTOS) return;
+  var item = { name: filename, blob: blob, status: "idle" };
+  state.songFiles.push(item);
+  saveState();
+  if (blob.size > MAX_UPLOAD_BYTES) {
+    item.status = "toolarge";
+    renderSongPhotoZone();
+    maybeCelebrate();
+    return;
+  }
+  item.status = "sending";
+  renderSongPhotoZone();
+  maybeCelebrate();
+  submitFile("song", blob, function (status) {
+    item.status = status;
+    renderSongPhotoZone();
+  }, filename);
+}
+
+function renderSongPhotoZone() {
+  var zone = document.getElementById("song-hw-zone");
+  if (!zone) return;
+  var s = state;
+  var count = s.songFiles.length;
+
+  var listHtml = s.songFiles.map(function (item, idx) {
+    var hint = songPhotoHint(item);
+    var isErr = item.status === "error" || item.status === "toolarge";
+    return (
+      '<div class="hw-attached">' +
+        '<div class="hw-icon terra">' + SVG.hwCheck + "</div>" +
+        '<div style="flex:1;">' +
+          '<div class="hw-name">' + esc(item.name) + "</div>" +
+          '<div class="hw-hint' + (isErr ? " error" : "") + '">' + hint + "</div>" +
+        "</div>" +
+        (item.status === "error" ? '<button class="hw-replace" data-song-retry-idx="' + idx + '">Повторить</button>' : "") +
+        '<button class="hw-replace" data-song-remove-idx="' + idx + '">Убрать</button>' +
+      "</div>" +
+      (item.status === "toolarge" ? '<button class="cta" data-song-opentg-idx="' + idx + '" style="margin:-8px 0 12px;">Открыть чат с ботом в Telegram</button>' : "")
+    );
+  }).join("");
+
+  var uploadHtml = count < MAX_PHOTOS
+    ? '<div class="instruction-note">Сфотографируй лист с разметкой. Можно прикрепить до ' + MAX_PHOTOS + ' фото.</div>' +
+      '<div class="hw-choice">' +
+        '<label class="hw-upload wide"><input type="file" accept="image/*" multiple id="song-hw-file" style="display:none;">' + SVG.uploadTerra + "Прикрепить фото (" + count + "/" + MAX_PHOTOS + ")</label>" +
+      "</div>"
+    : '<div class="instruction-note">Прикреплено максимум фото — ' + MAX_PHOTOS + ".</div>";
+
+  zone.innerHTML = listHtml + uploadHtml;
+
+  Array.prototype.forEach.call(zone.querySelectorAll("[data-song-remove-idx]"), function (btn) {
+    btn.addEventListener("click", function () {
+      state.songFiles.splice(parseInt(btn.getAttribute("data-song-remove-idx"), 10), 1);
+      saveState();
+      renderSongPhotoZone();
+      maybeCelebrate();
+    });
+  });
+  Array.prototype.forEach.call(zone.querySelectorAll("[data-song-retry-idx]"), function (btn) {
+    btn.addEventListener("click", function () {
+      var item = state.songFiles[parseInt(btn.getAttribute("data-song-retry-idx"), 10)];
+      if (!item || !item.blob) return;
+      item.status = "sending";
+      renderSongPhotoZone();
+      submitFile("song", item.blob, function (status) {
+        item.status = status;
+        renderSongPhotoZone();
+      }, item.name);
+    });
+  });
+  Array.prototype.forEach.call(zone.querySelectorAll("[data-song-opentg-idx]"), function (btn) {
+    btn.addEventListener("click", openTeacherChat);
+  });
+
+  var input = document.getElementById("song-hw-file");
+  if (input) {
+    input.addEventListener("change", function (e) {
+      var files = Array.prototype.slice.call(e.target.files || []);
+      files.forEach(function (f) {
+        if (state.songFiles.length >= MAX_PHOTOS) return;
+        finalizeSongPhotoUpload(f, f.name);
+      });
+    });
+  }
 }
 
 /* сегменты для статичного примера: {t:"текст"} или {mark:"V"|"v"} */
@@ -1532,24 +1665,129 @@ function updateSongPlayBtn(idx) {
   if (t) t.textContent = songTimeLabel(idx);
 }
 
-function toggleSongAudio(idx) {
-  var el = songAudioEls[idx];
+/* ---------- плеер песни: тот же движок, что и в распевках (свой неймспейс) ---------- */
+
+var songAudioBufferCache = {}; // ti -> Promise<AudioBuffer>
+function getSongAudioBuffer(ti, track) {
+  if (!songAudioBufferCache[ti]) {
+    songAudioBufferCache[ti] = fetch(track.audio)
+      .then(function (r) { return r.arrayBuffer(); })
+      .then(function (buf) { return getAudioCtx().decodeAudioData(buf); });
+  }
+  return songAudioBufferCache[ti];
+}
+
+var activeSongShifter = null; // { ti, shifter }
+function stopSongShiftedPlayback() {
+  if (activeSongShifter) {
+    try { activeSongShifter.shifter.disconnect(); } catch (e) {}
+    activeSongShifter = null;
+  }
+}
+
+function playSongShifted(ti, track) {
+  var pct = (state.songTempoMap && state.songTempoMap[ti]) || 100;
+  var semis = (state.songPitchMap && state.songPitchMap[ti]) || 0;
+  getSongAudioBuffer(ti, track).then(function (buffer) {
+    if (state.songPlayerKey !== ti) return;
+    loadSoundTouch().then(function (mod) {
+      if (state.songPlayerKey !== ti) return;
+      var ctx = getAudioCtx();
+      var shifter = new mod.PitchShifter(ctx, buffer, 4096, function () {
+        handleSongTrackEnded(ti);
+      });
+      shifter.tempo = pct / 100;
+      shifter.pitchSemitones = semis;
+      shifter.on("play", function (detail) {
+        if (state.songPlayerKey !== ti) return;
+        setRing("song-" + ti, (detail.percentagePlayed || 0) / 100);
+        state.songPlayerElapsed = Math.floor(detail.timePlayed || 0);
+        var t = document.getElementById("song-time-" + ti);
+        if (t) t.textContent = songTimeLabel(ti);
+      });
+      shifter.connect(ctx.destination);
+      activeSongShifter = { ti: ti, shifter: shifter };
+    }).catch(function () { fallbackToNativeSong(ti); });
+  }).catch(function () { fallbackToNativeSong(ti); });
+}
+
+function fallbackToNativeSong(ti) {
+  if (state.songPlayerKey !== ti) return;
+  var el = songAudioEls[ti];
   if (!el) return;
-  if (state.songPlayerKey === idx) {
-    el.pause();
+  el.currentTime = 0;
+  var p = el.play();
+  if (p && p.catch) p.catch(function () {});
+}
+
+function handleSongTrackEnded(ti) {
+  var track = LESSON.song.tracks[ti];
+  if (activeSongShifter && activeSongShifter.ti === ti) stopSongShiftedPlayback();
+  if (state.songLoopMap && state.songLoopMap[ti]) {
     state.songPlayerKey = null;
-    updateSongPlayBtn(idx);
+    toggleSongAudio(ti);
     return;
   }
+  setRing("song-" + ti, 0);
+  state.songPlayerKey = null;
+  state.songPlayerElapsed = 0;
+  updateSongPlayBtn(ti);
+  if (state.songAutoplayNext) {
+    var next = LESSON.song.tracks[ti + 1];
+    if (next) toggleSongAudio(ti + 1);
+  }
+}
+
+function toggleSongAudio(ti) {
+  var track = LESSON.song.tracks[ti];
+  if (!track) return;
+
+  if (state.songPlayerKey === ti) {
+    if (activeSongShifter && activeSongShifter.ti === ti) stopSongShiftedPlayback();
+    var curEl = songAudioEls[ti];
+    if (curEl) curEl.pause();
+    state.songPlayerKey = null;
+    updateSongPlayBtn(ti);
+    return;
+  }
+
   var prev = state.songPlayerKey;
   Object.keys(songAudioEls).forEach(function (k) { if (songAudioEls[k]) songAudioEls[k].pause(); });
   Object.keys(audioEls).forEach(function (k) { if (audioEls[k]) audioEls[k].pause(); });
-  var p = el.play();
-  if (p && p.catch) p.catch(function () {});
-  state.songPlayerKey = idx;
-  state.songPlayerElapsed = Math.floor(el.currentTime);
+  stopSongShiftedPlayback();
+  stopShiftedPlayback();
+
+  state.songPlayerKey = ti;
+  state.songPlayerElapsed = 0;
+
+  var semis = (state.songPitchMap && state.songPitchMap[ti]) || 0;
+  if (semis) {
+    getAudioCtx();
+    playSongShifted(ti, track);
+  } else {
+    var el = songAudioEls[ti];
+    if (el) {
+      el.currentTime = 0;
+      var p = el.play();
+      if (p && p.catch) p.catch(function () {});
+    }
+  }
+
   if (prev !== null && prev !== undefined) updateSongPlayBtn(prev);
-  updateSongPlayBtn(idx);
+  updateSongPlayBtn(ti);
+}
+
+function songFavKey(ti) {
+  return (LESSON.id || 1) + "-s-" + ti;
+}
+function toggleSongFavorite(ti, track) {
+  var key = songFavKey(ti);
+  if (state.favorites[key]) {
+    delete state.favorites[key];
+  } else {
+    state.favorites[key] = { lessonTitle: LESSON.title, label: track.title };
+  }
+  saveState();
 }
 
 /* ---- посимвольная разметка (свободная расстановка меток) ---- */
@@ -1741,14 +1979,22 @@ function renderSong() {
       }
     });
 
+    var isSongFav = !!state.favorites[songFavKey(ti)];
     tracksHtml +=
       '<div class="song-track">' +
         '<div class="song-track-title">' + esc(track.title) + "</div>" +
         '<div class="warmup-row song-player-row">' +
-          '<button class="play-btn" id="song-play-' + ti + '" data-ti="' + ti + '">' + SVG.play + "</button>" +
-          '<div class="warmup-time" id="song-time-' + ti + '">' + songTimeLabel(ti) + "</div>" +
+          '<button class="seek-btn" data-song-seek="-10" data-ti="' + ti + '">' + SVG.seekBack + "</button>" +
+          '<div class="player-ring-wrap">' +
+            '<svg class="player-ring" viewBox="0 0 44 44"><circle class="ring-track" cx="22" cy="22" r="19"></circle><circle class="ring-progress" id="ring-song-' + ti + '" cx="22" cy="22" r="19"></circle></svg>' +
+            '<button class="play-btn" id="song-play-' + ti + '" data-ti="' + ti + '">' + SVG.play + "</button>" +
+          "</div>" +
+          '<button class="seek-btn" data-song-seek="10" data-ti="' + ti + '">' + SVG.seekFwd + "</button>" +
+          '<div class="warmup-time" id="song-time-' + ti + '" style="flex:1;">' + songTimeLabel(ti) + "</div>" +
+          '<button class="icon-btn' + (isSongFav ? " fav-on" : "") + '" data-song-fav="' + ti + '" title="В избранное">' + SVG.star(isSongFav) + "</button>" +
+          '<button class="icon-btn" data-song-gear="' + ti + '" title="Настройки">' + SVG.gear + "</button>" +
         "</div>" +
-        '<input type="range" class="tempo-slider song-seek" id="song-seek-' + ti + '" data-ti="' + ti + '" min="0" max="1000" value="0">' +
+        songSettingsPanelHtml(ti, track) +
         '<audio id="song-audio-' + ti + '" src="' + esc(track.audio) + '" preload="metadata" style="display:none;"></audio>' +
         '<div class="chips-row">' +
           '<div class="chip drag-chip' + (sel === "V" ? " sel-V" : "") + '" id="chip-V-' + ti + '" draggable="true" data-ti="' + ti + '" data-mark="V">' + markCircle("V", "mark-circle") + "глубокий</div>" +
@@ -1774,15 +2020,7 @@ function renderSong() {
       '<div class="song-hint">' + esc(song.practiceHint) + " Значок можно перетащить (на компьютере) или выбрать и коснуться места в тексте (на телефоне) — в любую точку, даже внутри слова." + "</div>" +
       tracksHtml +
       '<div class="section-label" style="margin:8px 0;">Отправка разметки</div>' +
-      '<label class="photo-upload"><input type="file" accept="image/*" id="song-file" style="display:none;">' +
-        '<div class="hw-icon terra">' + SVG.uploadTerra + "</div>" +
-        '<div style="flex:1;">' +
-          '<div class="hw-name">' + esc(s.songFile || "Загрузить фото разметки") + "</div>" +
-          '<div class="hw-hint">' + songHint(s) + "</div>" +
-        "</div>" +
-      "</label>" +
-      (s.songStatus === "error" ? '<button class="hw-replace" id="song-retry" style="margin:-10px 0 16px;">Повторить отправку</button>' : "") +
-      (s.songStatus === "toolarge" ? '<button class="cta" id="song-open-tg" style="margin:-10px 0 16px;">Открыть чат с ботом в Telegram</button>' : "") +
+      '<div id="song-hw-zone"></div>' +
     "</div>" +
     '<div class="final-cta-wrap"><button class="cta terra" data-act="finish-lesson">Завершить урок</button></div>';
 
@@ -1881,75 +2119,118 @@ function renderSong() {
   song.tracks.forEach(function (track, ti) {
     var el = document.getElementById("song-audio-" + ti);
     songAudioEls[ti] = el;
-    var seek = document.getElementById("song-seek-" + ti);
+    el.preservesPitch = true;
+    el.mozPreservesPitch = true;
+    el.webkitPreservesPitch = true;
+    el.playbackRate = ((state.songTempoMap && state.songTempoMap[ti]) || 100) / 100;
     el.addEventListener("loadedmetadata", function () {
       state.songDurations[ti] = Math.round(el.duration) || 0;
       var t = document.getElementById("song-time-" + ti);
       if (t) t.textContent = songTimeLabel(ti);
     });
     el.addEventListener("timeupdate", function () {
-      if (el.duration) seek.value = Math.round((el.currentTime / el.duration) * 1000);
+      if (el.duration) setRing("song-" + ti, el.currentTime / el.duration);
       if (state.songPlayerKey === ti) {
         state.songPlayerElapsed = Math.floor(el.currentTime);
         var t = document.getElementById("song-time-" + ti);
         if (t) t.textContent = songTimeLabel(ti);
       }
     });
-    el.addEventListener("ended", function () {
-      if (state.songPlayerKey === ti) {
-        state.songPlayerKey = null;
-        state.songPlayerElapsed = 0;
-        updateSongPlayBtn(ti);
-      }
+    el.addEventListener("ended", function () { handleSongTrackEnded(ti); });
+
+    var tempoSlider = document.getElementById("song-tempo-" + ti);
+    tempoSlider.addEventListener("input", function () {
+      var pct = parseInt(tempoSlider.value, 10);
+      state.songTempoMap[ti] = pct;
+      el.playbackRate = pct / 100;
+      if (activeSongShifter && activeSongShifter.ti === ti) activeSongShifter.shifter.tempo = pct / 100;
+      var lbl = document.getElementById("song-tempo-label-" + ti);
+      if (lbl) lbl.textContent = tempoLabelText(track, pct);
+      saveState();
     });
-    seek.addEventListener("input", function () {
-      if (!el.duration) return;
-      el.currentTime = (seek.value / 1000) * el.duration;
-      state.songPlayerElapsed = Math.floor(el.currentTime);
-      var t = document.getElementById("song-time-" + ti);
-      if (t) t.textContent = songTimeLabel(ti);
+
+    var pitchSlider = document.getElementById("song-pitch-" + ti);
+    pitchSlider.addEventListener("input", function () {
+      var semis = parseFloat(pitchSlider.value);
+      state.songPitchMap[ti] = semis;
+      var lbl = document.getElementById("song-pitch-label-" + ti);
+      if (lbl) lbl.textContent = pitchLabelText(semis);
+      if (activeSongShifter && activeSongShifter.ti === ti) activeSongShifter.shifter.pitchSemitones = semis;
+      saveState();
     });
   });
+
   Array.prototype.forEach.call(app.querySelectorAll(".song-player-row .play-btn"), function (btn) {
     btn.addEventListener("click", function () {
       var ti = parseInt(btn.getAttribute("data-ti"), 10);
       toggleSongAudio(ti);
     });
   });
-
-  document.getElementById("song-file").addEventListener("change", function (e) {
-    var f = e.target.files[0];
-    if (!f) return;
-    state.songFile = f.name;
-    state.songBlob = f;
-    saveState();
-    if (f.size > MAX_UPLOAD_BYTES) {
-      state.songStatus = "toolarge";
-      render();
-      return;
-    }
-    state.songStatus = "sending";
-    saveState();
-    render();
-    submitFile("song", f, function (status) {
-      state.songStatus = status;
-      if (state.screen === "song") render();
-    }, f.name);
-  });
-  var songRetry = document.getElementById("song-retry");
-  if (songRetry) {
-    songRetry.addEventListener("click", function () {
-      if (!state.songBlob) return;
-      state.songStatus = "sending";
-      render();
-      submitFile("song", state.songBlob, function (status) {
-        state.songStatus = status;
-        if (state.screen === "song") render();
-      }, state.songFile);
+  Array.prototype.forEach.call(app.querySelectorAll("[data-song-seek]"), function (btn) {
+    btn.addEventListener("click", function () {
+      var ti = parseInt(btn.getAttribute("data-ti"), 10);
+      var delta = parseInt(btn.getAttribute("data-song-seek"), 10);
+      if (activeSongShifter && activeSongShifter.ti === ti) {
+        var sh = activeSongShifter.shifter;
+        var dur = sh.duration || 1;
+        var newSec = Math.max(0, Math.min(dur, sh.timePlayed + delta));
+        sh.percentagePlayed = newSec / dur;
+        if (state.songPlayerKey === ti) {
+          state.songPlayerElapsed = Math.floor(newSec);
+          setRing("song-" + ti, newSec / dur);
+          var t1 = document.getElementById("song-time-" + ti);
+          if (t1) t1.textContent = songTimeLabel(ti);
+        }
+        return;
+      }
+      var el = songAudioEls[ti];
+      if (!el) return;
+      if (delta < 0) el.currentTime = Math.max(0, el.currentTime + delta);
+      else el.currentTime = Math.min(el.duration || el.currentTime + delta, el.currentTime + delta);
+      if (state.songPlayerKey === ti) {
+        state.songPlayerElapsed = Math.floor(el.currentTime);
+        var t2 = document.getElementById("song-time-" + ti);
+        if (t2) t2.textContent = songTimeLabel(ti);
+      }
     });
-  }
-  var songOpenTg = document.getElementById("song-open-tg");
-  if (songOpenTg) songOpenTg.addEventListener("click", openTeacherChat);
+  });
+  Array.prototype.forEach.call(app.querySelectorAll("[data-song-gear]"), function (btn) {
+    btn.addEventListener("click", function () {
+      var ti = btn.getAttribute("data-song-gear");
+      state.songOpenSettings[ti] = !state.songOpenSettings[ti];
+      var panel = document.getElementById("song-settings-" + ti);
+      if (panel) panel.classList.toggle("open", !!state.songOpenSettings[ti]);
+    });
+  });
+  Array.prototype.forEach.call(app.querySelectorAll("[data-song-fav]"), function (btn) {
+    btn.addEventListener("click", function () {
+      var ti = parseInt(btn.getAttribute("data-song-fav"), 10);
+      var track = song.tracks[ti];
+      toggleSongFavorite(ti, track);
+      var isFav = !!state.favorites[songFavKey(ti)];
+      btn.classList.toggle("fav-on", isFav);
+      btn.innerHTML = SVG.star(isFav);
+    });
+  });
+  Array.prototype.forEach.call(app.querySelectorAll("[data-song-toggle-loop]"), function (row) {
+    row.addEventListener("click", function () {
+      var ti = row.getAttribute("data-song-toggle-loop");
+      state.songLoopMap[ti] = !state.songLoopMap[ti];
+      row.querySelector(".toggle-pill").classList.toggle("on", !!state.songLoopMap[ti]);
+      saveState();
+    });
+  });
+  Array.prototype.forEach.call(app.querySelectorAll("[data-song-toggle-autoplay]"), function (row) {
+    row.addEventListener("click", function () {
+      state.songAutoplayNext = !state.songAutoplayNext;
+      Array.prototype.forEach.call(app.querySelectorAll("[data-song-toggle-autoplay] .toggle-pill"), function (p) {
+        p.classList.toggle("on", state.songAutoplayNext);
+      });
+      saveState();
+    });
+  });
+
+  renderSongPhotoZone();
   wireActs();
 }
 

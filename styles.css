@@ -15,6 +15,8 @@
   --disabled: oklch(75% 0.01 70);
   --locked: oklch(65% 0.01 70);
   --white-text: oklch(97% 0.01 80);
+  --bgmuted: oklch(90% 0.012 75);
+  --star-fav: oklch(84% 0.15 92); /* жёлтый — цвет звезды «избранное» */
 
   --sh-d: oklch(70% 0.02 80 / 0.32);
   --sh-l: oklch(100% 0 0 / 0.85);
@@ -560,21 +562,25 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 }
 .profile-name { font: 800 19px 'Manrope', sans-serif; color: var(--ink); }
 .profile-status { font-size: 12.5px; color: var(--gray); margin-top: 2px; }
-.profile-cards { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
-.profile-card {
-  background: var(--bg); border-radius: 16px; box-shadow: var(--inset-sm); padding: 12px 14px;
+/* единый вдавленный блок кабинета: Тип занятий / Диапазон / цели / чипы — без отдельных карточек-теней */
+.cabinet-inset {
+  background: var(--bg); border-radius: 22px; box-shadow: var(--inset); padding: 18px 18px 20px; margin-bottom: 22px;
+}
+.cabinet-grid-2col {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  padding-bottom: 16px; border-bottom: 1px solid var(--line); margin-bottom: 16px;
 }
 .profile-card-label { font-size: 10.5px; color: var(--gray); text-transform: uppercase; letter-spacing: .03em; }
 .profile-card-value { font: 600 13px 'Inter', sans-serif; color: var(--ink); margin-top: 3px; }
 .profile-card-sub { font-size: 12px; color: var(--gray); margin-top: 2px; }
 .goal-box {
-  font: 600 12.5px 'Inter', sans-serif; line-height: 1.55; border-radius: 16px; padding: 14px 16px; margin-bottom: 16px;
+  font: 600 12.5px 'Inter', sans-serif; line-height: 1.55; border-radius: 14px; padding: 12px 14px;
 }
 .goal-primary { color: var(--ink-red); background: var(--soft-red); }
-.goal-secondary { color: var(--ink-terra); background: var(--soft-blue); color: oklch(38% 0.06 235); margin-bottom: 18px; }
-.chips-wrap { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.goal-secondary { color: oklch(38% 0.06 235); background: var(--soft-blue); }
+.chips-wrap { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip-tag {
-  background: var(--bg); box-shadow: var(--inset-sm); color: var(--ink);
+  background: var(--bgmuted); color: var(--ink);
   font: 600 12px 'Inter', sans-serif; padding: 7px 13px; border-radius: 14px;
 }
 .chips-empty { font-size: 12px; color: var(--gray); }
