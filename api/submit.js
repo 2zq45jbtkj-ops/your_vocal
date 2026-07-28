@@ -130,6 +130,14 @@ export default async function handler(req) {
       return json({ ok: true });
     }
 
+    if (kind === "booking") {
+      var bookText = (form.get("text") || "").toString();
+      var r4 = await tgSendMessage(token, chatId, "📅 Заявка на запись\n" + head + "\n" + bookText);
+      if (!r4.ok) return json({ ok: false, error: r4.description || "Telegram отклонил сообщение" }, 502);
+      if (r4.result) await rememberMessage(r4.result.message_id, tagKey).catch(function () {});
+      return json({ ok: true });
+    }
+
     var file = form.get("file");
     if (!file) return json({ ok: false, error: "Файл не передан" }, 400);
 
