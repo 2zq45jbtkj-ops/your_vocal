@@ -27,6 +27,8 @@ var TEACHER_BOT_USERNAME = "your_vocal_teacher_bot";
 var state = {
   screen: "tg",
   tgId: "", chatId: null, firstName: "", lastName: "",
+  notionLoadedFor: null, notionConfigured: null, notionFound: null,
+  notionProfile: null, notionAssessments: null,
   quizIndex: 0, quizAnswers: [], quizScore: 0,
   quizDone: false, warmupsDone: false, songDone: false,
   lectureViewed: false, celebrated: false,
@@ -578,16 +580,43 @@ function chipsHtml(arr) {
   return arr.map(function (x) { return '<span class="chip-tag">' + esc(x) + "</span>"; }).join("");
 }
 
+/* Карточка ученика ведётся в Notion (базы «Ученики» + «Срезы»), тянем её
+   "вживую" при каждом открытии Кабинета — тот же паттерн, что и загрузка
+   расписания для календаря (loadScheduleForMonth). Пока Николай не доделал
+   разовую настройку токена (NOTION_TOKEN в Vercel) или для конкретного
+   ученика ещё не заполнена карточка — тихо остаёмся на демо-данных, ничего
+   не ломается. */
+function loadStudentProfile() {
+  var chatId = state.chatId;
+  if (!chatId || state.notionLoadedFor === chatId) return;
+  state.notionLoadedFor = chatId;
+  fetch("/api/notion-student?chatId=" + encodeURIComponent(chatId))
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      state.notionConfigured = !!(data && data.configured);
+      state.notionFound = !!(data && data.found);
+      if (data && data.found) {
+        state.notionProfile = data.profile;
+        state.notionAssessments = data.assessments;
+      }
+      if (state.screen === "profile") render();
+    })
+    .catch(function () {});
+}
+
 function renderProfile() {
   var s = state;
-  var p = DEMO_PROFILE;
+  loadStudentProfile();
+  var useNotion = state.notionConfigured && state.notionFound && state.notionProfile;
+  var p = useNotion ? state.notionProfile : DEMO_PROFILE;
+  var assessmentsSource = useNotion ? state.notionAssessments : DEMO_ASSESSMENTS;
 
   var appHomeworkDone = [];
   if (s.quizDone) appHomeworkDone.push("Тест: " + LESSON.title);
   if (s.warmupsDone) appHomeworkDone.push("Распевки: " + LESSON.title);
   if (s.songDone) appHomeworkDone.push("Песня: " + LESSON.title);
 
-  var assessmentsHtml = DEMO_ASSESSMENTS.map(function (a, ai) {
+  var assessmentsHtml = (assessmentsSource || []).map(function (a, ai) {
     var metrics = a.metrics.map(function (m) {
       var score = m[1];
       var low = score < 5;
@@ -636,7 +665,7 @@ function renderProfile() {
         '<div class="profile-avatar">' + esc(p.short) + "</div>" +
         '<div>' +
           '<div class="profile-name">' + esc(p.name) + "</div>" +
-          '<div class="profile-status">' + p.age + ' лет · <span style="color:var(--terra);font-weight:600;">' + esc(p.status) + "</span></div>" +
+          '<div class="profile-status">' + (p.age != null ? p.age + " лет · " : "") + '<span style="color:var(--terra);font-weight:600;">' + esc(p.status) + "</span></div>" +
         "</div>" +
       "</div>" +
       '<div class="cabinet-inset">' +
@@ -659,7 +688,14 @@ function renderProfile() {
       "</div>" +
       '<div class="assessments-title">Срезы · колесо баланса</div>' +
       assessmentsHtml +
-      '<div class="instruction-note" style="margin-top:6px;">Профиль и срезы выше — пример, один в один с макетом дизайнера. Реальные данные ученика появятся, когда подключим бэкенд личного кабинета.</div>' +
+      (useNotion ? "" :
+        '<div class="instruction-note" style="margin-top:6px;">' +
+          (state.notionConfigured === false
+            ? "Показан демо-профиль. Чтобы подключить реальные данные из Notion, доверши разовую настройку (NOTION_TOKEN в Vercel) — я всё остальное уже сделал."
+            : (state.notionFound === false
+              ? "Показан демо-профиль. Для этого ученика (chat_id " + esc(String(state.chatId || "")) + ") пока нет строки в базе «Ученики» в Notion."
+              : "Загружаю профиль…")) +
+        "</div>") +
     "</div>";
 
   Array.prototype.forEach.call(app.querySelectorAll("[data-toggle-assessment]"), function (el) {
