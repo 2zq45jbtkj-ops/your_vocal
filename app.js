@@ -1310,7 +1310,7 @@ function toggleAudio(n) {
   if (!ex) return;
 
   if (state.playerIdx === n) {
-    if (activeShifter && activeShifter.n === n) stopShiftedPlayback();
+    stopShiftedPlayback();
     var curEl = audioEls[n];
     if (curEl) curEl.pause();
     state.playerIdx = null;
@@ -1325,61 +1325,13 @@ function toggleAudio(n) {
   state.playerIdx = n;
   state.playerElapsed = 0;
 
-  var semis = (state.pitchMap && state.pitchMap[n]) || 0;
-  if (semis) {
-    getAudioCtx(); // создаём/резюмируем AudioContext прямо в обработчике клика — так требуют браузеры
-    playShifted(n, ex);
-  } else {
-    var el = audioEls[n];
-    if (el) {
-      el.currentTime = 0;
-      var p = el.play();
-      if (p && p.catch) p.catch(function () {});
-    }
-  }
+  // Всегда играем через движок с реальным темпом/тональностью (не только когда
+  // тональность сдвинута) — иначе слайдер тональности не действует на уже запущенный трек.
+  getAudioCtx(); // создаём/резюмируем AudioContext прямо в обработчике клика — так требуют браузеры
+  playShifted(n, ex);
 
   if (prev) updatePlayBtn(exercises[prev - 1]);
   updatePlayBtn(ex);
-}
-
-var RING_CIRC = 2 * Math.PI * 19;
-
-function setRing(n, frac) {
-  var ring = document.getElementById("ring-" + n);
-  if (!ring) return;
-  ring.style.strokeDasharray = RING_CIRC;
-  ring.style.strokeDashoffset = RING_CIRC * (1 - Math.max(0, Math.min(1, frac || 0)));
-}
-
-function updatePlayBtn(ex) {
-  var btn = document.getElementById("play-" + ex.n);
-  var t = document.getElementById("time-" + ex.n);
-  if (!btn) return;
-  var playing = state.playerIdx === ex.n;
-  btn.className = "play-btn" + (playing ? " playing" : "");
-  btn.innerHTML = playing ? SVG.pause : SVG.play;
-  if (t) t.textContent = warmupTimeLabel(ex);
-}
-
-function toggleAudio(n) {
-  var el = audioEls[n];
-  if (!el) return;
-  var exercises = LESSON.warmups.exercises;
-  if (state.playerIdx === n) {
-    el.pause();
-    state.playerIdx = null;
-    updatePlayBtn(exercises[n - 1]);
-    return;
-  }
-  var prev = state.playerIdx;
-  Object.keys(audioEls).forEach(function (k) { if (audioEls[k]) audioEls[k].pause(); });
-  el.currentTime = 0;
-  var p = el.play();
-  if (p && p.catch) p.catch(function () {});
-  state.playerIdx = n;
-  state.playerElapsed = 0;
-  if (prev) updatePlayBtn(exercises[prev - 1]);
-  updatePlayBtn(exercises[n - 1]);
 }
 
 /* зона отправки видео (перерисовывается отдельно, не трогая аудио) */
@@ -1743,7 +1695,7 @@ function toggleSongAudio(ti) {
   if (!track) return;
 
   if (state.songPlayerKey === ti) {
-    if (activeSongShifter && activeSongShifter.ti === ti) stopSongShiftedPlayback();
+    stopSongShiftedPlayback();
     var curEl = songAudioEls[ti];
     if (curEl) curEl.pause();
     state.songPlayerKey = null;
@@ -1760,18 +1712,9 @@ function toggleSongAudio(ti) {
   state.songPlayerKey = ti;
   state.songPlayerElapsed = 0;
 
-  var semis = (state.songPitchMap && state.songPitchMap[ti]) || 0;
-  if (semis) {
-    getAudioCtx();
-    playSongShifted(ti, track);
-  } else {
-    var el = songAudioEls[ti];
-    if (el) {
-      el.currentTime = 0;
-      var p = el.play();
-      if (p && p.catch) p.catch(function () {});
-    }
-  }
+  // Всегда через движок с реальным темпом/тональностью — так же, как в распевках.
+  getAudioCtx();
+  playSongShifted(ti, track);
 
   if (prev !== null && prev !== undefined) updateSongPlayBtn(prev);
   updateSongPlayBtn(ti);
