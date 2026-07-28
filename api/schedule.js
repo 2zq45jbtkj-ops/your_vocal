@@ -1,24 +1,23 @@
 /* Занятость преподавателя для календаря "Запись".
 
-   Два независимых источника данных, проверяются по очереди:
+   Николай — не владелец студии, а сотрудник, поэтому официальный ключ доступа
+   к API HolyHope ему недоступен. Решение без API-ключа: данные о занятых датах
+   лежат прямо в проекте, в data/schedule-busy.json. Когда нужно обновить —
+   Николай пишет "обнови расписание", Claude открывает его собственное
+   расписание в браузере (Николай уже залогинен под своим сотрудническим
+   аккаунтом на labzvuka.t8s.ru — пароль и API-ключ тут никогда не участвуют),
+   считывает актуальные занятые даты и коммитит новый data/schedule-busy.json —
+   так же, как обновляется любой другой файл в проекте.
 
-   1) Ручная синхронизация (api/sync-schedule.js) — Николай не владелец студии
-      и не может получить authkey от HolyHope, поэтому вместо официального API
-      данные обновляются вручную: он просит Claude "обнови расписание", Claude
-      открывает его собственное расписание в браузере (он уже залогинен под
-      своим сотрудническим аккаунтом) и пишет актуальные занятые даты в KV
-      через api/sync-schedule.js. Этот эндпоинт просто читает то, что там лежит.
+   Если данные устарели или отсутствуют — эндпоинт просто отвечает
+   { configured: false }, календарь в приложении работает как визуальный,
+   ничего не ломается.
 
-   2) Официальный API HolyHope (если когда-нибудь появится authkey от
-      владельца студии) — нужны переменные окружения в Vercel:
-        HOLLIHOP_DOMAIN   — поддомен вида "labzvuka" (без .t8s.ru)
-        HOLLIHOP_AUTHKEY  — ключ доступа из HolyHope: Настройки -> Интеграция -> API
-      Документация: https://hollipedia.t8s.ru/books/api/page/api-20
-
-   Если не настроено ни то, ни другое — отвечает { configured: false },
-   календарь в приложении работает как обычный визуальный, ничего не ломается. */
-
-import { kvGet } from "./_lib.js";
+   Официальный API HolyHope (на случай, если когда-нибудь появится authkey от
+   владельца студии) оставлен как запасной путь — переменные окружения:
+     HOLLIHOP_DOMAIN   — поддомен вида "labzvuka" (без .t8s.ru)
+     HOLLIHOP_AUTHKEY  — ключ доступа: Настройки -> Интеграция -> API
+   Документация: https://hollipedia.t8s.ru/books/api/page/api-20 */
 
 export const config = { runtime: "edge" };
 
@@ -37,15 +36,14 @@ export default async function handler(req) {
     return json({ ok: false, error: "Нужны параметры from и to (YYYY-MM-DD)" }, 400);
   }
 
-  // 1) ручная синхронизация через KV
+  // 1) файл в проекте, обновляемый вручную
   try {
-    var raw = await kvGet("schedule:busyDates");
-    if (raw) {
-      var manualDates = JSON.parse(raw);
-      if (Array.isArray(manualDates)) {
-        var filtered = manualDates.filter(function (d) { return d >= dateFrom && d <= dateTo; });
-        var syncedAt = await kvGet("schedule:syncedAt");
-        return json({ ok: true, configured: true, source: "manual", syncedAt: syncedAt || null, busyDates: filtered });
+    var fileRes = await fetch(url.origin + "/data/schedule-busy.json");
+    if (fileRes.ok) {
+      var fileData = await fileRes.json();
+      if (fileData && Array.isArray(fileData.busyDates)) {
+        var filtered = fileData.busyDates.filter(function (d) { return d >= dateFrom && d <= dateTo; });
+        return json({ ok: true, configured: true, source: "manual", syncedAt: fileData.syncedAt || null, busyDates: filtered });
       }
     }
   } catch (e) {}
