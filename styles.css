@@ -110,14 +110,20 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 }
 .filter-btn.active-blue { background: var(--blue); color: var(--white-text); box-shadow: var(--raised-sm); }
 .filter-btn.active-terra { background: var(--terra); color: var(--white-text); box-shadow: var(--raised-sm); }
-.roadmap-wrap { padding: 20px 0 4px 18px; }
+.roadmap-wrap { padding: 20px 0 4px; }
 .roadmap-label {
   font: 600 12px 'Inter', sans-serif; text-transform: uppercase; letter-spacing: .04em;
-  color: var(--gray-mute); margin-bottom: 10px;
+  color: var(--gray-mute); margin-bottom: 10px; padding: 0 18px;
 }
-.roadmap-scroll { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; padding-right: 18px; }
+/* edge-to-edge: без своего padding-left/right у скроллера — центрирование карточек
+   даёт симметричный calc()-паддинг ниже, отдельно для каждой стороны. Без этого
+   родительский padding-left обрезал первую карточку при свайпе до упора влево. */
+.roadmap-scroll {
+  display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory;
+  padding: 8px calc((100% - 82%) / 2) 6px;
+}
 .roadmap-card {
-  scroll-snap-align: start; flex: 0 0 82%; background: var(--bg); border-radius: 20px;
+  scroll-snap-align: center; flex: 0 0 82%; background: var(--bg); border-radius: 20px;
   box-shadow: var(--raised-lg); padding: 16px 18px; cursor: pointer;
 }
 .roadmap-title { font: 700 14.5px 'Manrope', sans-serif; color: var(--ink); }
