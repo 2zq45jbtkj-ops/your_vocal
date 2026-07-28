@@ -660,23 +660,24 @@ function renderQuiz() {
       '<div class="quiz-radio"></div><span>' + esc(text) + "</span></div>";
   });
 
-  var quizFrac = (s.quizIndex + 1) / questions.length;
-  var quizRingCirc = 2 * Math.PI * 17;
-  var quizRingOffset = quizRingCirc * (1 - quizFrac);
+  var answeredCount = s.quizAnswers.filter(function (a) { return a !== null && a !== undefined; }).length;
+  var quizFrac = answeredCount / questions.length;
+  var quizPct = Math.round(quizFrac * 100);
 
   app.innerHTML =
     stepHeader("Тест", 2, 50) +
     '<div class="quiz-body">' +
       '<div class="quiz-counter-row">' +
         '<span class="quiz-counter">Вопрос ' + (s.quizIndex + 1) + " из " + questions.length + "</span>" +
-        '<div class="quiz-ring-wrap">' +
-          '<svg class="player-ring" viewBox="0 0 40 40"><circle class="quiz-ring-track" cx="20" cy="20" r="17"></circle><circle class="quiz-ring-progress" cx="20" cy="20" r="17" style="stroke-dasharray:' + quizRingCirc + ";stroke-dashoffset:" + quizRingOffset + ';"></circle></svg>' +
-          '<span class="quiz-ring-label">' + (s.quizIndex + 1) + "/" + questions.length + "</span>" +
-        "</div>" +
       "</div>" +
-      '<div class="quiz-progress"><div style="width:' + Math.round(quizFrac * 100) + '%;"></div></div>' +
+      '<div class="quiz-progress"><div style="width:' + quizPct + '%;"></div></div>' +
       '<div class="quiz-card">' +
         '<div class="quiz-q">' + esc(cq.q) + "</div>" + optsHtml +
+      "</div>" +
+      '<div class="quiz-ring-big-wrap">' +
+        '<div class="quiz-ring-big" style="background:conic-gradient(oklch(56% 0.09 235) ' + quizPct + '%, oklch(87% 0.01 70) 0);">' +
+          '<div class="quiz-ring-big-inner"><span>' + (s.quizIndex + 1) + "/" + questions.length + "</span></div>" +
+        "</div>" +
       "</div>" +
     "</div>" +
     '<div class="quiz-cta-wrap"><button id="quiz-next" class="cta' + (isLast ? " terra" : "") + '"' + (hasAnswer ? "" : " disabled") + ">" + (isLast ? "Завершить" : "Далее") + "</button></div>";

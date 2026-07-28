@@ -243,12 +243,16 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 .quiz-counter-row {
   display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
 }
-.quiz-ring-wrap { position: relative; width: 40px; height: 40px; flex-shrink: 0; }
-.quiz-ring-wrap .player-ring { position: absolute; inset: 0; transform: rotate(-90deg); }
-.quiz-ring-label {
-  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  font: 700 9.5px 'Manrope', sans-serif; color: var(--ink);
+.quiz-ring-big-wrap { display: flex; justify-content: center; padding: 32px 0 16px; }
+.quiz-ring-big {
+  width: 180px; height: 180px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
 }
+.quiz-ring-big-inner {
+  width: 150px; height: 150px; border-radius: 50%; background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+}
+.quiz-ring-big-inner span { font: 800 30px 'Manrope', sans-serif; color: var(--ink); }
 .quiz-counter { font-size: 11px; color: var(--gray); font-weight: 600; white-space: nowrap; }
 .quiz-progress { height: 5px; background: var(--line); border-radius: 3px; overflow: hidden; margin-bottom: 16px; box-shadow: inset 1px 1px 2px oklch(70% 0.02 80 / 0.3); }
 .quiz-progress > div { height: 100%; background: var(--terra); border-radius: 3px; }
