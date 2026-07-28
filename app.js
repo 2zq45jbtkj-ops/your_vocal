@@ -359,7 +359,7 @@ function lockedRoadmapCardHtml(n) {
   var lockedSteps = ["Лекция", "Тест", "Распевки", "Упражнение с песней"];
   var stepsHtml = lockedSteps.map(function (label) {
     return '<div class="roadmap-step">' +
-      '<div class="roadmap-step-dot">' + SVG.lock + "</div>" +
+      '<div class="roadmap-step-dot"></div>' +
       '<span style="color:var(--locked);">' + label + "</span>" +
     "</div>";
   }).join("");
@@ -378,22 +378,30 @@ function roadmapScrollHtml() {
   return html;
 }
 
-function renderCourses() {
-  var stats = lessonStats();
-  var filter = state.coursesFilter || (progressPercent() === 100 ? "completed" : "inProgress");
-
-  var items =
+/* уроки в статусе «завершено» — простой список тайлов, без доп. информации.
+   Пока реально может быть пройден только урок 1 (у остальных ещё нет контента). */
+function completedLessonsGridHtml() {
+  if (progressPercent() !== 100) {
+    return '<div class="courses-empty">Пока нет завершённых уроков</div>';
+  }
+  var tile =
     '<div class="lesson-tile" data-act="open-lesson">' +
       '<div class="lesson-dot" style="background:oklch(56% 0.09 235);">1</div>' +
       '<div class="lesson-tile-name">' + esc(LESSON.title) + "</div>" +
     "</div>";
-  for (var i = 2; i <= TOTAL_LESSONS; i++) {
-    items +=
-      '<div class="lesson-tile locked">' +
-        '<div class="lesson-dot" style="background:oklch(95% 0.014 80);">' + SVG.lock + "</div>" +
-        '<div class="lesson-tile-name">Урок ' + i + "</div>" +
+  return '<div class="courses-grid">' + tile + "</div>";
+}
+
+function renderCourses() {
+  var stats = lessonStats();
+  var filter = state.coursesFilter || (progressPercent() === 100 ? "completed" : "inProgress");
+
+  var bodyHtml = filter === "completed"
+    ? completedLessonsGridHtml()
+    : '<div class="roadmap-wrap">' +
+        '<div class="roadmap-label">Дорожная карта урока · листайте →</div>' +
+        '<div class="roadmap-scroll">' + roadmapScrollHtml() + "</div>" +
       "</div>";
-  }
 
   app.innerHTML =
     '<div class="courses-head">' +
@@ -405,11 +413,7 @@ function renderCourses() {
       '<button class="filter-btn' + (filter === "inProgress" ? " active" : "") + '" data-act="filter-inprogress">В работе · ' + stats.inProgress + "</button>" +
       '<button class="filter-btn' + (filter === "completed" ? " active" : "") + '" data-act="filter-completed">✓ Завершено · ' + stats.completed + "</button>" +
     "</div>" +
-    '<div class="roadmap-wrap">' +
-      '<div class="roadmap-label">Дорожная карта урока · листайте →</div>' +
-      '<div class="roadmap-scroll">' + roadmapScrollHtml() + "</div>" +
-    "</div>" +
-    '<div class="courses-grid">' + items + "</div>";
+    bodyHtml;
   wireActs();
 }
 
