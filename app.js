@@ -44,7 +44,7 @@ var state = {
   songPlayerKey: null, songPlayerElapsed: 0, songDurations: {}, songOpenSettings: {},
   songRevealed: {}, songSelectedMark: {},
   feedbackMood: null, feedbackText: "", coursesFilter: null,
-  favPlayerKey: null, pendingUnstar: null, pendingUnstarData: null, pendingUnstarSecs: 0
+  pendingUnstar: null, pendingUnstarData: null, pendingUnstarSecs: 0
 };
 
 var audioEls = {};
@@ -451,9 +451,8 @@ function renderCourses() {
   wireActs();
 }
 
-/* ---------- избранные распевки: список + мини-плеер + снятие звезды с undo (1:1 по макету) ---------- */
+/* ---------- избранные распевки: тот же плеер урока + снятие звезды с undo (1:1 по макету) ---------- */
 
-var favAudioEls = {};
 var unstarTimer = null;
 
 function renderFavorites() {
@@ -468,19 +467,12 @@ function renderFavorites() {
     entries.push({ key: key, n: n, ex: ex, fav: s.favorites[key] });
   });
 
-  var listHtml = entries.map(function (item) {
-    var playing = s.favPlayerKey === item.n;
-    return (
-      '<div class="fav-item">' +
-        '<button class="fav-play-btn' + (playing ? " playing" : "") + '" data-fav-play="' + item.n + '">' + (playing ? SVG.pause : SVG.play) + "</button>" +
-        '<div class="fav-item-body">' +
-          '<div class="fav-item-label">' + esc(item.ex.label1 + (item.ex.label2 ? " " + item.ex.label2 : "")) + "</div>" +
-          '<div class="fav-item-sub">Урок 1 · ' + esc(item.fav.lessonTitle) + "</div>" +
-        "</div>" +
-        '<button class="fav-unstar-btn" data-fav-unstar="' + item.key + '">' + SVG.star(true) + "</button>" +
-        '<audio id="fav-audio-' + item.n + '" src="' + esc(item.ex.src) + '" preload="none" style="display:none;"></audio>' +
-      "</div>"
-    );
+  // Тот же самый плеер-компонент, что и на экране урока (warmupCardHtml) —
+  // перемотка, кольцо, шестерёнка с темпом/тональностью/повтором — всё одинаково.
+  // Единственная разница — подпись урока вместо инструкций "как выполнять".
+  var cards = entries.map(function (item) {
+    var sub = '<div class="fav-item-sub" style="margin-top:6px;">Урок 1 · ' + esc(item.fav.lessonTitle) + "</div>";
+    return warmupCardHtml(item.ex, sub);
   }).join("");
 
   app.innerHTML =
@@ -488,47 +480,18 @@ function renderFavorites() {
       '<div class="top-title lg">Избранные распевки</div>' +
     "</div>" +
     '<div style="padding:8px 20px 130px;">' +
-      (entries.length ? listHtml : '<div class="courses-empty">Пока нет избранных распевок — нажми на звезду в плеере урока.</div>') +
+      (entries.length ? cards : '<div class="courses-empty">Пока нет избранных распевок — нажми на звезду в плеере урока.</div>') +
     "</div>" +
     (s.pendingUnstar
       ? '<div class="unstar-toast"><span>Убрано из избранного · ' + s.pendingUnstarSecs + 'с</span><button data-act="undo-unstar">Вернуть</button></div>'
       : "");
 
-  Array.prototype.forEach.call(app.querySelectorAll("[data-fav-play]"), function (btn) {
-    btn.addEventListener("click", function () {
-      toggleFavAudio(parseInt(btn.getAttribute("data-fav-play"), 10));
-    });
-  });
-  Array.prototype.forEach.call(app.querySelectorAll("[data-fav-unstar]"), function (btn) {
-    btn.addEventListener("click", function () {
-      scheduleUnstar(btn.getAttribute("data-fav-unstar"));
-    });
+  entries.forEach(function (item) { wireWarmupCard(item.ex); });
+  wireWarmupControls(function (n) {
+    // на этом экране звезда не просто снимает избранное, а показывает отменяемый тост
+    scheduleUnstar(favKey(n));
   });
   wireActs();
-}
-
-function toggleFavAudio(n) {
-  var el = document.getElementById("fav-audio-" + n);
-  if (!el) return;
-  favAudioEls[n] = el;
-  if (state.favPlayerKey === n) {
-    el.pause();
-    state.favPlayerKey = null;
-    render();
-    return;
-  }
-  Object.keys(favAudioEls).forEach(function (k) { if (favAudioEls[k]) favAudioEls[k].pause(); });
-  Object.keys(audioEls).forEach(function (k) { if (audioEls[k]) audioEls[k].pause(); });
-  Object.keys(songAudioEls).forEach(function (k) { if (songAudioEls[k]) songAudioEls[k].pause(); });
-  el.currentTime = 0;
-  var p = el.play();
-  if (p && p.catch) p.catch(function () {});
-  state.favPlayerKey = n;
-  render();
-  el.addEventListener("ended", function onEnded() {
-    if (state.favPlayerKey === n) { state.favPlayerKey = null; render(); }
-    el.removeEventListener("ended", onEnded);
-  });
 }
 
 function scheduleUnstar(key) {
@@ -1331,114 +1294,118 @@ function warmupSettingsPanelHtml(ex) {
   );
 }
 
-function renderWarmups() {
-  var cards = "";
-  LESSON.warmups.exercises.forEach(function (ex) {
-    var isFav = !!state.favorites[favKey(ex.n)];
-    cards +=
-      '<div class="warmup-card">' +
-        '<div class="warmup-row">' +
-          '<button class="seek-btn" data-seek="-10" data-n="' + ex.n + '">' + SVG.seekBack + "</button>" +
-          '<div class="player-ring-wrap">' +
-            '<svg class="player-ring" viewBox="0 0 44 44"><circle class="ring-track" cx="22" cy="22" r="19"></circle><circle class="ring-progress" id="ring-' + ex.n + '" cx="22" cy="22" r="19"></circle></svg>' +
-            '<button class="play-btn" id="play-' + ex.n + '" data-n="' + ex.n + '">' + SVG.play + "</button>" +
-          "</div>" +
-          '<button class="seek-btn" data-seek="10" data-n="' + ex.n + '">' + SVG.seekFwd + "</button>" +
-          '<div class="warmup-labels">' +
-            '<div class="warmup-label">' + esc(ex.label1) + "</div>" +
-            (ex.label2 ? '<div class="warmup-label">' + esc(ex.label2) + "</div>" : "") +
-          "</div>" +
-          '<div class="warmup-time" id="time-' + ex.n + '">' + warmupTimeLabel(ex) + "</div>" +
-          '<button class="icon-btn' + (isFav ? " fav-on" : "") + '" data-fav="' + ex.n + '" title="В избранное">' + SVG.star(isFav) + "</button>" +
-          '<button class="icon-btn" data-gear="' + ex.n + '" title="Настройки">' + SVG.gear + "</button>" +
+/* ==========================================================================
+   ЕДИНЫЙ ПЛЕЕР РАСПЕВКИ — используется ВЕЗДЕ, где показывается упражнение
+   с аудио: на экране урока «Распевки» и на экране «Избранные распевки».
+   Интерфейс и весь функционал (перемотка ±10, play/pause, кольцо прогресса,
+   звезда, шестерёнка → Темп/Тональность/Повтор/Автовоспроизведение) ОДИН И
+   ТОТ ЖЕ везде. Если нужно что-то добавить в плеер — менять СНАЧАЛА здесь
+   (warmupCardHtml / wireWarmupCard / wireWarmupControls), а не в отдельных
+   экранах, чтобы не разойтись. См. также PLAYER_SPEC.md в корне проекта.
+   ========================================================================== */
+
+function warmupCardHtml(ex, extraHtml) {
+  var isFav = !!state.favorites[favKey(ex.n)];
+  return (
+    '<div class="warmup-card">' +
+      '<div class="warmup-row">' +
+        '<button class="seek-btn" data-seek="-10" data-n="' + ex.n + '">' + SVG.seekBack + "</button>" +
+        '<div class="player-ring-wrap">' +
+          '<svg class="player-ring" viewBox="0 0 44 44"><circle class="ring-track" cx="22" cy="22" r="19"></circle><circle class="ring-progress" id="ring-' + ex.n + '" cx="22" cy="22" r="19"></circle></svg>' +
+          '<button class="play-btn" id="play-' + ex.n + '" data-n="' + ex.n + '">' + SVG.play + "</button>" +
         "</div>" +
-        warmupSettingsPanelHtml(ex) +
-        '<p class="warmup-sub">' + esc(ex.sub) + "</p>" +
-        (ex.how ? '<p class="warmup-how"><b>Как выполнять:</b> ' + esc(ex.how) + "</p>" : "") +
-        (ex.mistake ? '<p class="warmup-mistake"><b>Частая ошибка:</b> ' + esc(ex.mistake) + "</p>" : "") +
-        '<audio id="audio-' + ex.n + '" src="' + esc(ex.src) + '" preload="metadata" style="display:none;"></audio>' +
-      "</div>";
+        '<button class="seek-btn" data-seek="10" data-n="' + ex.n + '">' + SVG.seekFwd + "</button>" +
+        '<div class="warmup-labels">' +
+          '<div class="warmup-label">' + esc(ex.label1) + "</div>" +
+          (ex.label2 ? '<div class="warmup-label">' + esc(ex.label2) + "</div>" : "") +
+        "</div>" +
+        '<div class="warmup-time" id="time-' + ex.n + '">' + warmupTimeLabel(ex) + "</div>" +
+        '<button class="icon-btn' + (isFav ? " fav-on" : "") + '" data-fav="' + ex.n + '" title="В избранное">' + SVG.star(isFav) + "</button>" +
+        '<button class="icon-btn" data-gear="' + ex.n + '" title="Настройки">' + SVG.gear + "</button>" +
+      "</div>" +
+      warmupSettingsPanelHtml(ex) +
+      (extraHtml || "") +
+      '<audio id="audio-' + ex.n + '" src="' + esc(ex.src) + '" preload="metadata" style="display:none;"></audio>' +
+    "</div>"
+  );
+}
+
+function wireWarmupCard(ex) {
+  var n = ex.n;
+  var el = document.getElementById("audio-" + n);
+  if (!el) return;
+  audioEls[n] = el;
+  el.preservesPitch = true;
+  el.mozPreservesPitch = true;
+  el.webkitPreservesPitch = true;
+  el.playbackRate = ((state.tempoMap && state.tempoMap[n]) || 100) / 100;
+  el.addEventListener("loadedmetadata", function () {
+    state.durations[n] = Math.round(el.duration) || 0;
+    var t = document.getElementById("time-" + n);
+    if (t) t.textContent = warmupTimeLabel(ex);
   });
-
-  app.innerHTML =
-    stepHeader("Распевки «" + esc(LESSON.title) + "»", 3, 75) +
-    '<div class="warmups-body">' +
-      '<div class="instruction-note">' + LESSON.warmups.instruction + "</div>" +
-      cards +
-      '<div class="section-label" style="margin:0 0 8px;">Отправка видео</div>' +
-      '<div id="hw-zone"></div>' +
-    "</div>" +
-    '<div class="bottom-cta" style="padding-top:0;"><button class="cta" data-act="finish-warmups">Продолжить: упражнение с песней</button></div>';
-
-  LESSON.warmups.exercises.forEach(function (ex) {
-    var el = document.getElementById("audio-" + ex.n);
-    audioEls[ex.n] = el;
-    // Замедление без "плывущего" питча — держим исходную тональность упражнения.
-    el.preservesPitch = true;
-    el.mozPreservesPitch = true;
-    el.webkitPreservesPitch = true;
-    el.playbackRate = ((state.tempoMap && state.tempoMap[ex.n]) || 100) / 100;
-    el.addEventListener("loadedmetadata", function () {
-      state.durations[ex.n] = Math.round(el.duration) || 0;
-      var t = document.getElementById("time-" + ex.n);
+  el.addEventListener("timeupdate", function () {
+    if (el.duration) setRing(n, el.currentTime / el.duration);
+    if (state.playerIdx === n) {
+      state.playerElapsed = Math.floor(el.currentTime);
+      var t = document.getElementById("time-" + n);
       if (t) t.textContent = warmupTimeLabel(ex);
-    });
-    el.addEventListener("timeupdate", function () {
-      if (el.duration) setRing(ex.n, el.currentTime / el.duration);
-      if (state.playerIdx === ex.n) {
-        state.playerElapsed = Math.floor(el.currentTime);
-        var t = document.getElementById("time-" + ex.n);
-        if (t) t.textContent = warmupTimeLabel(ex);
-      }
-    });
-    el.addEventListener("ended", function () { handleExerciseEnded(ex.n); });
+    }
+  });
+  el.addEventListener("ended", function () { handleExerciseEnded(n); });
 
-    var tempoSlider = document.getElementById("tempo-" + ex.n);
-    tempoSlider.addEventListener("input", function () {
-      var pct = parseInt(tempoSlider.value, 10);
-      state.tempoMap[ex.n] = pct;
-      el.playbackRate = pct / 100;
-      if (activeShifter && activeShifter.n === ex.n) activeShifter.shifter.tempo = pct / 100;
-      var lbl = document.getElementById("tempo-label-" + ex.n);
-      if (lbl) lbl.textContent = tempoLabelText(ex, pct);
-      saveState();
-    });
-
-    var pitchSlider = document.getElementById("pitch-" + ex.n);
-    pitchSlider.addEventListener("input", function () {
-      var semis = parseFloat(pitchSlider.value);
-      state.pitchMap[ex.n] = semis;
-      var lbl = document.getElementById("pitch-label-" + ex.n);
-      if (lbl) lbl.textContent = pitchLabelText(semis);
-      saveState();
-
-      if (state.playerIdx !== ex.n) return; // трек сейчас не играет — применится при следующем запуске
-      if (activeShifter && activeShifter.n === ex.n) {
-        if (semis) {
-          activeShifter.shifter.pitchSemitones = semis; // движок уже включён — просто обновляем на лету
-        } else {
-          // тональность вернули на 0 — переключаемся обратно на обычное аудио с той же позиции
-          var pos = activeShifter.shifter.timePlayed || 0;
-          stopShiftedPlayback();
-          if (el) { el.currentTime = pos; var p = el.play(); if (p && p.catch) p.catch(function () {}); }
-        }
-      } else if (semis) {
-        // сейчас играет обычное аудио — подключаем движок с той же позиции
-        var pos2 = el ? el.currentTime : 0;
-        if (el) el.pause();
-        getAudioCtx();
-        playShifted(ex.n, ex, pos2);
-      }
-    });
+  var tempoSlider = document.getElementById("tempo-" + n);
+  if (tempoSlider) tempoSlider.addEventListener("input", function () {
+    var pct = parseInt(tempoSlider.value, 10);
+    state.tempoMap[n] = pct;
+    el.playbackRate = pct / 100;
+    if (activeShifter && activeShifter.n === n) activeShifter.shifter.tempo = pct / 100;
+    var lbl = document.getElementById("tempo-label-" + n);
+    if (lbl) lbl.textContent = tempoLabelText(ex, pct);
+    saveState();
   });
 
-  Array.prototype.forEach.call(app.querySelectorAll(".play-btn"), function (btn) {
+  var pitchSlider = document.getElementById("pitch-" + n);
+  if (pitchSlider) pitchSlider.addEventListener("input", function () {
+    var semis = parseFloat(pitchSlider.value);
+    state.pitchMap[n] = semis;
+    var lbl = document.getElementById("pitch-label-" + n);
+    if (lbl) lbl.textContent = pitchLabelText(semis);
+    saveState();
+
+    if (state.playerIdx !== n) return; // трек сейчас не играет — применится при следующем запуске
+    if (activeShifter && activeShifter.n === n) {
+      if (semis) {
+        activeShifter.shifter.pitchSemitones = semis; // движок уже включён — просто обновляем на лету
+      } else {
+        // тональность вернули на 0 — переключаемся обратно на обычное аудио с той же позиции
+        var pos = activeShifter.shifter.timePlayed || 0;
+        stopShiftedPlayback(n);
+        el.currentTime = pos;
+        var p = el.play();
+        if (p && p.catch) p.catch(function () {});
+      }
+    } else if (semis) {
+      // сейчас играет обычное аудио — подключаем движок с той же позиции
+      var pos2 = el.currentTime;
+      el.pause();
+      getAudioCtx();
+      playShifted(n, ex, pos2);
+    }
+  });
+}
+
+/* onFav (необязательно) — свой обработчик звезды. По умолчанию — обычный
+   toggle (лесной экран урока). На экране «Избранные распевки» передаём снятие
+   с 10-секундным отменяемым тостом — это единственное законное отличие между
+   экранами, сам плеер и его настройки при этом идентичны. */
+function wireWarmupControls(onFav) {
+  Array.prototype.forEach.call(app.querySelectorAll(".play-btn[data-n]"), function (btn) {
     btn.addEventListener("click", function () {
-      var n = parseInt(btn.getAttribute("data-n"), 10);
-      toggleAudio(n);
+      toggleAudio(parseInt(btn.getAttribute("data-n"), 10));
     });
   });
-  Array.prototype.forEach.call(app.querySelectorAll(".seek-btn"), function (btn) {
+  Array.prototype.forEach.call(app.querySelectorAll(".seek-btn[data-n]"), function (btn) {
     btn.addEventListener("click", function () {
       var n = parseInt(btn.getAttribute("data-n"), 10);
       var delta = parseInt(btn.getAttribute("data-seek"), 10);
@@ -1479,6 +1446,7 @@ function renderWarmups() {
     btn.addEventListener("click", function () {
       var n = parseInt(btn.getAttribute("data-fav"), 10);
       var ex = LESSON.warmups.exercises[n - 1];
+      if (onFav) { onFav(n, ex, btn); return; }
       toggleFavorite(n, ex);
       var isFav = !!state.favorites[favKey(n)];
       btn.classList.toggle("fav-on", isFav);
@@ -1502,6 +1470,30 @@ function renderWarmups() {
       saveState();
     });
   });
+}
+
+function renderWarmups() {
+  var cards = "";
+  LESSON.warmups.exercises.forEach(function (ex) {
+    var extra =
+      '<p class="warmup-sub">' + esc(ex.sub) + "</p>" +
+      (ex.how ? '<p class="warmup-how"><b>Как выполнять:</b> ' + esc(ex.how) + "</p>" : "") +
+      (ex.mistake ? '<p class="warmup-mistake"><b>Частая ошибка:</b> ' + esc(ex.mistake) + "</p>" : "");
+    cards += warmupCardHtml(ex, extra);
+  });
+
+  app.innerHTML =
+    stepHeader("Распевки «" + esc(LESSON.title) + "»", 3, 75) +
+    '<div class="warmups-body">' +
+      '<div class="instruction-note">' + LESSON.warmups.instruction + "</div>" +
+      cards +
+      '<div class="section-label" style="margin:0 0 8px;">Отправка видео</div>' +
+      '<div id="hw-zone"></div>' +
+    "</div>" +
+    '<div class="bottom-cta" style="padding-top:0;"><button class="cta" data-act="finish-warmups">Продолжить: упражнение с песней</button></div>';
+
+  LESSON.warmups.exercises.forEach(function (ex) { wireWarmupCard(ex); });
+  wireWarmupControls();
 
   renderHwZone();
   wireActs();
