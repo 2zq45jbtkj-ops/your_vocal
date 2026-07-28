@@ -952,11 +952,24 @@ function renderComingSoon(title, icon) {
   wireActs();
 }
 
-var DOCK_SCREENS = ["courses", "profile", "questions", "more"];
+/* Главные 4 вкладки дока. */
+var MAIN_TAB_SCREENS = ["courses", "profile", "questions", "more"];
+/* Подэкраны урока и избранное относятся к вкладке «Уроки» — она подсвечивается
+   и на них, даже если открыт конкретный шаг урока, а не список уроков. */
+var LESSON_SUB_SCREENS = ["lesson-home", "lecture", "quiz", "quiz-result", "warmups", "song", "feedback", "favorites"];
+/* Дока нет ТОЛЬКО на экранах входа — на всех остальных она закреплена всегда. */
+var NO_DOCK_SCREENS = ["tg", "name"];
+
+function activeDockTab() {
+  if (MAIN_TAB_SCREENS.indexOf(state.screen) !== -1) return state.screen;
+  if (LESSON_SUB_SCREENS.indexOf(state.screen) !== -1) return "courses";
+  return null;
+}
 
 function renderDock() {
-  if (DOCK_SCREENS.indexOf(state.screen) === -1) return;
+  if (NO_DOCK_SCREENS.indexOf(state.screen) !== -1) return;
   var stats = lessonStats();
+  var activeTab = activeDockTab();
   var badge = stats.completed ? '<span class="dock-badge">' + stats.completed + "</span>" : "";
   var items = [
     { screen: "profile", act: "go-profile", icon: SVG.dockPerson, label: "Кабинет" },
@@ -966,7 +979,7 @@ function renderDock() {
   ];
   var html = '<div class="dock">';
   items.forEach(function (it) {
-    var active = state.screen === it.screen;
+    var active = activeTab === it.screen;
     var color = active ? "oklch(60% 0.13 38)" : "oklch(52% 0.012 70)";
     html += '<button class="dock-item' + (active ? " active" : "") + '" data-act="' + it.act + '">' +
       (it.badge || "") + it.icon(color) + "<span>" + it.label + "</span></button>";
@@ -2135,7 +2148,7 @@ function renderFeedback() {
   MOODS.forEach(function (m) { if (m.v === s.feedbackMood) label = m.label; });
 
   app.innerHTML =
-    '<div class="auth-screen" style="padding-top:58px;">' +
+    '<div class="auth-screen" style="padding-top:58px;padding-bottom:130px;">' +
       '<div class="auth-title">Как прошёл урок?</div>' +
       '<div class="auth-sub">Домашнее задание выполнено. Оцени, как всё прошло — это поможет сделать курс лучше.</div>' +
       '<div class="mood-row">' + moodsHtml + "</div>" +
@@ -2524,7 +2537,7 @@ function render() {
   lastRenderedScreen = state.screen;
   lastRenderedQuizIndex = state.quizIndex;
   if (tg) {
-    if (DOCK_SCREENS.indexOf(state.screen) !== -1 || state.screen === "tg") tg.BackButton.hide();
+    if (MAIN_TAB_SCREENS.indexOf(state.screen) !== -1 || state.screen === "tg") tg.BackButton.hide();
     else tg.BackButton.show();
   }
   switch (state.screen) {

@@ -202,7 +202,7 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 .lesson-progress-bar > div { height: 100%; background: var(--terra); border-radius: 3px; transition: width .3s ease; }
 
 /* ---------- степпер урока ---------- */
-.stepper { padding: 8px 20px 24px; }
+.stepper { padding: 8px 20px 130px; }
 .step-row { display: flex; gap: 12px; cursor: pointer; }
 .step-row.locked { cursor: default; }
 .step-rail { display: flex; flex-direction: column; align-items: center; }
@@ -238,7 +238,7 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
   font-size: 12.5px; color: var(--ink-terra); margin: 6px 0 16px; font-weight: 600;
 }
 .lecture-para { font-size: 12.5px; color: var(--ink); line-height: 1.6; margin: 0 0 14px; }
-.bottom-cta { padding: 14px 20px 24px; }
+.bottom-cta { padding: 14px 20px 130px; }
 .bottom-cta .cta { height: 52px; font-size: 15px; }
 
 /* ---------- тест ---------- */
@@ -265,7 +265,7 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 .quiz-radio { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--disabled); background: transparent; flex-shrink: 0; }
 .quiz-opt.sel .quiz-radio { border-color: var(--blue); background: var(--blue); }
 .quiz-opt span { font-size: 13px; color: var(--ink); }
-.quiz-cta-wrap { padding: 16px 20px 24px; }
+.quiz-cta-wrap { padding: 16px 20px 130px; }
 .quiz-cta-wrap .cta { height: 52px; font-size: 15px; }
 .cta.terra { background: var(--terra); }
 .cta.terra:disabled { background: var(--disabled); box-shadow: none; }
@@ -273,7 +273,7 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 /* результат теста */
 .result-screen {
   min-height: 100vh; display: flex; flex-direction: column;
-  padding: 58px 24px 24px; align-items: center; text-align: center;
+  padding: 58px 24px 130px; align-items: center; text-align: center;
 }
 .result-badge {
   width: 68px; height: 68px; border-radius: 50%; background: var(--bg);
