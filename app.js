@@ -806,16 +806,20 @@ function renderQuestions() {
         }).join("")
       : '<div class="courses-empty" style="grid-column:1/-1;">В этот день занятия не проводятся</div>';
     html =
-      '<button class="cal-nav-btn" style="width:auto;height:44px;padding:0 18px;border-radius:14px;color:var(--blue);font:600 13px Inter,sans-serif;margin-bottom:16px;" data-act="cal-clear">‹ Другая дата</button>' +
-      '<div style="font:800 24px Manrope,sans-serif;color:var(--ink);text-transform:capitalize;">' + selLabel + "</div>" +
-      '<div style="margin-top:40px;">' +
-        '<div class="section-label" style="margin-top:0;">Свободное время</div>' +
-        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">' + slotsHtml + "</div>" +
-      "</div>" +
-      '<div style="padding:24px 0 16px;">' +
-        '<button class="cta" id="confirm-booking-btn"' + (state.selectedTime == null ? " disabled" : "") + ' style="' + (state.selectedTime == null ? "background:oklch(85% 0.01 70);box-shadow:none;" : "") + '">' +
-          (state.selectedTime == null ? "Выберите время" : "Подтвердить на " + state.selectedTime) +
-        "</button>" +
+      '<div style="display:flex;flex-direction:column;min-height:calc(100vh - 188px);">' +
+        '<div>' +
+          '<button class="cal-nav-btn" style="width:auto;height:44px;padding:0 18px;border-radius:14px;color:var(--blue);font:600 13px Inter,sans-serif;margin-bottom:16px;" data-act="cal-clear">‹ Другая дата</button>' +
+          '<div style="font:800 24px Manrope,sans-serif;color:var(--ink);text-transform:capitalize;">' + selLabel + "</div>" +
+          '<div style="margin-top:40px;">' +
+            '<div class="section-label" style="margin-top:0;">Свободное время</div>' +
+            '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">' + slotsHtml + "</div>" +
+          "</div>" +
+        "</div>" +
+        '<div style="padding:24px 0 16px;margin-top:auto;">' +
+          '<button class="cta" id="confirm-booking-btn"' + (state.selectedTime == null ? " disabled" : "") + ' style="' + (state.selectedTime == null ? "background:oklch(85% 0.01 70);box-shadow:none;" : "") + '">' +
+            (state.selectedTime == null ? "Выберите время" : "Подтвердить на " + state.selectedTime) +
+          "</button>" +
+        "</div>" +
       "</div>";
   } else {
     html =
