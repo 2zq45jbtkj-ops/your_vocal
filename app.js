@@ -30,14 +30,14 @@ var state = {
   quizIndex: 0, quizAnswers: [], quizScore: 0,
   quizDone: false, warmupsDone: false, songDone: false,
   lectureViewed: false, celebrated: false,
-  warmupFile: null, songFile: null,
+  warmupFiles: [], songFile: null,
   songPlacements: {}, // "ti-li" -> [{type:"V"|"v", index:Number}]
   // transient (не сохраняется):
   playerIdx: null, playerElapsed: 0, durations: {},
   songPlayerKey: null, songPlayerElapsed: 0, songDurations: {},
   songRevealed: {}, songSelectedMark: {},
   feedbackMood: null, feedbackText: "", coursesFilter: null,
-  warmupStatus: "idle", songStatus: "idle"
+  songStatus: "idle"
 };
 
 var audioEls = {};
@@ -51,7 +51,8 @@ function saveState() {
       quizScore: state.quizScore, quizDone: state.quizDone,
       warmupsDone: state.warmupsDone, songDone: state.songDone,
       lectureViewed: state.lectureViewed, celebrated: state.celebrated,
-      warmupFile: state.warmupFile, songFile: state.songFile,
+      warmupFiles: state.warmupFiles.map(function (f) { return { name: f.name, status: f.status }; }),
+      songFile: state.songFile,
       songPlacements: state.songPlacements
     }));
   } catch (e) {}
@@ -79,7 +80,7 @@ function progressPercent() {
   var n = 0;
   if (state.lectureViewed) n++;
   if (state.quizDone) n++;
-  if (state.warmupFile) n++;
+  if (state.warmupFiles && state.warmupFiles.length) n++;
   if (state.songFile) n++;
   return n * 25;
 }
@@ -127,7 +128,14 @@ function showConfetti() {
 
 function maybeCelebrate() {
   if (!LESSON) return;
-  if (progressPercent() === 100 && !state.celebrated) {
+  var pct = progressPercent();
+  // Прогресс упал ниже 100% (заменили/убрали файл) — снимаем флаг,
+  // чтобы при повторном достижении 100% конфетти сыграли снова.
+  if (pct < 100) {
+    if (state.celebrated) { state.celebrated = false; saveState(); }
+    return;
+  }
+  if (pct === 100 && !state.celebrated) {
     state.celebrated = true;
     saveState();
     showConfetti();
@@ -187,9 +195,13 @@ function submitQuizResult(score, total, wrongDetails) {
   f.append("total", total);
   if (wrongDetails && wrongDetails.length) {
     var lines = wrongDetails.map(function (w, i) {
-      return (i + 1) + ". " + w.q + "\n   Ответ ученика: " + w.chosen + "\n   Правильный: " + w.correct;
+      var block = "❌ Вопрос " + (i + 1) + ": " + w.q +
+        "\n   Ответ ученика: " + w.chosen +
+        "\n   Правильный ответ: " + w.correct;
+      if (w.explain) block += "\n   Почему: " + w.explain;
+      return block;
     });
-    f.append("details", lines.join("\n"));
+    f.append("details", lines.join("\n\n"));
   }
   fetch("/api/submit", { method: "POST", body: f }).catch(function () {});
 }
@@ -318,28 +330,46 @@ function lessonStats() {
   return { completed: completed, inProgress: inProgress };
 }
 
-function renderCourses() {
+function roadmapCardHtml() {
+  var s = state;
+  var subs = LESSON.stepSubtitles;
   var pct = progressPercent();
-  var stats = lessonStats();
-  var filter = state.coursesFilter || (pct === 100 ? "completed" : "inProgress");
-  var lessonMatchesFilter = filter === "completed" ? pct === 100 : pct < 100;
+  var steps = [
+    { label: "Лекция «" + esc(LESSON.title) + "»", done: s.lectureViewed },
+    { label: "Тест", done: s.quizDone },
+    { label: "Распевки «" + esc(LESSON.title) + "»", done: !!(s.warmupFiles && s.warmupFiles.length) },
+    { label: "Упражнение с песней", done: !!s.songFile }
+  ];
+  var stepsHtml = steps.map(function (st) {
+    return '<div class="roadmap-step">' +
+      '<div class="roadmap-step-dot' + (st.done ? " done" : "") + '">' + (st.done ? SVG.stepCheck : "") + "</div>" +
+      '<span>' + st.label + "</span>" +
+    "</div>";
+  }).join("");
+  return (
+    '<div class="roadmap-card" data-act="open-lesson">' +
+      '<div class="roadmap-title">' + esc(LESSON.title) + "</div>" +
+      '<div class="roadmap-sub">' + (pct === 100 ? "Завершён" : "В процессе · " + pct + "%") + "</div>" +
+      stepsHtml +
+    "</div>"
+  );
+}
 
-  var items = "";
-  for (var i = 1; i <= TOTAL_LESSONS; i++) {
-    if (i === 1) {
-      if (!lessonMatchesFilter) continue;
-      items +=
-        '<div class="lesson-tile" data-act="open-lesson">' +
-          '<div class="lesson-dot" style="background:oklch(56% 0.09 235);">1</div>' +
-          '<div class="lesson-tile-name">' + esc(LESSON.title) + "</div>" +
-        "</div>";
-    } else {
-      items +=
-        '<div class="lesson-tile locked">' +
-          '<div class="lesson-dot" style="background:oklch(95% 0.014 80);">' + SVG.lock + "</div>" +
-          '<div class="lesson-tile-name">Урок ' + i + "</div>" +
-        "</div>";
-    }
+function renderCourses() {
+  var stats = lessonStats();
+  var filter = state.coursesFilter || (progressPercent() === 100 ? "completed" : "inProgress");
+
+  var items =
+    '<div class="lesson-tile" data-act="open-lesson">' +
+      '<div class="lesson-dot" style="background:oklch(56% 0.09 235);">1</div>' +
+      '<div class="lesson-tile-name">' + esc(LESSON.title) + "</div>" +
+    "</div>";
+  for (var i = 2; i <= TOTAL_LESSONS; i++) {
+    items +=
+      '<div class="lesson-tile locked">' +
+        '<div class="lesson-dot" style="background:oklch(95% 0.014 80);">' + SVG.lock + "</div>" +
+        '<div class="lesson-tile-name">Урок ' + i + "</div>" +
+      "</div>";
   }
 
   app.innerHTML =
@@ -351,6 +381,10 @@ function renderCourses() {
     '<div class="filter-row">' +
       '<button class="filter-btn' + (filter === "inProgress" ? " active" : "") + '" data-act="filter-inprogress">В работе · ' + stats.inProgress + "</button>" +
       '<button class="filter-btn' + (filter === "completed" ? " active" : "") + '" data-act="filter-completed">✓ Завершено · ' + stats.completed + "</button>" +
+    "</div>" +
+    '<div class="roadmap-wrap">' +
+      '<div class="roadmap-label">Дорожная карта урока · листайте →</div>' +
+      '<div class="roadmap-scroll">' + roadmapCardHtml() + "</div>" +
     "</div>" +
     '<div class="courses-grid">' + items + "</div>";
   wireActs();
@@ -508,7 +542,8 @@ function renderQuiz() {
         wrongDetails.push({
           q: q.q,
           chosen: (chosen === null || chosen === undefined) ? "(не отвечено)" : q.opts[chosen],
-          correct: q.opts[q.correct]
+          correct: q.opts[q.correct],
+          explain: q.explain || ""
         });
       }
     });
@@ -561,7 +596,10 @@ function renderWarmups() {
       '<div class="warmup-card">' +
         '<div class="warmup-row">' +
           '<button class="seek-btn" data-seek="-10" data-n="' + ex.n + '">' + SVG.seekBack + "</button>" +
-          '<button class="play-btn" id="play-' + ex.n + '" data-n="' + ex.n + '">' + SVG.play + "</button>" +
+          '<div class="player-ring-wrap">' +
+            '<svg class="player-ring" viewBox="0 0 44 44"><circle class="ring-track" cx="22" cy="22" r="19"></circle><circle class="ring-progress" id="ring-' + ex.n + '" cx="22" cy="22" r="19"></circle></svg>' +
+            '<button class="play-btn" id="play-' + ex.n + '" data-n="' + ex.n + '">' + SVG.play + "</button>" +
+          "</div>" +
           '<button class="seek-btn" data-seek="10" data-n="' + ex.n + '">' + SVG.seekFwd + "</button>" +
           '<div class="warmup-labels">' +
             '<div class="warmup-label">' + esc(ex.label1) + "</div>" +
@@ -569,13 +607,13 @@ function renderWarmups() {
           "</div>" +
           '<div class="warmup-time" id="time-' + ex.n + '">' + warmupTimeLabel(ex) + "</div>" +
         "</div>" +
-        '<p class="warmup-sub">' + esc(ex.sub) + "</p>" +
-        (ex.how ? '<p class="warmup-how"><b>Как выполнять:</b> ' + esc(ex.how) + "</p>" : "") +
-        (ex.mistake ? '<p class="warmup-mistake"><b>Частая ошибка:</b> ' + esc(ex.mistake) + "</p>" : "") +
         '<div class="tempo-row">' +
           '<span class="tempo-label" id="tempo-label-' + ex.n + '">' + tempoLabelText(ex, 100) + "</span>" +
           '<input type="range" class="tempo-slider" id="tempo-' + ex.n + '" min="50" max="100" step="5" value="100">' +
         "</div>" +
+        '<p class="warmup-sub">' + esc(ex.sub) + "</p>" +
+        (ex.how ? '<p class="warmup-how"><b>Как выполнять:</b> ' + esc(ex.how) + "</p>" : "") +
+        (ex.mistake ? '<p class="warmup-mistake"><b>Частая ошибка:</b> ' + esc(ex.mistake) + "</p>" : "") +
         '<audio id="audio-' + ex.n + '" src="' + esc(ex.src) + '" preload="metadata" style="display:none;"></audio>' +
       "</div>";
   });
@@ -585,7 +623,6 @@ function renderWarmups() {
     '<div class="warmups-body">' +
       '<div class="instruction-note">' + LESSON.warmups.instruction + "</div>" +
       cards +
-      '<div class="tempo-note">' + esc(LESSON.warmups.tempoLinkText) + ' <a href="' + esc(LESSON.warmups.tempoLinkUrl) + '" target="_blank">' + esc(LESSON.warmups.tempoLinkLabel) + "</a></div>" +
       '<div class="section-label" style="margin:0 0 8px;">Отправка видео</div>' +
       '<div id="hw-zone"></div>' +
     "</div>" +
@@ -604,6 +641,7 @@ function renderWarmups() {
       if (t) t.textContent = warmupTimeLabel(ex);
     });
     el.addEventListener("timeupdate", function () {
+      if (el.duration) setRing(ex.n, el.currentTime / el.duration);
       if (state.playerIdx === ex.n) {
         state.playerElapsed = Math.floor(el.currentTime);
         var t = document.getElementById("time-" + ex.n);
@@ -611,6 +649,7 @@ function renderWarmups() {
       }
     });
     el.addEventListener("ended", function () {
+      setRing(ex.n, 0);
       if (state.playerIdx === ex.n) {
         state.playerIdx = null;
         state.playerElapsed = 0;
@@ -653,6 +692,15 @@ function renderWarmups() {
   wireActs();
 }
 
+var RING_CIRC = 2 * Math.PI * 19;
+
+function setRing(n, frac) {
+  var ring = document.getElementById("ring-" + n);
+  if (!ring) return;
+  ring.style.strokeDasharray = RING_CIRC;
+  ring.style.strokeDashoffset = RING_CIRC * (1 - Math.max(0, Math.min(1, frac || 0)));
+}
+
 function updatePlayBtn(ex) {
   var btn = document.getElementById("play-" + ex.n);
   var t = document.getElementById("time-" + ex.n);
@@ -686,85 +734,106 @@ function toggleAudio(n) {
 
 /* зона отправки видео (перерисовывается отдельно, не трогая аудио) */
 
+var MAX_VIDEOS = 5;
+
 function finalizeWarmupUpload(blob, filename) {
-  state.warmupFile = filename;
-  state.warmupBlob = blob;
+  if (state.warmupFiles.length >= MAX_VIDEOS) return;
+  var item = { name: filename, blob: blob, status: "idle" };
+  state.warmupFiles.push(item);
   saveState();
   if (blob.size > MAX_UPLOAD_BYTES) {
-    state.warmupStatus = "toolarge";
+    item.status = "toolarge";
     renderHwZone();
     maybeCelebrate();
     return;
   }
-  state.warmupStatus = "sending";
+  item.status = "sending";
   renderHwZone();
   maybeCelebrate();
   readVideoMeta(blob).then(function (meta) {
     submitFile("warmup", blob, function (status) {
-      state.warmupStatus = status;
+      item.status = status;
       renderHwZone();
     }, filename, meta);
   });
+}
+
+function warmupHint(item) {
+  if (item.status === "sending") return "Отправляю преподавателю…";
+  if (item.status === "sent") return "Отправлено преподавателю ✓";
+  if (item.status === "error") return "Не отправилось — нажми «Повторить»";
+  if (item.status === "toolarge") return "Файл большой — сервер такое не пропустит. Отправь это видео преподавателю прямо в чат с ботом";
+  return "Видео прикреплено";
 }
 
 function renderHwZone() {
   var zone = document.getElementById("hw-zone");
   if (!zone) return;
   var s = state;
+  var count = s.warmupFiles.length;
 
-  if (s.warmupFile) {
-    var hint = "Видео прикреплено";
-    if (s.warmupStatus === "sending") hint = "Отправляю преподавателю…";
-    else if (s.warmupStatus === "sent") hint = "Отправлено преподавателю ✓";
-    else if (s.warmupStatus === "error") hint = "Не отправилось — нажми «Повторить»";
-    else if (s.warmupStatus === "toolarge") hint = "Файл большой — сервер такое не пропустит. Отправь это видео преподавателю прямо в чат с ботом (кнопка ниже)";
-    zone.innerHTML =
+  var listHtml = s.warmupFiles.map(function (item, idx) {
+    var hint = warmupHint(item);
+    var isErr = item.status === "error" || item.status === "toolarge";
+    return (
       '<div class="hw-attached">' +
         '<div class="hw-icon">' + SVG.hwCheck + "</div>" +
         '<div style="flex:1;">' +
-          '<div class="hw-name">' + esc(s.warmupFile) + "</div>" +
-          '<div class="hw-hint' + (s.warmupStatus === "error" || s.warmupStatus === "toolarge" ? " error" : "") + '">' + hint + "</div>" +
+          '<div class="hw-name">' + esc(item.name) + "</div>" +
+          '<div class="hw-hint' + (isErr ? " error" : "") + '">' + hint + "</div>" +
         "</div>" +
-        (s.warmupStatus === "error" ? '<button class="hw-replace" id="hw-retry">Повторить</button>' : "") +
-        '<button class="hw-replace" id="hw-retake">Заменить</button>' +
+        (item.status === "error" ? '<button class="hw-replace" data-retry-idx="' + idx + '">Повторить</button>' : "") +
+        '<button class="hw-replace" data-remove-idx="' + idx + '">Убрать</button>' +
       "</div>" +
-      (s.warmupStatus === "toolarge" ? '<button class="cta" id="hw-open-tg" style="margin-top:10px;">Открыть чат с ботом в Telegram</button>' : "");
-    if (s.warmupStatus === "error") {
-      document.getElementById("hw-retry").addEventListener("click", function () {
-        if (!state.warmupBlob) { state.warmupStatus = "error"; renderHwZone(); return; }
-        state.warmupStatus = "sending";
-        renderHwZone();
-        readVideoMeta(state.warmupBlob).then(function (meta) {
-          submitFile("warmup", state.warmupBlob, function (status) {
-            state.warmupStatus = status;
-            renderHwZone();
-          }, state.warmupFile, meta);
-        });
-      });
-    }
-    if (s.warmupStatus === "toolarge") {
-      document.getElementById("hw-open-tg").addEventListener("click", openTeacherChat);
-    }
-    document.getElementById("hw-retake").addEventListener("click", function () {
-      state.warmupFile = null;
-      state.warmupBlob = null;
-      state.warmupStatus = "idle";
+      (item.status === "toolarge" ? '<button class="cta" data-opentg-idx="' + idx + '" style="margin:-8px 0 12px;">Открыть чат с ботом в Telegram</button>' : "")
+    );
+  }).join("");
+
+  var uploadHtml = count < MAX_VIDEOS
+    ? '<div class="instruction-note">Сними видео обычной камерой телефона — без ограничений по качеству (Full HD 1080p и выше) и по длительности. Можно прикрепить до ' + MAX_VIDEOS + ' видео.</div>' +
+      '<div class="hw-choice">' +
+        '<label class="hw-upload wide"><input type="file" accept="video/*" multiple id="hw-file" style="display:none;">' + SVG.upload + "Прикрепить видео (" + count + "/" + MAX_VIDEOS + ")</label>" +
+      "</div>"
+    : '<div class="instruction-note">Прикреплено максимум видео — ' + MAX_VIDEOS + ".</div>";
+
+  zone.innerHTML = listHtml + uploadHtml;
+
+  Array.prototype.forEach.call(zone.querySelectorAll("[data-remove-idx]"), function (btn) {
+    btn.addEventListener("click", function () {
+      state.warmupFiles.splice(parseInt(btn.getAttribute("data-remove-idx"), 10), 1);
       saveState();
       renderHwZone();
+      maybeCelebrate();
     });
-    return;
-  }
-
-  zone.innerHTML =
-    '<div class="instruction-note">Сними видео обычной камерой телефона — без ограничений по качеству (Full HD 1080p и выше) и по длительности.</div>' +
-    '<div class="hw-choice">' +
-      '<label class="hw-upload wide"><input type="file" accept="video/*" id="hw-file" style="display:none;">' + SVG.upload + "Прикрепить снятое видео</label>" +
-    "</div>";
-  document.getElementById("hw-file").addEventListener("change", function (e) {
-    var f = e.target.files[0];
-    if (!f) return;
-    finalizeWarmupUpload(f, f.name);
   });
+  Array.prototype.forEach.call(zone.querySelectorAll("[data-retry-idx]"), function (btn) {
+    btn.addEventListener("click", function () {
+      var item = state.warmupFiles[parseInt(btn.getAttribute("data-retry-idx"), 10)];
+      if (!item || !item.blob) return;
+      item.status = "sending";
+      renderHwZone();
+      readVideoMeta(item.blob).then(function (meta) {
+        submitFile("warmup", item.blob, function (status) {
+          item.status = status;
+          renderHwZone();
+        }, item.name, meta);
+      });
+    });
+  });
+  Array.prototype.forEach.call(zone.querySelectorAll("[data-opentg-idx]"), function (btn) {
+    btn.addEventListener("click", openTeacherChat);
+  });
+
+  var input = document.getElementById("hw-file");
+  if (input) {
+    input.addEventListener("change", function (e) {
+      var files = Array.prototype.slice.call(e.target.files || []);
+      files.forEach(function (f) {
+        if (state.warmupFiles.length >= MAX_VIDEOS) return;
+        finalizeWarmupUpload(f, f.name);
+      });
+    });
+  }
 }
 
 function stopAllMedia() {
@@ -861,6 +930,19 @@ function trackCorrectness(ti, track) {
   });
 }
 
+/* текстовое превью строки со вставленными метками — для отчёта преподавателю */
+function markedTextPreview(text, marks) {
+  var sorted = marks.slice().sort(function (a, b) { return a.index - b.index; });
+  var out = "";
+  var pos = 0;
+  sorted.forEach(function (m) {
+    out += text.slice(pos, m.index) + "[" + m.type + "]";
+    pos = m.index;
+  });
+  out += text.slice(pos);
+  return out;
+}
+
 function renderChars(text, from, to, ti, li) {
   var html = "";
   for (var i = from; i < to; i++) {
@@ -915,6 +997,17 @@ function submitSongMarks() {
     var correctness = trackCorrectness(ti, track);
     var ok = correctness.filter(Boolean).length;
     lines.push(track.title + ": " + ok + "/" + correctness.length + " строк совпадает");
+    if (ok < correctness.length) {
+      track.lines.forEach(function (line, li) {
+        if (correctness[li]) return;
+        var placed = getLineMarks(ti, li);
+        lines.push(
+          "   ❌ Строка: «" + line.text + "»\n" +
+          "      Отметил ученик: " + markedTextPreview(line.text, placed) + "\n" +
+          "      Правильно: " + markedTextPreview(line.text, line.correct)
+        );
+      });
+    }
   });
   var f = baseSubmitFields();
   f.append("kind", "song-marks");
