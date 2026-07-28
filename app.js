@@ -43,7 +43,8 @@ var state = {
   playerIdx: null, playerElapsed: 0, durations: {}, openSettings: {},
   songPlayerKey: null, songPlayerElapsed: 0, songDurations: {}, songOpenSettings: {},
   songRevealed: {}, songSelectedMark: {},
-  feedbackMood: null, feedbackText: "", coursesFilter: null
+  feedbackMood: null, feedbackText: "", coursesFilter: null,
+  favPlayerKey: null, pendingUnstar: null, pendingUnstarData: null, pendingUnstarSecs: 0
 };
 
 var audioEls = {};
@@ -280,6 +281,7 @@ function backTarget() {
   switch (state.screen) {
     case "name": return "tg";
     case "lesson-home": return "courses";
+    case "favorites": return "courses";
     case "lecture": case "warmups": case "song": case "quiz-result": return "lesson-home";
     case "feedback": return "song";
     case "quiz": return null; // отдельная логика
@@ -360,13 +362,11 @@ function lessonStats() {
 
 function roadmapCardHtml() {
   var s = state;
-  var subs = LESSON.stepSubtitles;
-  var pct = progressPercent();
   var steps = [
-    { label: "Лекция «" + esc(LESSON.title) + "»", done: s.lectureViewed },
+    { label: "Лекция «" + esc(LESSON.title) + "»", done: true },
     { label: "Тест", done: s.quizDone },
-    { label: "Распевки «" + esc(LESSON.title) + "»", done: !!(s.warmupFiles && s.warmupFiles.length) },
-    { label: "Упражнение с песней", done: !!(s.songFiles && s.songFiles.length) }
+    { label: "Распевки", done: !!(s.warmupFiles && s.warmupFiles.length) },
+    { label: "Песня", done: !!(s.songFiles && s.songFiles.length) }
   ];
   var stepsHtml = steps.map(function (st) {
     return '<div class="roadmap-step">' +
@@ -376,15 +376,15 @@ function roadmapCardHtml() {
   }).join("");
   return (
     '<div class="roadmap-card" data-act="open-lesson">' +
-      '<div class="roadmap-title">' + esc(LESSON.title) + "</div>" +
-      '<div class="roadmap-sub">' + (pct === 100 ? "Завершён" : "В процессе · " + pct + "%") + "</div>" +
+      '<div class="roadmap-title">Урок 1 · ' + esc(LESSON.title) + "</div>" +
+      '<div class="roadmap-sub">' + (s.songFiles && s.songFiles.length ? "Завершён" : "В процессе") + "</div>" +
       stepsHtml +
     "</div>"
   );
 }
 
 function lockedRoadmapCardHtml(n) {
-  var lockedSteps = ["Лекция", "Тест", "Распевки", "Упражнение с песней"];
+  var lockedSteps = ["Лекция", "Тест", "Распевки", "Песня"];
   var stepsHtml = lockedSteps.map(function (label) {
     return '<div class="roadmap-step">' +
       '<div class="roadmap-step-dot"></div>' +
@@ -394,7 +394,7 @@ function lockedRoadmapCardHtml(n) {
   return (
     '<div class="roadmap-card locked">' +
       '<div class="roadmap-title" style="color:var(--locked);">Урок ' + n + "</div>" +
-      '<div class="roadmap-sub">Пока закрыт</div>' +
+      '<div class="roadmap-sub">Откроется позже</div>' +
       stepsHtml +
     "</div>"
   );
@@ -406,43 +406,164 @@ function roadmapScrollHtml() {
   return html;
 }
 
-/* уроки в статусе «завершено» — простой список тайлов, без доп. информации.
-   Пока реально может быть пройден только урок 1 (у остальных ещё нет контента). */
-function completedLessonsGridHtml() {
-  if (progressPercent() !== 100) {
-    return '<div class="courses-empty">Пока нет завершённых уроков</div>';
-  }
-  var tile =
+function lessonsGridHtml() {
+  var tile1 =
     '<div class="lesson-tile" data-act="open-lesson">' +
       '<div class="lesson-dot" style="background:oklch(56% 0.09 235);">1</div>' +
       '<div class="lesson-tile-name">' + esc(LESSON.title) + "</div>" +
     "</div>";
-  return '<div class="courses-grid">' + tile + "</div>";
+  var rest = "";
+  for (var i = 2; i <= TOTAL_LESSONS; i++) {
+    rest +=
+      '<div class="lesson-tile locked">' +
+        '<div class="lesson-dot" style="background:var(--line);">' + SVG.lock + "</div>" +
+        '<div class="lesson-tile-name">Урок ' + i + "</div>" +
+      "</div>";
+  }
+  return '<div class="courses-grid">' + tile1 + rest + "</div>";
 }
 
 function renderCourses() {
   var stats = lessonStats();
-  var filter = state.coursesFilter || (progressPercent() === 100 ? "completed" : "inProgress");
-
-  var bodyHtml = filter === "completed"
-    ? completedLessonsGridHtml()
-    : '<div class="roadmap-wrap">' +
-        '<div class="roadmap-label">Дорожная карта урока · листайте →</div>' +
-        '<div class="roadmap-scroll">' + roadmapScrollHtml() + "</div>" +
-      "</div>";
+  var filter = state.coursesFilter; // "inProgress" | "completed" | null — пилюли чисто визуальные, как в макете
+  var favCount = Object.keys(state.favorites || {}).length;
 
   app.innerHTML =
     '<div class="courses-head">' +
+      '<div class="section-label" style="margin-top:0;">Курс</div>' +
       '<div class="courses-title">Курс вокала</div>' +
       '<div class="courses-sub">30 уроков · ' + esc(state.lastName) + " " + esc(state.firstName) + "</div>" +
-      '<button class="reset-link" data-act="reset-progress">Сбросить и войти как другой ученик</button>' +
+      '<button class="fav-warmups-btn" data-act="go-favorites">' +
+        SVG.star(true) +
+        '<span>Избранные распевки</span>' +
+        '<span class="fav-warmups-count">' + favCount + "</span>" +
+      "</button>" +
     "</div>" +
     '<div class="filter-row">' +
       '<button class="filter-btn' + (filter === "inProgress" ? " active" : "") + '" data-act="filter-inprogress">В работе · ' + stats.inProgress + "</button>" +
       '<button class="filter-btn' + (filter === "completed" ? " active" : "") + '" data-act="filter-completed">✓ Завершено · ' + stats.completed + "</button>" +
     "</div>" +
-    bodyHtml;
+    '<div class="roadmap-wrap">' +
+      '<div class="roadmap-label">Дорожная карта урока · листайте →</div>' +
+      '<div class="roadmap-scroll">' + roadmapScrollHtml() + "</div>" +
+    "</div>" +
+    lessonsGridHtml();
   wireActs();
+}
+
+/* ---------- избранные распевки: список + мини-плеер + снятие звезды с undo (1:1 по макету) ---------- */
+
+var favAudioEls = {};
+var unstarTimer = null;
+
+function renderFavorites() {
+  var s = state;
+  var entries = [];
+  Object.keys(s.favorites || {}).forEach(function (key) {
+    var m = key.match(/-w-(\d+)$/);
+    if (!m) return;
+    var n = parseInt(m[1], 10);
+    var ex = LESSON.warmups.exercises[n - 1];
+    if (!ex) return;
+    entries.push({ key: key, n: n, ex: ex, fav: s.favorites[key] });
+  });
+
+  var listHtml = entries.map(function (item) {
+    var playing = s.favPlayerKey === item.n;
+    return (
+      '<div class="fav-item">' +
+        '<button class="fav-play-btn' + (playing ? " playing" : "") + '" data-fav-play="' + item.n + '">' + (playing ? SVG.pause : SVG.play) + "</button>" +
+        '<div class="fav-item-body">' +
+          '<div class="fav-item-label">' + esc(item.ex.label1 + (item.ex.label2 ? " " + item.ex.label2 : "")) + "</div>" +
+          '<div class="fav-item-sub">Урок 1 · ' + esc(item.fav.lessonTitle) + "</div>" +
+        "</div>" +
+        '<button class="fav-unstar-btn" data-fav-unstar="' + item.key + '">' + SVG.star(true) + "</button>" +
+        '<audio id="fav-audio-' + item.n + '" src="' + esc(item.ex.src) + '" preload="none" style="display:none;"></audio>' +
+      "</div>"
+    );
+  }).join("");
+
+  app.innerHTML =
+    '<div class="top">' + backBtn("back") +
+      '<div class="top-title lg">Избранные распевки</div>' +
+    "</div>" +
+    '<div style="padding:8px 20px 130px;">' +
+      (entries.length ? listHtml : '<div class="courses-empty">Пока нет избранных распевок — нажми на звезду в плеере урока.</div>') +
+    "</div>" +
+    (s.pendingUnstar
+      ? '<div class="unstar-toast"><span>Убрано из избранного · ' + s.pendingUnstarSecs + 'с</span><button data-act="undo-unstar">Вернуть</button></div>'
+      : "");
+
+  Array.prototype.forEach.call(app.querySelectorAll("[data-fav-play]"), function (btn) {
+    btn.addEventListener("click", function () {
+      toggleFavAudio(parseInt(btn.getAttribute("data-fav-play"), 10));
+    });
+  });
+  Array.prototype.forEach.call(app.querySelectorAll("[data-fav-unstar]"), function (btn) {
+    btn.addEventListener("click", function () {
+      scheduleUnstar(btn.getAttribute("data-fav-unstar"));
+    });
+  });
+  wireActs();
+}
+
+function toggleFavAudio(n) {
+  var el = document.getElementById("fav-audio-" + n);
+  if (!el) return;
+  favAudioEls[n] = el;
+  if (state.favPlayerKey === n) {
+    el.pause();
+    state.favPlayerKey = null;
+    render();
+    return;
+  }
+  Object.keys(favAudioEls).forEach(function (k) { if (favAudioEls[k]) favAudioEls[k].pause(); });
+  Object.keys(audioEls).forEach(function (k) { if (audioEls[k]) audioEls[k].pause(); });
+  Object.keys(songAudioEls).forEach(function (k) { if (songAudioEls[k]) songAudioEls[k].pause(); });
+  el.currentTime = 0;
+  var p = el.play();
+  if (p && p.catch) p.catch(function () {});
+  state.favPlayerKey = n;
+  render();
+  el.addEventListener("ended", function onEnded() {
+    if (state.favPlayerKey === n) { state.favPlayerKey = null; render(); }
+    el.removeEventListener("ended", onEnded);
+  });
+}
+
+function scheduleUnstar(key) {
+  if (unstarTimer) clearInterval(unstarTimer);
+  var removed = state.favorites[key];
+  delete state.favorites[key];
+  saveState();
+  state.pendingUnstar = key;
+  state.pendingUnstarData = removed;
+  state.pendingUnstarSecs = 10;
+  render();
+  unstarTimer = setInterval(function () {
+    state.pendingUnstarSecs--;
+    if (state.pendingUnstarSecs <= 0) {
+      clearInterval(unstarTimer);
+      unstarTimer = null;
+      state.pendingUnstar = null;
+      state.pendingUnstarData = null;
+      if (state.screen === "favorites") render();
+      return;
+    }
+    var el = document.querySelector(".unstar-toast span");
+    if (el) el.textContent = "Убрано из избранного · " + state.pendingUnstarSecs + "с";
+  }, 1000);
+}
+
+function undoUnstar() {
+  if (unstarTimer) { clearInterval(unstarTimer); unstarTimer = null; }
+  if (state.pendingUnstar && state.pendingUnstarData) {
+    state.favorites[state.pendingUnstar] = state.pendingUnstarData;
+    saveState();
+  }
+  state.pendingUnstar = null;
+  state.pendingUnstarData = null;
+  render();
 }
 
 /* ---------- личный кабинет: колесо баланса (1:1 по макету дизайнера) ---------- */
@@ -502,11 +623,6 @@ function renderProfile() {
   if (s.quizDone) appHomeworkDone.push("Тест: " + LESSON.title);
   if (s.warmupsDone) appHomeworkDone.push("Распевки: " + LESSON.title);
   if (s.songDone) appHomeworkDone.push("Песня: " + LESSON.title);
-
-  var favoritesHtml = Object.keys(s.favorites || {}).map(function (key) {
-    var f = s.favorites[key];
-    return '<span class="chip-tag" data-remove-fav="' + key + '" style="cursor:pointer;">★ ' + esc(f.label) + " (" + esc(f.lessonTitle) + ")</span>";
-  }).join("");
 
   var assessmentsHtml = DEMO_ASSESSMENTS.map(function (a, ai) {
     var metrics = a.metrics.map(function (m) { return { label: m[0], score: m[1], pct: m[1] * 10 }; });
@@ -2344,8 +2460,10 @@ var ACTS = {
   "go-courses": function () { go("courses"); },
   "go-questions": function () { go("questions"); },
   "go-more": function () { go("more"); },
-  "filter-inprogress": function () { state.coursesFilter = "inProgress"; render(); },
-  "filter-completed": function () { state.coursesFilter = "completed"; render(); },
+  "filter-inprogress": function () { state.coursesFilter = state.coursesFilter === "inProgress" ? null : "inProgress"; render(); },
+  "filter-completed": function () { state.coursesFilter = state.coursesFilter === "completed" ? null : "completed"; render(); },
+  "go-favorites": function () { go("favorites"); },
+  "undo-unstar": undoUnstar,
   "cal-prev": function () {
     var m = state.calMonth - 1, y = state.calYear;
     if (m < 0) { m = 11; y -= 1; }
@@ -2392,6 +2510,7 @@ function render() {
     case "tg": renderTg(); break;
     case "name": renderName(); break;
     case "courses": renderCourses(); break;
+    case "favorites": renderFavorites(); break;
     case "profile": renderProfile(); break;
     case "questions": renderQuestions(); break;
     case "more": renderMore(); break;
