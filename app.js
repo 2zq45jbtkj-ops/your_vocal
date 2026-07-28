@@ -390,6 +390,155 @@ function renderCourses() {
   wireActs();
 }
 
+/* ---------- личный кабинет: колесо баланса (демо) ---------- */
+
+function wheelSVG(metrics, size) {
+  size = size || 220;
+  var center = size / 2;
+  var maxR = size / 2 - 30;
+  var n = metrics.length;
+  var angleStep = (2 * Math.PI) / n;
+  var maxScore = 10;
+  function pointAt(i, r) {
+    var angle = -Math.PI / 2 + i * angleStep;
+    return [center + r * Math.cos(angle), center + r * Math.sin(angle)];
+  }
+  var gridRings = [0.25, 0.5, 0.75, 1].map(function (frac) {
+    var pts = [];
+    for (var i = 0; i < n; i++) {
+      var p = pointAt(i, maxR * frac);
+      pts.push(p[0].toFixed(1) + "," + p[1].toFixed(1));
+    }
+    return '<polygon points="' + pts.join(" ") + '" fill="none" stroke="oklch(87% 0.01 70)" stroke-width="1"></polygon>';
+  }).join("");
+  var spokes = "";
+  for (var i = 0; i < n; i++) {
+    var p = pointAt(i, maxR);
+    spokes += '<line x1="' + center + '" y1="' + center + '" x2="' + p[0].toFixed(1) + '" y2="' + p[1].toFixed(1) + '" stroke="oklch(87% 0.01 70)" stroke-width="1"></line>';
+  }
+  var dataPts = metrics.map(function (m, i) {
+    var p = pointAt(i, maxR * (m.score / maxScore));
+    return p[0].toFixed(1) + "," + p[1].toFixed(1);
+  }).join(" ");
+  var labels = metrics.map(function (m, i) {
+    var p = pointAt(i, maxR + 20);
+    return '<text x="' + p[0].toFixed(1) + '" y="' + p[1].toFixed(1) + '" font-size="7.5" fill="oklch(52% 0.012 70)" text-anchor="middle" dominant-baseline="middle">' + esc(m.label) + "</text>";
+  }).join("");
+  return (
+    '<svg viewBox="0 0 ' + size + " " + size + '" width="100%" style="max-width:260px;display:block;margin:0 auto;">' +
+      gridRings + spokes +
+      '<polygon points="' + dataPts + '" fill="oklch(56% 0.09 235 / 0.32)" stroke="oklch(56% 0.09 235)" stroke-width="2"></polygon>' +
+      labels +
+    "</svg>"
+  );
+}
+
+var DEMO_WHEEL_METRICS = [
+  { label: "Дыхание", score: 7 },
+  { label: "Опора звука", score: 6 },
+  { label: "Регистры", score: 5 },
+  { label: "Атака звука", score: 6 },
+  { label: "Гортань", score: 5 },
+  { label: "Дикция", score: 7 },
+  { label: "Микрофон", score: 4 },
+  { label: "Актёрское", score: 6 }
+];
+
+function renderProfile() {
+  var s = state;
+  var initials = ((s.firstName || "У")[0] + (s.lastName || "Ч")[0]).toUpperCase();
+  var name = ((s.lastName || "Ученик") + " " + (s.firstName || "")).trim();
+  app.innerHTML =
+    '<div style="padding:58px 20px 130px;">' +
+      '<div class="profile-head">' +
+        '<div class="profile-avatar">' + esc(initials) + "</div>" +
+        '<div>' +
+          '<div class="profile-name">' + esc(name) + "</div>" +
+          '<div class="profile-status">Ученик · <span style="color:var(--terra);font-weight:600;">в процессе курса</span></div>' +
+        "</div>" +
+      "</div>" +
+      '<div class="profile-cards">' +
+        '<div class="profile-card"><div class="profile-card-label">Тип занятий</div><div class="profile-card-value">Индивидуально</div></div>' +
+        '<div class="profile-card"><div class="profile-card-label">Диапазон · тембр</div><div class="profile-card-value">Уточняется на диагностике</div></div>' +
+      "</div>" +
+      '<div class="section-label" style="margin-top:16px;">Колесо баланса · пример</div>' +
+      '<div class="wheel-card">' + wheelSVG(DEMO_WHEEL_METRICS) + "</div>" +
+      '<div class="wheel-legend">' +
+        DEMO_WHEEL_METRICS.map(function (m) {
+          return '<div class="wheel-legend-row"><span>' + esc(m.label) + "</span><b>" + m.score + "/10</b></div>";
+        }).join("") +
+      "</div>" +
+      '<div class="instruction-note" style="margin-top:16px;">Это демо-версия раздела с примером данных — реальные оценки преподаватель будет вносить, когда подключим полноценный личный кабинет с базой данных.</div>' +
+    "</div>";
+  wireActs();
+}
+
+/* ---------- вопросы: визуальный календарь занятости ---------- */
+
+var CAL_WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+var CAL_MONTHS = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
+
+function loadScheduleForMonth(vy, vm) {
+  var key = vy + "-" + vm;
+  if (state.calLoadedKey === key) return;
+  state.calLoadedKey = key;
+  var from = vy + "-" + String(vm + 1).padStart(2, "0") + "-01";
+  var lastDay = new Date(vy, vm + 1, 0).getDate();
+  var to = vy + "-" + String(vm + 1).padStart(2, "0") + "-" + String(lastDay).padStart(2, "0");
+  fetch("/api/schedule?from=" + from + "&to=" + to)
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      state.calBusyDates = data.busyDates || [];
+      state.calConfigured = !!data.configured;
+      if (state.screen === "questions") render();
+    })
+    .catch(function () {});
+}
+
+function renderQuestions() {
+  var now = new Date();
+  var vy = state.calYear != null ? state.calYear : now.getFullYear();
+  var vm = state.calMonth != null ? state.calMonth : now.getMonth();
+  state.calYear = vy;
+  state.calMonth = vm;
+
+  var first = new Date(vy, vm, 1);
+  var startWeekday = (first.getDay() + 6) % 7;
+  var daysInMonth = new Date(vy, vm + 1, 0).getDate();
+  var todayStr = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0");
+  var busy = state.calBusyDates || [];
+
+  var cells = "";
+  for (var i = 0; i < startWeekday; i++) cells += '<div class="cal-cell empty"></div>';
+  for (var d = 1; d <= daysInMonth; d++) {
+    var dateStr = vy + "-" + String(vm + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+    var isToday = dateStr === todayStr;
+    var isBusy = busy.indexOf(dateStr) !== -1;
+    cells += '<div class="cal-cell' + (isToday ? " today" : "") + '">' + d + (isBusy ? '<span class="cal-dot"></span>' : "") + "</div>";
+  }
+
+  app.innerHTML =
+    '<div style="padding:58px 20px 130px;">' +
+      '<div class="section-label" style="margin-top:0;">Запись</div>' +
+      '<div class="courses-title" style="font-size:22px;">Расписание преподавателя</div>' +
+      '<div class="cal-nav">' +
+        '<button class="cal-nav-btn" data-act="cal-prev">‹</button>' +
+        '<div class="cal-month-label">' + CAL_MONTHS[vm] + " " + vy + "</div>" +
+        '<button class="cal-nav-btn" data-act="cal-next">›</button>' +
+      "</div>" +
+      '<div class="cal-weekdays">' + CAL_WEEKDAYS.map(function (w) { return "<div>" + w + "</div>"; }).join("") + "</div>" +
+      '<div class="cal-grid">' + cells + "</div>" +
+      '<div class="cal-legend"><span class="cal-dot"></span> занято по расписанию</div>' +
+      (state.calConfigured
+        ? '<div class="instruction-note" style="margin-top:16px;">Показано реальное расписание преподавателя. Автоматическая запись из приложения появится позже — пока просто напиши в чат с ботом, на какое время хочешь записаться.</div>'
+        : '<div class="instruction-note" style="margin-top:16px;">Это пока визуальный календарь без связи с реальным расписанием. Чтобы записаться на занятие — напиши преподавателю в чат с ботом.</div>') +
+      '<button class="cta" data-act="cal-open-tg" style="margin-top:14px;">Открыть чат с ботом в Telegram</button>' +
+    "</div>";
+
+  wireActs();
+  loadScheduleForMonth(vy, vm);
+}
+
 function renderComingSoon(title, icon) {
   app.innerHTML =
     '<div class="result-screen" style="padding-bottom:110px;">' +
@@ -511,11 +660,21 @@ function renderQuiz() {
       '<div class="quiz-radio"></div><span>' + esc(text) + "</span></div>";
   });
 
+  var quizFrac = (s.quizIndex + 1) / questions.length;
+  var quizRingCirc = 2 * Math.PI * 17;
+  var quizRingOffset = quizRingCirc * (1 - quizFrac);
+
   app.innerHTML =
     stepHeader("Тест", 2, 50) +
     '<div class="quiz-body">' +
-      '<div class="quiz-counter-row"><span class="quiz-counter">Вопрос ' + (s.quizIndex + 1) + " из " + questions.length + "</span></div>" +
-      '<div class="quiz-progress"><div style="width:' + Math.round(((s.quizIndex + 1) / questions.length) * 100) + '%;"></div></div>' +
+      '<div class="quiz-counter-row">' +
+        '<span class="quiz-counter">Вопрос ' + (s.quizIndex + 1) + " из " + questions.length + "</span>" +
+        '<div class="quiz-ring-wrap">' +
+          '<svg class="player-ring" viewBox="0 0 40 40"><circle class="quiz-ring-track" cx="20" cy="20" r="17"></circle><circle class="quiz-ring-progress" cx="20" cy="20" r="17" style="stroke-dasharray:' + quizRingCirc + ";stroke-dashoffset:" + quizRingOffset + ';"></circle></svg>' +
+          '<span class="quiz-ring-label">' + (s.quizIndex + 1) + "/" + questions.length + "</span>" +
+        "</div>" +
+      "</div>" +
+      '<div class="quiz-progress"><div style="width:' + Math.round(quizFrac * 100) + '%;"></div></div>' +
       '<div class="quiz-card">' +
         '<div class="quiz-q">' + esc(cq.q) + "</div>" + optsHtml +
       "</div>" +
@@ -1333,7 +1492,18 @@ var ACTS = {
   "go-questions": function () { go("questions"); },
   "go-more": function () { go("more"); },
   "filter-inprogress": function () { state.coursesFilter = "inProgress"; render(); },
-  "filter-completed": function () { state.coursesFilter = "completed"; render(); }
+  "filter-completed": function () { state.coursesFilter = "completed"; render(); },
+  "cal-prev": function () {
+    var m = state.calMonth - 1, y = state.calYear;
+    if (m < 0) { m = 11; y -= 1; }
+    state.calMonth = m; state.calYear = y; render();
+  },
+  "cal-next": function () {
+    var m = state.calMonth + 1, y = state.calYear;
+    if (m > 11) { m = 0; y += 1; }
+    state.calMonth = m; state.calYear = y; render();
+  },
+  "cal-open-tg": openTeacherChat
 };
 
 function wireActs() {
@@ -1366,8 +1536,8 @@ function render() {
     case "tg": renderTg(); break;
     case "name": renderName(); break;
     case "courses": renderCourses(); break;
-    case "profile": renderComingSoon("Личный кабинет", SVG.dockPerson("oklch(60% 0.13 38)")); break;
-    case "questions": renderComingSoon("Вопросы", SVG.dockQuestion("oklch(60% 0.13 38)")); break;
+    case "profile": renderProfile(); break;
+    case "questions": renderQuestions(); break;
     case "more": renderComingSoon("Ещё", SVG.dockMore("oklch(60% 0.13 38)")); break;
     case "lesson-home": renderLessonHome(); break;
     case "lecture": renderLecture(); break;

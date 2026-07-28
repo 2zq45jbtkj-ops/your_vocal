@@ -243,6 +243,12 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 .quiz-counter-row {
   display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
 }
+.quiz-ring-wrap { position: relative; width: 40px; height: 40px; flex-shrink: 0; }
+.quiz-ring-wrap .player-ring { position: absolute; inset: 0; transform: rotate(-90deg); }
+.quiz-ring-label {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font: 700 9.5px 'Manrope', sans-serif; color: var(--ink);
+}
 .quiz-counter { font-size: 11px; color: var(--gray); font-weight: 600; white-space: nowrap; }
 .quiz-progress { height: 5px; background: var(--line); border-radius: 3px; overflow: hidden; margin-bottom: 16px; box-shadow: inset 1px 1px 2px oklch(70% 0.02 80 / 0.3); }
 .quiz-progress > div { height: 100%; background: var(--terra); border-radius: 3px; }
@@ -295,11 +301,17 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 .play-btn.playing { background: var(--terra); }
 .player-ring-wrap { position: relative; width: 44px; height: 44px; flex-shrink: 0; }
 .player-ring { position: absolute; inset: 0; transform: rotate(-90deg); pointer-events: none; }
-.ring-track { fill: none; stroke: var(--line); stroke-width: 2.5; }
+.ring-track { fill: none; stroke: var(--line); stroke-width: 4.5; }
 .ring-progress {
-  fill: none; stroke: var(--terra); stroke-width: 2.5; stroke-linecap: round;
-  filter: drop-shadow(0 0 4px oklch(60% 0.13 38 / 0.65));
+  fill: none; stroke: var(--terra); stroke-width: 4.5; stroke-linecap: round;
+  filter: drop-shadow(0 0 5px oklch(60% 0.13 38 / 0.75));
   transition: stroke-dashoffset .1s linear;
+}
+.quiz-ring-track { fill: none; stroke: var(--line); stroke-width: 4.5; }
+.quiz-ring-progress {
+  fill: none; stroke: var(--terra); stroke-width: 4.5; stroke-linecap: round;
+  filter: drop-shadow(0 0 5px oklch(60% 0.13 38 / 0.75));
+  transition: stroke-dashoffset .2s ease;
 }
 .player-ring-wrap .play-btn { position: absolute; top: 3px; left: 3px; }
 .warmup-labels { flex: 1; }
@@ -490,3 +502,55 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 }
 .celebrate-title { font-size: 19px; font-weight: 700; color: var(--ink); margin-bottom: 4px; }
 .celebrate-sub { font-size: 13px; color: var(--gray); }
+
+/* ---------- личный кабинет ---------- */
+.profile-head { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+.profile-avatar {
+  width: 58px; height: 58px; border-radius: 50%; background: var(--terra); color: var(--white-text);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  font: 800 20px 'Manrope', sans-serif; box-shadow: var(--raised);
+}
+.profile-name { font: 800 19px 'Manrope', sans-serif; color: var(--ink); }
+.profile-status { font-size: 12.5px; color: var(--gray); margin-top: 2px; }
+.profile-cards { display: flex; flex-direction: column; gap: 10px; }
+.profile-card {
+  background: var(--bg); border-radius: 16px; box-shadow: var(--raised); padding: 12px 16px;
+}
+.profile-card-label { font-size: 11px; color: var(--gray-mute); font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
+.profile-card-value { font-size: 13.5px; color: var(--ink); font-weight: 600; margin-top: 3px; }
+.wheel-card {
+  background: var(--bg); border-radius: 20px; box-shadow: var(--raised-lg); padding: 18px 8px;
+}
+.wheel-legend { margin-top: 12px; display: flex; flex-direction: column; gap: 2px; }
+.wheel-legend-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 4px; font-size: 12.5px; color: var(--ink); border-bottom: 1px solid var(--line);
+}
+.wheel-legend-row:last-child { border-bottom: none; }
+.wheel-legend-row b { color: var(--terra); font-family: 'Manrope', sans-serif; }
+
+/* ---------- вопросы: календарь занятости ---------- */
+.cal-nav { display: flex; align-items: center; justify-content: space-between; margin: 16px 0 10px; }
+.cal-nav-btn {
+  width: 36px; height: 36px; border-radius: 12px; border: none; background: var(--bg);
+  box-shadow: var(--raised-sm); font-size: 17px; color: var(--ink); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.cal-month-label { font: 700 14.5px 'Manrope', sans-serif; color: var(--ink); text-transform: capitalize; }
+.cal-weekdays {
+  display: grid; grid-template-columns: repeat(7, 1fr); text-align: center;
+  font-size: 10.5px; color: var(--gray-mute); font-weight: 600; margin-bottom: 6px;
+}
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; margin-bottom: 14px; }
+.cal-cell {
+  aspect-ratio: 1; border-radius: 12px; background: var(--bg); box-shadow: var(--raised-sm);
+  display: flex; align-items: center; justify-content: center; position: relative;
+  font-size: 12.5px; color: var(--ink); font-weight: 600;
+}
+.cal-cell.empty { box-shadow: none; background: transparent; }
+.cal-cell.today { box-shadow: var(--inset-sm); color: var(--terra); }
+.cal-dot {
+  position: absolute; bottom: 5px; width: 5px; height: 5px; border-radius: 50%; background: var(--terra);
+}
+.cal-legend { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--gray); }
+.cal-legend .cal-dot { position: static; }
