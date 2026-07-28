@@ -38,6 +38,7 @@ var state = {
   // то же самое, но для плеера в упражнении с песней — свой набор настроек.
   songTempoMap: {}, songPitchMap: {}, songLoopMap: {}, songAutoplayNext: false,
   favorites: {}, // "lessonId-w-n" / "lessonId-s-ti" -> { lessonTitle, label }
+  darkMode: false, notifOn: true, // раздел «Ещё»; darkMode хранится отдельным ключом (см. loadDarkMode)
   // transient (не сохраняется):
   playerIdx: null, playerElapsed: 0, durations: {}, openSettings: {},
   songPlayerKey: null, songPlayerElapsed: 0, songDurations: {}, songOpenSettings: {},
@@ -63,9 +64,19 @@ function saveState() {
       autoplayNext: state.autoplayNext,
       songTempoMap: state.songTempoMap, songPitchMap: state.songPitchMap,
       songLoopMap: state.songLoopMap, songAutoplayNext: state.songAutoplayNext,
-      favorites: state.favorites
+      favorites: state.favorites, notifOn: state.notifOn
     }));
   } catch (e) {}
+}
+
+/* «Тёмная тема» — отдельный ключ localStorage, как в дизайн-файле (vocalAppDarkMode) */
+function loadDarkMode() {
+  try { state.darkMode = localStorage.getItem("vocalAppDarkMode") === "1"; } catch (e) {}
+}
+function toggleDarkMode() {
+  state.darkMode = !state.darkMode;
+  try { localStorage.setItem("vocalAppDarkMode", state.darkMode ? "1" : "0"); } catch (e) {}
+  render();
 }
 
 function loadState() {
@@ -232,8 +243,8 @@ var SVG = {
   stepCheck: '<svg width="13" height="10" viewBox="0 0 13 10" fill="none"><path d="M1 5l4 4 7-8" stroke="oklch(97% 0.01 80)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   doc: '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="2" y="1" width="10" height="12" rx="1.5" stroke="oklch(95% 0.014 80)" stroke-width="1.4"/><path d="M4.5 5h5M4.5 7.5h5M4.5 10h3" stroke="oklch(95% 0.014 80)" stroke-width="1.2" stroke-linecap="round"/></svg>',
   resultCheck: '<svg width="26" height="20" viewBox="0 0 26 20" fill="none"><path d="M2 10l8 8L24 2" stroke="oklch(28% 0.015 70)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  seekBack: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 4v6h6" stroke="oklch(56% 0.09 235)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 15a8 8 0 1 0 2-9.5L4 10" stroke="oklch(56% 0.09 235)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><text x="12" y="17.5" font-size="7.5" font-weight="700" fill="oklch(56% 0.09 235)" text-anchor="middle">10</text></svg>',
-  seekFwd: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M20 4v6h-6" stroke="oklch(56% 0.09 235)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M19.5 15a8 8 0 1 1-2-9.5L20 10" stroke="oklch(56% 0.09 235)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><text x="12" y="17.5" font-size="7.5" font-weight="700" fill="oklch(56% 0.09 235)" text-anchor="middle">10</text></svg>',
+  seekBack: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 4v6h6" stroke="oklch(56% 0.09 235)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 15a8 8 0 1 0 2-9.5L4 10" stroke="oklch(56% 0.09 235)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  seekFwd: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M20 4v6h-6" stroke="oklch(56% 0.09 235)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M19.5 15a8 8 0 1 1-2-9.5L20 10" stroke="oklch(56% 0.09 235)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   play: '<svg width="12" height="14" viewBox="0 0 12 14" fill="none"><path d="M1 1l10 6-10 6V1z" fill="oklch(95% 0.014 80)"/></svg>',
   pause: '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="1" width="4" height="10" rx="1" fill="oklch(95% 0.014 80)"/><rect x="7" y="1" width="4" height="10" rx="1" fill="oklch(95% 0.014 80)"/></svg>',
   upload: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 11V2m0 0L4.5 5.5M8 2l3.5 3.5" stroke="oklch(28% 0.015 70)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12v1a2 2 0 002 2h8a2 2 0 002-2v-1" stroke="oklch(28% 0.015 70)" stroke-width="1.6" stroke-linecap="round"/></svg>',
@@ -246,6 +257,7 @@ var SVG = {
   dockQuestion: function (c) { return '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="5" width="17" height="15" rx="2.5" stroke="' + c + '" stroke-width="1.6"/><path d="M3.5 9.5h17M8 2.5v4M16 2.5v4" stroke="' + c + '" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="13.5" r="1.1" fill="' + c + '"/><circle cx="12" cy="13.5" r="1.1" fill="' + c + '"/></svg>'; },
   dockMore: function (c) { return '<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="4.5" cy="10" r="1.6" fill="' + c + '"/><circle cx="10" cy="10" r="1.6" fill="' + c + '"/><circle cx="15.5" cy="10" r="1.6" fill="' + c + '"/></svg>'; },
   gear: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 5.2a2.8 2.8 0 100 5.6 2.8 2.8 0 000-5.6z" stroke="oklch(52% 0.012 70)" stroke-width="1.3"/><path d="M8 1.3v1.4M8 13.3v1.4M14.7 8h-1.4M2.7 8H1.3M12.5 3.5l-1 1M4.5 11.5l-1 1M12.5 12.5l-1-1M4.5 4.5l-1-1" stroke="oklch(52% 0.012 70)" stroke-width="1.3" stroke-linecap="round"/></svg>',
+  chevronRight: '<svg width="7" height="12" viewBox="0 0 8 14" fill="none"><path d="M1 1l6 6-6 6" stroke="oklch(75% 0.01 70)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   star: function (filled) {
     var stroke = filled ? "oklch(84% 0.15 92)" : "oklch(52% 0.012 70)";
     var fill = filled ? "oklch(84% 0.15 92)" : "none";
@@ -767,6 +779,81 @@ function renderQuestions() {
   loadScheduleForMonth(vy, vm);
 }
 
+/* ---------- «Ещё» — 1:1 по дизайн-файлу, ничего сверх списка ---------- */
+
+function renderMore() {
+  var s = state;
+  var items = [
+    {
+      label: "Тёмная тема", isToggle: true, on: s.darkMode,
+      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M13.5 9.5A6 6 0 016.5 2.5a6 6 0 108.5 6.9 6 6 0 01-1.5.1z" stroke="var(--gray)" stroke-width="1.4" stroke-linejoin="round"/></svg>',
+      iconBg: "var(--bgmuted)"
+    },
+    {
+      label: "Уведомления", isToggle: true, on: s.notifOn,
+      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1a4 4 0 00-4 4v2.5L2.5 10h11L12 7.5V5a4 4 0 00-4-4z" stroke="oklch(38% 0.06 235)" stroke-width="1.4" stroke-linejoin="round"/><path d="M6.2 12.5a1.9 1.9 0 003.6 0" stroke="oklch(38% 0.06 235)" stroke-width="1.4" stroke-linecap="round"/></svg>',
+      iconBg: "var(--soft-blue)"
+    },
+    {
+      label: "Написать в поддержку", isLink: true,
+      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 3h12v8H5l-3 3V3z" stroke="oklch(38% 0.1 38)" stroke-width="1.4" stroke-linejoin="round"/></svg>',
+      iconBg: "var(--soft-terra)"
+    },
+    {
+      label: "Правила и оферта", isLink: true,
+      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="3" y="1.5" width="10" height="13" rx="1.5" stroke="var(--gray)" stroke-width="1.4"/><path d="M5.5 5h5M5.5 8h5M5.5 11h3" stroke="var(--gray)" stroke-width="1.2" stroke-linecap="round"/></svg>',
+      iconBg: "var(--bgmuted)"
+    },
+    {
+      label: "Политика конфиденциальности", isLink: true,
+      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1.5l5.5 2v4c0 3.6-2.3 6-5.5 7-3.2-1-5.5-3.4-5.5-7v-4L8 1.5z" stroke="var(--gray)" stroke-width="1.4" stroke-linejoin="round"/></svg>',
+      iconBg: "var(--bgmuted)"
+    },
+    {
+      label: "О преподавателе", isLink: true,
+      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="var(--gray)" stroke-width="1.4"/><path d="M8 5.3v.1M7 7.3h1v3.5h1" stroke="var(--gray)" stroke-width="1.3" stroke-linecap="round"/></svg>',
+      iconBg: "var(--bgmuted)"
+    },
+    {
+      label: "Сбросить и войти как другой ученик", danger: true,
+      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 2H3.5A1.5 1.5 0 002 3.5v9A1.5 1.5 0 003.5 14H6M10.5 11l3-3-3-3M13 8H6" stroke="oklch(53% 0.18 25)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      iconBg: "var(--soft-red)"
+    }
+  ];
+
+  var itemsHtml = items.map(function (item, i) {
+    var right = item.isToggle
+      ? '<div class="toggle-pill' + (item.on ? " on" : "") + '"><div class="toggle-dot"></div></div>'
+      : (item.isLink ? SVG.chevronRight : "");
+    var color = item.danger ? "oklch(53% 0.18 25)" : "var(--ink)";
+    return (
+      '<div class="more-item" data-more-idx="' + i + '">' +
+        '<div class="more-item-icon" style="background:' + item.iconBg + ';">' + item.icon + "</div>" +
+        '<span class="more-item-label" style="color:' + color + ';">' + esc(item.label) + "</span>" +
+        right +
+      "</div>"
+    );
+  }).join("");
+
+  app.innerHTML =
+    '<div style="padding:58px 20px 130px;">' +
+      '<div class="courses-title" style="margin-bottom:18px;">Ещё</div>' +
+      itemsHtml +
+    "</div>";
+
+  Array.prototype.forEach.call(app.querySelectorAll("[data-more-idx]"), function (el) {
+    el.addEventListener("click", function () {
+      var idx = parseInt(el.getAttribute("data-more-idx"), 10);
+      if (idx === 0) { toggleDarkMode(); return; }
+      if (idx === 1) { state.notifOn = !state.notifOn; saveState(); render(); return; }
+      if (idx === 6) { resetProgress(); return; }
+      // «Написать в поддержку», «Правила и оферта», «Политика конфиденциальности»,
+      // «О преподавателе» — в дизайн-файле это заглушки без содержимого, оставляю как есть.
+    });
+  });
+  wireActs();
+}
+
 function renderComingSoon(title, icon) {
   app.innerHTML =
     '<div class="result-screen" style="padding-bottom:110px;">' +
@@ -1020,7 +1107,7 @@ function stopShiftedPlayback() {
   }
 }
 
-function playShifted(n, ex) {
+function playShifted(n, ex, startSeconds) {
   var pct = (state.tempoMap && state.tempoMap[n]) || 100;
   var semis = (state.pitchMap && state.pitchMap[n]) || 0;
   getAudioBuffer(n, ex).then(function (buffer) {
@@ -1033,6 +1120,7 @@ function playShifted(n, ex) {
       });
       shifter.tempo = pct / 100;
       shifter.pitchSemitones = semis;
+      if (startSeconds && shifter.duration) shifter.percentagePlayed = startSeconds / shifter.duration;
       shifter.on("play", function (detail) {
         if (state.playerIdx !== n) return;
         setRing(n, (detail.percentagePlayed || 0) / 100);
@@ -1042,15 +1130,15 @@ function playShifted(n, ex) {
       });
       shifter.connect(ctx.destination);
       activeShifter = { n: n, shifter: shifter };
-    }).catch(function () { fallbackToNative(n); });
-  }).catch(function () { fallbackToNative(n); });
+    }).catch(function () { fallbackToNative(n, startSeconds); });
+  }).catch(function () { fallbackToNative(n, startSeconds); });
 }
 
-function fallbackToNative(n) {
+function fallbackToNative(n, startSeconds) {
   if (state.playerIdx !== n) return;
   var el = audioEls[n];
   if (!el) return;
-  el.currentTime = 0;
+  el.currentTime = startSeconds || 0;
   var p = el.play();
   if (p && p.catch) p.catch(function () {});
 }
@@ -1205,8 +1293,25 @@ function renderWarmups() {
       state.pitchMap[ex.n] = semis;
       var lbl = document.getElementById("pitch-label-" + ex.n);
       if (lbl) lbl.textContent = pitchLabelText(semis);
-      if (activeShifter && activeShifter.n === ex.n) activeShifter.shifter.pitchSemitones = semis;
       saveState();
+
+      if (state.playerIdx !== ex.n) return; // трек сейчас не играет — применится при следующем запуске
+      if (activeShifter && activeShifter.n === ex.n) {
+        if (semis) {
+          activeShifter.shifter.pitchSemitones = semis; // движок уже включён — просто обновляем на лету
+        } else {
+          // тональность вернули на 0 — переключаемся обратно на обычное аудио с той же позиции
+          var pos = activeShifter.shifter.timePlayed || 0;
+          stopShiftedPlayback();
+          if (el) { el.currentTime = pos; var p = el.play(); if (p && p.catch) p.catch(function () {}); }
+        }
+      } else if (semis) {
+        // сейчас играет обычное аудио — подключаем движок с той же позиции
+        var pos2 = el ? el.currentTime : 0;
+        if (el) el.pause();
+        getAudioCtx();
+        playShifted(ex.n, ex, pos2);
+      }
     });
   });
 
@@ -1325,10 +1430,22 @@ function toggleAudio(n) {
   state.playerIdx = n;
   state.playerElapsed = 0;
 
-  // Всегда играем через движок с реальным темпом/тональностью (не только когда
-  // тональность сдвинута) — иначе слайдер тональности не действует на уже запущенный трек.
-  getAudioCtx(); // создаём/резюмируем AudioContext прямо в обработчике клика — так требуют браузеры
-  playShifted(n, ex);
+  // Обычное аудио по умолчанию — надёжно играет всегда, в т.ч. если телефон
+  // в беззвучном режиме (Web Audio API там иногда молчит). Более тяжёлый
+  // движок с питч-шифтом включаем только когда тональность реально сдвинута —
+  // и умеем на лету подключать/отключать его без остановки трека (см. слайдер).
+  var semis = (state.pitchMap && state.pitchMap[n]) || 0;
+  if (semis) {
+    getAudioCtx();
+    playShifted(n, ex);
+  } else {
+    var el = audioEls[n];
+    if (el) {
+      el.currentTime = 0;
+      var p = el.play();
+      if (p && p.catch) p.catch(function () {});
+    }
+  }
 
   if (prev) updatePlayBtn(exercises[prev - 1]);
   updatePlayBtn(ex);
@@ -1637,7 +1754,7 @@ function stopSongShiftedPlayback() {
   }
 }
 
-function playSongShifted(ti, track) {
+function playSongShifted(ti, track, startSeconds) {
   var pct = (state.songTempoMap && state.songTempoMap[ti]) || 100;
   var semis = (state.songPitchMap && state.songPitchMap[ti]) || 0;
   getSongAudioBuffer(ti, track).then(function (buffer) {
@@ -1650,6 +1767,7 @@ function playSongShifted(ti, track) {
       });
       shifter.tempo = pct / 100;
       shifter.pitchSemitones = semis;
+      if (startSeconds && shifter.duration) shifter.percentagePlayed = startSeconds / shifter.duration;
       shifter.on("play", function (detail) {
         if (state.songPlayerKey !== ti) return;
         setRing("song-" + ti, (detail.percentagePlayed || 0) / 100);
@@ -1659,15 +1777,15 @@ function playSongShifted(ti, track) {
       });
       shifter.connect(ctx.destination);
       activeSongShifter = { ti: ti, shifter: shifter };
-    }).catch(function () { fallbackToNativeSong(ti); });
-  }).catch(function () { fallbackToNativeSong(ti); });
+    }).catch(function () { fallbackToNativeSong(ti, startSeconds); });
+  }).catch(function () { fallbackToNativeSong(ti, startSeconds); });
 }
 
-function fallbackToNativeSong(ti) {
+function fallbackToNativeSong(ti, startSeconds) {
   if (state.songPlayerKey !== ti) return;
   var el = songAudioEls[ti];
   if (!el) return;
-  el.currentTime = 0;
+  el.currentTime = startSeconds || 0;
   var p = el.play();
   if (p && p.catch) p.catch(function () {});
 }
@@ -1712,9 +1830,20 @@ function toggleSongAudio(ti) {
   state.songPlayerKey = ti;
   state.songPlayerElapsed = 0;
 
-  // Всегда через движок с реальным темпом/тональностью — так же, как в распевках.
-  getAudioCtx();
-  playSongShifted(ti, track);
+  // Обычное аудио по умолчанию (надёжно играет всегда), движок с питч-шифтом —
+  // только если тональность реально сдвинута. См. toggleAudio в распевках — то же самое.
+  var semis = (state.songPitchMap && state.songPitchMap[ti]) || 0;
+  if (semis) {
+    getAudioCtx();
+    playSongShifted(ti, track);
+  } else {
+    var el = songAudioEls[ti];
+    if (el) {
+      el.currentTime = 0;
+      var p = el.play();
+      if (p && p.catch) p.catch(function () {});
+    }
+  }
 
   if (prev !== null && prev !== undefined) updateSongPlayBtn(prev);
   updateSongPlayBtn(ti);
@@ -2098,8 +2227,23 @@ function renderSong() {
       state.songPitchMap[ti] = semis;
       var lbl = document.getElementById("song-pitch-label-" + ti);
       if (lbl) lbl.textContent = pitchLabelText(semis);
-      if (activeSongShifter && activeSongShifter.ti === ti) activeSongShifter.shifter.pitchSemitones = semis;
       saveState();
+
+      if (state.songPlayerKey !== ti) return;
+      if (activeSongShifter && activeSongShifter.ti === ti) {
+        if (semis) {
+          activeSongShifter.shifter.pitchSemitones = semis;
+        } else {
+          var pos = activeSongShifter.shifter.timePlayed || 0;
+          stopSongShiftedPlayback();
+          if (el) { el.currentTime = pos; var p = el.play(); if (p && p.catch) p.catch(function () {}); }
+        }
+      } else if (semis) {
+        var pos2 = el ? el.currentTime : 0;
+        if (el) el.pause();
+        getAudioCtx();
+        playSongShifted(ti, track, pos2);
+      }
     });
   });
 
@@ -2250,7 +2394,7 @@ function render() {
     case "courses": renderCourses(); break;
     case "profile": renderProfile(); break;
     case "questions": renderQuestions(); break;
-    case "more": renderComingSoon("Ещё", SVG.dockMore("oklch(60% 0.13 38)")); break;
+    case "more": renderMore(); break;
     case "lesson-home": renderLessonHome(); break;
     case "lecture": renderLecture(); break;
     case "quiz": renderQuiz(); break;
@@ -2285,6 +2429,7 @@ fetch("data/lesson-01.json")
     LESSON = data;
     state.quizAnswers = new Array(data.quiz.questions.length).fill(null);
     loadState();
+    loadDarkMode();
     // подставляем Telegram-username, если открыто внутри Telegram
     if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
       var u = tg.initDataUnsafe.user;
