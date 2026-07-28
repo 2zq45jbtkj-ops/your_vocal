@@ -1095,23 +1095,25 @@ function warmupSettingsPanelHtml(ex) {
   return (
     '<div class="settings-panel' + (open ? " open" : "") + '" id="settings-' + ex.n + '">' +
       '<div class="settings-panel-inner">' +
-        '<div class="settings-slider-row">' +
-          '<span class="settings-slider-label">Темп</span>' +
-          '<input type="range" class="tempo-slider" id="tempo-' + ex.n + '" min="50" max="100" step="5" value="' + pct + '">' +
-          '<span class="settings-slider-value" id="tempo-label-' + ex.n + '">' + tempoLabelText(ex, pct) + "</span>" +
-        "</div>" +
-        '<div class="settings-slider-row">' +
-          '<span class="settings-slider-label">Тональность</span>' +
-          '<input type="range" class="pitch-slider" id="pitch-' + ex.n + '" min="-5" max="3" step="0.5" value="' + semis + '">' +
-          '<span class="settings-slider-value" id="pitch-label-' + ex.n + '">' + pitchLabelText(semis) + "</span>" +
-        "</div>" +
-        '<div class="settings-toggle-row" data-toggle-loop="' + ex.n + '">' +
-          '<span>Повтор (loop)</span>' +
-          '<div class="toggle-pill' + (loopOn ? " on" : "") + '"><div class="toggle-dot"></div></div>' +
-        "</div>" +
-        '<div class="settings-toggle-row" data-toggle-autoplay="' + ex.n + '">' +
-          '<span>Автовоспроизведение следующей</span>' +
-          '<div class="toggle-pill' + (autoOn ? " on" : "") + '"><div class="toggle-dot"></div></div>' +
+        '<div class="settings-box">' +
+          '<div class="settings-slider-row">' +
+            '<span class="settings-slider-label">Темп</span>' +
+            '<input type="range" class="tempo-slider" id="tempo-' + ex.n + '" min="50" max="100" step="5" value="' + pct + '">' +
+            '<span class="settings-slider-value" id="tempo-label-' + ex.n + '">' + tempoLabelText(ex, pct) + "</span>" +
+          "</div>" +
+          '<div class="settings-slider-row">' +
+            '<span class="settings-slider-label">Тональность</span>' +
+            '<input type="range" class="pitch-slider" id="pitch-' + ex.n + '" min="-5" max="3" step="0.5" value="' + semis + '">' +
+            '<span class="settings-slider-value" id="pitch-label-' + ex.n + '">' + pitchLabelText(semis) + "</span>" +
+          "</div>" +
+          '<div class="settings-toggle-row" data-toggle-loop="' + ex.n + '">' +
+            '<span>Повтор (loop)</span>' +
+            '<div class="toggle-pill' + (loopOn ? " on" : "") + '"><div class="toggle-dot"></div></div>' +
+          "</div>" +
+          '<div class="settings-toggle-row" data-toggle-autoplay="' + ex.n + '">' +
+            '<span>Автовоспроизведение следующей</span>' +
+            '<div class="toggle-pill' + (autoOn ? " on" : "") + '"><div class="toggle-dot"></div></div>' +
+          "</div>" +
         "</div>" +
       "</div>" +
     "</div>"
