@@ -588,15 +588,24 @@ function renderProfile() {
   if (s.songDone) appHomeworkDone.push("Песня: " + LESSON.title);
 
   var assessmentsHtml = DEMO_ASSESSMENTS.map(function (a, ai) {
-    var metrics = a.metrics.map(function (m) { return { label: m[0], score: m[1], pct: m[1] * 10 }; });
+    var metrics = a.metrics.map(function (m) {
+      var score = m[1];
+      var low = score < 5;
+      return {
+        label: m[0], score: score, pct: score * 10,
+        // ниже 5 — красным, как в дизайн-файле (barColor/scoreColor)
+        scoreColor: low ? "oklch(56% 0.18 25)" : "var(--ink)",
+        barColor: low ? "oklch(56% 0.18 25)" : "var(--blue)"
+      };
+    });
     var lowPoints = metrics.slice().sort(function (x, y) { return x.score - y.score; }).slice(0, 3);
     var expanded = !!(s.expandedAssessments && s.expandedAssessments[ai]);
 
     var metricsGrid = expanded
       ? '<div class="assessment-metrics-grid">' +
           metrics.map(function (m) {
-            return '<div><div class="assessment-metric-row"><span>' + esc(m.label) + '</span><span class="assessment-metric-score">' + m.score + "</span></div>" +
-              '<div class="assessment-metric-bar"><div style="width:' + m.pct + '%;"></div></div></div>';
+            return '<div><div class="assessment-metric-row"><span>' + esc(m.label) + '</span><span class="assessment-metric-score" style="color:' + m.scoreColor + ';">' + m.score + "</span></div>" +
+              '<div class="assessment-metric-bar"><div style="width:' + m.pct + '%;background:' + m.barColor + ';"></div></div></div>';
           }).join("") +
         "</div>"
       : "";
