@@ -440,8 +440,8 @@ function renderCourses() {
       "</button>" +
     "</div>" +
     '<div class="filter-row">' +
-      '<button class="filter-btn' + (filter === "inProgress" ? " active" : "") + '" data-act="filter-inprogress">В работе · ' + stats.inProgress + "</button>" +
-      '<button class="filter-btn' + (filter === "completed" ? " active" : "") + '" data-act="filter-completed">✓ Завершено · ' + stats.completed + "</button>" +
+      '<button class="filter-btn' + (filter === "inProgress" ? " active-blue" : "") + '" data-act="filter-inprogress">В работе · ' + stats.inProgress + "</button>" +
+      '<button class="filter-btn' + (filter === "completed" ? " active-terra" : "") + '" data-act="filter-completed">✓ Завершено · ' + stats.completed + "</button>" +
     "</div>" +
     '<div class="roadmap-wrap">' +
       '<div class="roadmap-label">Дорожная карта урока · листайте →</div>' +

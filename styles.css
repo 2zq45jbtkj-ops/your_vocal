@@ -105,10 +105,11 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 .filter-row { display: flex; gap: 10px; padding: 16px 18px 4px; }
 .filter-btn {
   flex: 1; height: 50px; border-radius: 16px; border: none;
-  font: 700 13px 'Manrope', sans-serif; cursor: pointer;
-  background: var(--bg); color: var(--ink); box-shadow: var(--raised);
+  font: 700 13.5px 'Manrope', sans-serif; cursor: pointer;
+  background: var(--bg); color: var(--gray); box-shadow: var(--inset-sm);
 }
-.filter-btn.active { background: var(--soft-terra); color: var(--ink-terra); box-shadow: var(--inset-sm); }
+.filter-btn.active-blue { background: var(--blue); color: var(--white-text); box-shadow: var(--raised-sm); }
+.filter-btn.active-terra { background: var(--terra); color: var(--white-text); box-shadow: var(--raised-sm); }
 .roadmap-wrap { padding: 20px 0 4px 18px; }
 .roadmap-label {
   font: 600 12px 'Inter', sans-serif; text-transform: uppercase; letter-spacing: .04em;
