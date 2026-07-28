@@ -1212,8 +1212,16 @@ function getAudioBuffer(n, ex) {
 }
 
 var activeShifter = null; // { n, shifter }
-function stopShiftedPlayback() {
+// «поколение» запуска движка на упражнение — каждый новый playShifted() аннулирует
+// все более ранние ещё не догрузившиеся запуски того же трека (иначе при быстром
+// перетаскивании слайдера тональности накапливаются параллельные запуски и звук
+// накладывается друг на друга / не останавливается по паузе).
+var shiftGeneration = {};
+
+function stopShiftedPlayback(n) {
+  if (n != null) shiftGeneration[n] = (shiftGeneration[n] || 0) + 1;
   if (activeShifter) {
+    if (n == null) shiftGeneration[activeShifter.n] = (shiftGeneration[activeShifter.n] || 0) + 1;
     try { activeShifter.shifter.disconnect(); } catch (e) {}
     activeShifter = null;
   }
@@ -1222,24 +1230,28 @@ function stopShiftedPlayback() {
 function playShifted(n, ex, startSeconds) {
   var pct = (state.tempoMap && state.tempoMap[n]) || 100;
   var semis = (state.pitchMap && state.pitchMap[n]) || 0;
+  shiftGeneration[n] = (shiftGeneration[n] || 0) + 1;
+  var myGen = shiftGeneration[n];
   getAudioBuffer(n, ex).then(function (buffer) {
-    if (state.playerIdx !== n) return; // пока грузили — ученик успел переключиться
+    if (state.playerIdx !== n || shiftGeneration[n] !== myGen) return; // устарело — новее вызов уже перехватил
     loadSoundTouch().then(function (mod) {
-      if (state.playerIdx !== n) return;
+      if (state.playerIdx !== n || shiftGeneration[n] !== myGen) return;
       var ctx = getAudioCtx();
       var shifter = new mod.PitchShifter(ctx, buffer, 4096, function () {
+        if (shiftGeneration[n] !== myGen) return;
         handleExerciseEnded(n);
       });
       shifter.tempo = pct / 100;
       shifter.pitchSemitones = semis;
       if (startSeconds && shifter.duration) shifter.percentagePlayed = startSeconds / shifter.duration;
       shifter.on("play", function (detail) {
-        if (state.playerIdx !== n) return;
+        if (state.playerIdx !== n || shiftGeneration[n] !== myGen) return;
         setRing(n, (detail.percentagePlayed || 0) / 100);
         state.playerElapsed = Math.floor(detail.timePlayed || 0);
         var t = document.getElementById("time-" + n);
         if (t) t.textContent = warmupTimeLabel(ex);
       });
+      if (state.playerIdx !== n || shiftGeneration[n] !== myGen) { try { shifter.disconnect(); } catch (e) {} return; }
       shifter.connect(ctx.destination);
       activeShifter = { n: n, shifter: shifter };
     }).catch(function () { fallbackToNative(n, startSeconds); });
@@ -1527,7 +1539,7 @@ function toggleAudio(n) {
   if (!ex) return;
 
   if (state.playerIdx === n) {
-    stopShiftedPlayback();
+    stopShiftedPlayback(n);
     var curEl = audioEls[n];
     if (curEl) curEl.pause();
     state.playerIdx = null;
@@ -1537,7 +1549,7 @@ function toggleAudio(n) {
 
   var prev = state.playerIdx;
   Object.keys(audioEls).forEach(function (k) { if (audioEls[k]) audioEls[k].pause(); });
-  stopShiftedPlayback();
+  if (prev != null) stopShiftedPlayback(prev);
 
   state.playerIdx = n;
   state.playerElapsed = 0;
@@ -1859,8 +1871,12 @@ function getSongAudioBuffer(ti, track) {
 }
 
 var activeSongShifter = null; // { ti, shifter }
-function stopSongShiftedPlayback() {
+var songShiftGeneration = {}; // то же самое «поколение» вызовов, что и в распевках — см. shiftGeneration
+
+function stopSongShiftedPlayback(ti) {
+  if (ti != null) songShiftGeneration[ti] = (songShiftGeneration[ti] || 0) + 1;
   if (activeSongShifter) {
+    if (ti == null) songShiftGeneration[activeSongShifter.ti] = (songShiftGeneration[activeSongShifter.ti] || 0) + 1;
     try { activeSongShifter.shifter.disconnect(); } catch (e) {}
     activeSongShifter = null;
   }
@@ -1869,24 +1885,28 @@ function stopSongShiftedPlayback() {
 function playSongShifted(ti, track, startSeconds) {
   var pct = (state.songTempoMap && state.songTempoMap[ti]) || 100;
   var semis = (state.songPitchMap && state.songPitchMap[ti]) || 0;
+  songShiftGeneration[ti] = (songShiftGeneration[ti] || 0) + 1;
+  var myGen = songShiftGeneration[ti];
   getSongAudioBuffer(ti, track).then(function (buffer) {
-    if (state.songPlayerKey !== ti) return;
+    if (state.songPlayerKey !== ti || songShiftGeneration[ti] !== myGen) return;
     loadSoundTouch().then(function (mod) {
-      if (state.songPlayerKey !== ti) return;
+      if (state.songPlayerKey !== ti || songShiftGeneration[ti] !== myGen) return;
       var ctx = getAudioCtx();
       var shifter = new mod.PitchShifter(ctx, buffer, 4096, function () {
+        if (songShiftGeneration[ti] !== myGen) return;
         handleSongTrackEnded(ti);
       });
       shifter.tempo = pct / 100;
       shifter.pitchSemitones = semis;
       if (startSeconds && shifter.duration) shifter.percentagePlayed = startSeconds / shifter.duration;
       shifter.on("play", function (detail) {
-        if (state.songPlayerKey !== ti) return;
+        if (state.songPlayerKey !== ti || songShiftGeneration[ti] !== myGen) return;
         setRing("song-" + ti, (detail.percentagePlayed || 0) / 100);
         state.songPlayerElapsed = Math.floor(detail.timePlayed || 0);
         var t = document.getElementById("song-time-" + ti);
         if (t) t.textContent = songTimeLabel(ti);
       });
+      if (state.songPlayerKey !== ti || songShiftGeneration[ti] !== myGen) { try { shifter.disconnect(); } catch (e) {} return; }
       shifter.connect(ctx.destination);
       activeSongShifter = { ti: ti, shifter: shifter };
     }).catch(function () { fallbackToNativeSong(ti, startSeconds); });
@@ -1925,7 +1945,7 @@ function toggleSongAudio(ti) {
   if (!track) return;
 
   if (state.songPlayerKey === ti) {
-    stopSongShiftedPlayback();
+    stopSongShiftedPlayback(ti);
     var curEl = songAudioEls[ti];
     if (curEl) curEl.pause();
     state.songPlayerKey = null;
@@ -1936,7 +1956,7 @@ function toggleSongAudio(ti) {
   var prev = state.songPlayerKey;
   Object.keys(songAudioEls).forEach(function (k) { if (songAudioEls[k]) songAudioEls[k].pause(); });
   Object.keys(audioEls).forEach(function (k) { if (audioEls[k]) audioEls[k].pause(); });
-  stopSongShiftedPlayback();
+  if (prev != null && prev !== undefined) stopSongShiftedPlayback(prev);
   stopShiftedPlayback();
 
   state.songPlayerKey = ti;
