@@ -698,13 +698,6 @@ function renderProfile() {
       render();
     });
   });
-  Array.prototype.forEach.call(app.querySelectorAll("[data-remove-fav]"), function (el) {
-    el.addEventListener("click", function () {
-      delete state.favorites[el.getAttribute("data-remove-fav")];
-      saveState();
-      render();
-    });
-  });
   wireActs();
 }
 
@@ -1289,7 +1282,7 @@ function handleExerciseEnded(n) {
 /* ---------- избранные распевки (звезда) ---------- */
 
 function favKey(n) {
-  return (LESSON.id || 1) + "-" + n;
+  return (LESSON.id || 1) + "-w-" + n;
 }
 function toggleFavorite(n, ex) {
   var key = favKey(n);
