@@ -685,10 +685,6 @@ function renderProfile() {
           (appHomeworkDone.length ? chipsHtml(appHomeworkDone) : '<span class="chips-empty">Пока ничего не пройдено</span>') +
         "</div>" +
       "</div>" +
-      '<div class="section-label">Мои распевки</div>' +
-      '<div class="chips-wrap" style="margin-bottom:22px;">' +
-        (favoritesHtml || '<span class="chips-empty">Пока нет избранных распевок — нажми на звезду в плеере</span>') +
-      "</div>" +
       '<div class="assessments-title">Срезы · колесо баланса</div>' +
       assessmentsHtml +
       '<div class="instruction-note" style="margin-top:6px;">Профиль и срезы выше — пример, один в один с макетом дизайнера. Реальные данные ученика появятся, когда подключим бэкенд личного кабинета.</div>' +
