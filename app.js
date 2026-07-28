@@ -689,6 +689,24 @@ function loadScheduleForMonth(vy, vm) {
     .catch(function () {});
 }
 
+/* Расписание преподавателя: пн/вт — выходной, ср — личный день с укороченным
+   окном 12:15–16:00, чт-вс — обычные рабочие дни с 10:00, урок 45 минут,
+   перерыв 14:30–15:15. */
+var STANDARD_SLOTS = ["10:00", "10:45", "11:30", "12:15", "13:00", "13:45", "15:15", "16:00", "16:45", "17:30", "18:15", "19:00"];
+var WEDNESDAY_SLOTS = ["12:15", "13:00", "13:45", "14:30", "15:15"];
+
+function dowMonFirst(dateStr) {
+  var date = new Date(dateStr + "T00:00:00");
+  return (date.getDay() + 6) % 7; // 0=Пн ... 6=Вс
+}
+
+function slotsForDate(dateStr) {
+  var dow = dowMonFirst(dateStr);
+  if (dow === 0 || dow === 1) return []; // пн/вт — выходной
+  if (dow === 2) return WEDNESDAY_SLOTS.slice(); // ср — личный день
+  return STANDARD_SLOTS.slice(); // чт-вс — рабочие дни
+}
+
 function buildCalendarCells(vy, vm, selectedDate) {
   var firstDow = (new Date(vy, vm, 1).getDay() + 6) % 7;
   var daysInMonth = new Date(vy, vm + 1, 0).getDate();
@@ -703,15 +721,14 @@ function buildCalendarCells(vy, vm, selectedDate) {
     var isToday = date.getTime() === today.getTime();
     var dateStr = vy + "-" + pad2(vm + 1) + "-" + pad2(d);
     var isSelected = selectedDate === dateStr;
-    var fullyBooked = state.calConfigured
-      ? (!isPast && !isSelected && busy.indexOf(dateStr) !== -1)
-      : (!isPast && !isSelected && ((d + dow) % 4 === 0));
-    var clickable = !isPast && !fullyBooked;
+    var isDayOff = dow === 0 || dow === 1; // пн/вт — выходной, не бронируется вообще
+    var isBusy = state.calConfigured && !isPast && !isSelected && !isDayOff && busy.indexOf(dateStr) !== -1;
+    var clickable = !isPast && !isDayOff;
     var bg = "oklch(90% 0.03 235)", color = "oklch(38% 0.06 235)",
       shadow = "3px 3px 6px oklch(70% 0.02 80/0.28), -3px -3px 6px oklch(100% 0 0/0.75)";
     if (isSelected) { bg = "oklch(56% 0.09 235)"; color = "oklch(97% 0.01 80)"; shadow = "3px 3px 6px oklch(70% 0.02 80/0.35)"; }
-    else if (isPast) { bg = "oklch(92% 0.008 70)"; color = "oklch(70% 0.008 70)"; shadow = "none"; }
-    else if (fullyBooked) { bg = "oklch(88% 0.05 38)"; color = "oklch(45% 0.1 38)"; shadow = "3px 3px 6px oklch(70% 0.02 80/0.28), -3px -3px 6px oklch(100% 0 0/0.75)"; }
+    else if (isPast || isDayOff) { bg = "oklch(92% 0.008 70)"; color = "oklch(70% 0.008 70)"; shadow = "none"; }
+    else if (isBusy) { bg = "oklch(88% 0.05 38)"; color = "oklch(45% 0.1 38)"; shadow = "3px 3px 6px oklch(70% 0.02 80/0.28), -3px -3px 6px oklch(100% 0 0/0.75)"; }
     var ring = (isToday && !isSelected) ? "box-shadow:0 0 0 2px oklch(60% 0.13 38 / 0.55);" : "";
     cells.push({
       num: d, dateStr: dateStr, clickable: clickable,
@@ -723,26 +740,23 @@ function buildCalendarCells(vy, vm, selectedDate) {
 
 function buildTimeSlots(dateStr, selectedTime) {
   if (!dateStr) return [];
-  var d = parseInt(dateStr.slice(8, 10), 10);
-  var hours = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
-  return hours.map(function (h) {
-    var disabled = (d + h) % 5 === 0;
-    var isSelected = selectedTime === h;
+  var slots = slotsForDate(dateStr);
+  return slots.map(function (t) {
+    var isSelected = selectedTime === t;
     var bg = "oklch(95% 0.014 80)", color = "oklch(30% 0.015 70)",
       shadow = "5px 5px 10px oklch(70% 0.02 80/0.3), -5px -5px 10px oklch(100% 0 0/0.8)";
-    if (disabled) { bg = "oklch(90% 0.008 70)"; color = "oklch(70% 0.008 70)"; shadow = "none"; }
-    else if (isSelected) { bg = "oklch(56% 0.09 235)"; color = "oklch(97% 0.01 80)"; shadow = "4px 4px 8px oklch(70% 0.02 80/0.35)"; }
+    if (isSelected) { bg = "oklch(56% 0.09 235)"; color = "oklch(97% 0.01 80)"; shadow = "4px 4px 8px oklch(70% 0.02 80/0.35)"; }
     return {
-      h: h, disabled: disabled,
-      style: "height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;font:700 13px Manrope,sans-serif;background:" + bg + ";color:" + color + ";box-shadow:" + shadow + ";cursor:" + (disabled ? "default" : "pointer") + ";"
+      t: t,
+      style: "height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;font:700 13px Manrope,sans-serif;background:" + bg + ";color:" + color + ";box-shadow:" + shadow + ";cursor:pointer;"
     };
   });
 }
 
-function submitBooking(dateStr, hour) {
+function submitBooking(dateStr, time) {
   var f = baseSubmitFields();
   f.append("kind", "booking");
-  f.append("text", "Дата: " + dateStr + ", время: " + hour + ":00");
+  f.append("text", "Дата: " + dateStr + ", время: " + time + " (45 мин)");
   fetch("/api/submit", { method: "POST", body: f }).catch(function () {});
 }
 
@@ -776,8 +790,8 @@ function renderQuestions() {
       "</div>" +
       '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:7px 6px;margin-top:8px;">' + cellsHtml + "</div>" +
       '<div style="margin-top:20px;display:flex;gap:16px;font:500 11.5px Inter,sans-serif;color:var(--gray);">' +
-        '<div style="display:flex;align-items:center;gap:6px;"><span style="width:9px;height:9px;border-radius:50%;background:oklch(56% 0.09 235);display:inline-block;"></span>свободно</div>' +
-        '<div style="display:flex;align-items:center;gap:6px;"><span style="width:9px;height:9px;border-radius:50%;background:oklch(60% 0.13 38);display:inline-block;"></span>занято</div>' +
+        '<div style="display:flex;align-items:center;gap:6px;"><span style="width:9px;height:9px;border-radius:50%;background:oklch(56% 0.09 235);display:inline-block;"></span>свободный день</div>' +
+        '<div style="display:flex;align-items:center;gap:6px;"><span style="width:9px;height:9px;border-radius:50%;background:oklch(60% 0.13 38);display:inline-block;"></span>уже есть уроки</div>' +
       "</div>" +
       (state.calConfigured
         ? ""
@@ -786,9 +800,11 @@ function renderQuestions() {
     var selDate = new Date(state.selectedDate + "T00:00:00");
     var selLabel = selDate.getDate() + " " + CAL_MONTHS[selDate.getMonth()] + ", " + CAL_WEEKDAYS_FULL[(selDate.getDay() + 6) % 7];
     var slots = buildTimeSlots(state.selectedDate, state.selectedTime);
-    var slotsHtml = slots.map(function (sl) {
-      return '<div' + (sl.disabled ? "" : ' data-slot-hour="' + sl.h + '"') + ' style="' + sl.style + '">' + sl.h + ":00</div>";
-    }).join("");
+    var slotsHtml = slots.length
+      ? slots.map(function (sl) {
+          return '<div data-slot-time="' + sl.t + '" style="' + sl.style + '">' + sl.t + "</div>";
+        }).join("")
+      : '<div class="courses-empty" style="grid-column:1/-1;">В этот день занятия не проводятся</div>';
     html =
       '<button class="cal-nav-btn" style="width:auto;height:44px;padding:0 18px;border-radius:14px;color:var(--blue);font:600 13px Inter,sans-serif;margin-bottom:16px;" data-act="cal-clear">‹ Другая дата</button>' +
       '<div style="font:800 24px Manrope,sans-serif;color:var(--ink);text-transform:capitalize;">' + selLabel + "</div>" +
@@ -798,7 +814,7 @@ function renderQuestions() {
       "</div>" +
       '<div style="padding:24px 0 16px;">' +
         '<button class="cta" id="confirm-booking-btn"' + (state.selectedTime == null ? " disabled" : "") + ' style="' + (state.selectedTime == null ? "background:oklch(85% 0.01 70);box-shadow:none;" : "") + '">' +
-          (state.selectedTime == null ? "Выберите время" : "Подтвердить на " + state.selectedTime + ":00") +
+          (state.selectedTime == null ? "Выберите время" : "Подтвердить на " + state.selectedTime) +
         "</button>" +
       "</div>";
   } else {
@@ -827,9 +843,9 @@ function renderQuestions() {
       render();
     });
   });
-  Array.prototype.forEach.call(app.querySelectorAll("[data-slot-hour]"), function (el) {
+  Array.prototype.forEach.call(app.querySelectorAll("[data-slot-time]"), function (el) {
     el.addEventListener("click", function () {
-      state.selectedTime = parseInt(el.getAttribute("data-slot-hour"), 10);
+      state.selectedTime = el.getAttribute("data-slot-time");
       render();
     });
   });
