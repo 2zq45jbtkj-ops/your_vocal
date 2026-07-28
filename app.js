@@ -233,7 +233,7 @@ var SVG = {
   notesIcon: function (color) { return '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="4" cy="11" r="2.2" stroke="' + color + '" stroke-width="1.4"/><circle cx="11" cy="9" r="2.2" stroke="' + color + '" stroke-width="1.4"/><path d="M6.2 11V2.5L13.2 1v6.5" stroke="' + color + '" stroke-width="1.4"/></svg>'; },
   dockPerson: function (c) { return '<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="6.5" r="3.3" stroke="' + c + '" stroke-width="1.6"/><path d="M3.5 17c0-3.5 2.9-6 6.5-6s6.5 2.5 6.5 6" stroke="' + c + '" stroke-width="1.6" stroke-linecap="round"/></svg>'; },
   dockLessons: function (c) { return '<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="14" height="14" rx="3" stroke="' + c + '" stroke-width="1.6"/><path d="M6.5 8h7M6.5 12h4.5" stroke="' + c + '" stroke-width="1.6" stroke-linecap="round"/></svg>'; },
-  dockQuestion: function (c) { return '<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7.3" stroke="' + c + '" stroke-width="1.6"/><path d="M7.8 8a2.2 2.2 0 0 1 4.3.6c0 1.5-2.1 1.6-2.1 3.2" stroke="' + c + '" stroke-width="1.6" stroke-linecap="round"/><circle cx="10" cy="14.3" r="0.9" fill="' + c + '"/></svg>'; },
+  dockQuestion: function (c) { return '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="5" width="17" height="15" rx="2.5" stroke="' + c + '" stroke-width="1.6"/><path d="M3.5 9.5h17M8 2.5v4M16 2.5v4" stroke="' + c + '" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="13.5" r="1.1" fill="' + c + '"/><circle cx="12" cy="13.5" r="1.1" fill="' + c + '"/></svg>'; },
   dockMore: function (c) { return '<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="4.5" cy="10" r="1.6" fill="' + c + '"/><circle cx="10" cy="10" r="1.6" fill="' + c + '"/><circle cx="15.5" cy="10" r="1.6" fill="' + c + '"/></svg>'; }
 };
 
@@ -355,6 +355,29 @@ function roadmapCardHtml() {
   );
 }
 
+function lockedRoadmapCardHtml(n) {
+  var lockedSteps = ["Лекция", "Тест", "Распевки", "Упражнение с песней"];
+  var stepsHtml = lockedSteps.map(function (label) {
+    return '<div class="roadmap-step">' +
+      '<div class="roadmap-step-dot">' + SVG.lock + "</div>" +
+      '<span style="color:var(--locked);">' + label + "</span>" +
+    "</div>";
+  }).join("");
+  return (
+    '<div class="roadmap-card locked">' +
+      '<div class="roadmap-title" style="color:var(--locked);">Урок ' + n + "</div>" +
+      '<div class="roadmap-sub">Пока закрыт</div>' +
+      stepsHtml +
+    "</div>"
+  );
+}
+
+function roadmapScrollHtml() {
+  var html = roadmapCardHtml();
+  for (var i = 2; i <= TOTAL_LESSONS; i++) html += lockedRoadmapCardHtml(i);
+  return html;
+}
+
 function renderCourses() {
   var stats = lessonStats();
   var filter = state.coursesFilter || (progressPercent() === 100 ? "completed" : "inProgress");
@@ -384,107 +407,160 @@ function renderCourses() {
     "</div>" +
     '<div class="roadmap-wrap">' +
       '<div class="roadmap-label">Дорожная карта урока · листайте →</div>' +
-      '<div class="roadmap-scroll">' + roadmapCardHtml() + "</div>" +
+      '<div class="roadmap-scroll">' + roadmapScrollHtml() + "</div>" +
     "</div>" +
     '<div class="courses-grid">' + items + "</div>";
   wireActs();
 }
 
-/* ---------- личный кабинет: колесо баланса (демо) ---------- */
+/* ---------- личный кабинет: колесо баланса (1:1 по макету дизайнера) ---------- */
 
-function wheelSVG(metrics, size) {
-  size = size || 220;
-  var center = size / 2;
-  var maxR = size / 2 - 30;
-  var n = metrics.length;
-  var angleStep = (2 * Math.PI) / n;
-  var maxScore = 10;
-  function pointAt(i, r) {
-    var angle = -Math.PI / 2 + i * angleStep;
-    return [center + r * Math.cos(angle), center + r * Math.sin(angle)];
+function renderWheel(metrics) {
+  var size = 240, R = 92, cx = size / 2, cy = size / 2, n = metrics.length;
+  function angleFor(i) { return -Math.PI / 2 + i * (2 * Math.PI / n); }
+  function ptStr(fracFn) {
+    return metrics.map(function (m, i) {
+      var a = angleFor(i), r = fracFn(m) * R;
+      return (cx + r * Math.cos(a)).toFixed(1) + "," + (cy + r * Math.sin(a)).toFixed(1);
+    }).join(" ");
   }
-  var gridRings = [0.25, 0.5, 0.75, 1].map(function (frac) {
-    var pts = [];
-    for (var i = 0; i < n; i++) {
-      var p = pointAt(i, maxR * frac);
-      pts.push(p[0].toFixed(1) + "," + p[1].toFixed(1));
-    }
-    return '<polygon points="' + pts.join(" ") + '" fill="none" stroke="oklch(87% 0.01 70)" stroke-width="1"></polygon>';
+  var rings = [0.25, 0.5, 0.75, 1].map(function (f) {
+    return '<polygon points="' + ptStr(function () { return f; }) + '" fill="none" stroke="oklch(85% 0.01 70)" stroke-width="1"></polygon>';
   }).join("");
-  var spokes = "";
-  for (var i = 0; i < n; i++) {
-    var p = pointAt(i, maxR);
-    spokes += '<line x1="' + center + '" y1="' + center + '" x2="' + p[0].toFixed(1) + '" y2="' + p[1].toFixed(1) + '" stroke="oklch(87% 0.01 70)" stroke-width="1"></line>';
-  }
-  var dataPts = metrics.map(function (m, i) {
-    var p = pointAt(i, maxR * (m.score / maxScore));
-    return p[0].toFixed(1) + "," + p[1].toFixed(1);
-  }).join(" ");
-  var labels = metrics.map(function (m, i) {
-    var p = pointAt(i, maxR + 20);
-    return '<text x="' + p[0].toFixed(1) + '" y="' + p[1].toFixed(1) + '" font-size="7.5" fill="oklch(52% 0.012 70)" text-anchor="middle" dominant-baseline="middle">' + esc(m.label) + "</text>";
+  var axes = metrics.map(function (m, i) {
+    var a = angleFor(i);
+    return '<line x1="' + cx + '" y1="' + cy + '" x2="' + (cx + R * Math.cos(a)).toFixed(1) + '" y2="' + (cy + R * Math.sin(a)).toFixed(1) + '" stroke="oklch(88% 0.01 70)" stroke-width="1"></line>';
   }).join("");
-  return (
-    '<svg viewBox="0 0 ' + size + " " + size + '" width="100%" style="max-width:260px;display:block;margin:0 auto;">' +
-      gridRings + spokes +
-      '<polygon points="' + dataPts + '" fill="oklch(56% 0.09 235 / 0.32)" stroke="oklch(56% 0.09 235)" stroke-width="2"></polygon>' +
-      labels +
-    "</svg>"
-  );
+  var dataPoly = '<polygon points="' + ptStr(function (m) { return m.score / 10; }) + '" fill="oklch(56% 0.09 235 / 0.35)" stroke="oklch(56% 0.09 235)" stroke-width="2"></polygon>';
+  var dots = metrics.map(function (m, i) {
+    var a = angleFor(i), r = (m.score / 10) * R;
+    return '<circle cx="' + (cx + r * Math.cos(a)).toFixed(1) + '" cy="' + (cy + r * Math.sin(a)).toFixed(1) + '" r="2.6" fill="oklch(60% 0.13 38)"></circle>';
+  }).join("");
+  return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + " " + size + '">' + rings + axes + dataPoly + dots + "</svg>";
 }
 
-var DEMO_WHEEL_METRICS = [
-  { label: "Дыхание", score: 7 },
-  { label: "Опора звука", score: 6 },
-  { label: "Регистры", score: 5 },
-  { label: "Атака звука", score: 6 },
-  { label: "Гортань", score: 5 },
-  { label: "Дикция", score: 7 },
-  { label: "Микрофон", score: 4 },
-  { label: "Актёрское", score: 6 }
+/* демо-профиль и срезы — та же самая тестовая карточка, что в макете дизайнера
+   (Мария Ивановна). Реальные данные ученика подключим вместе с бэкендом кабинета. */
+var DEMO_PROFILE = {
+  short: "МИ", name: "Мария Ивановна", age: 27, status: "Активный",
+  lessonType: "Вокал",
+  range: "Ля малой октавы — До 2-й октавы", voiceType: "Лирико-колоратурное сопрано",
+  primaryGoal: "Убрать зажим гортани и компенсаторное дыхание ключицей, укрепить опору дыхания, начать уверенно брать высокие ноты.",
+  goals: ["Не берутся высокие ноты", "Уверенность в голосе"],
+  notes: ["Гортанный зажим", "Компенсаторное дыхание ключицей"],
+  focus: "Снятие зажима гортани через упражнения на сирена и полуприкрытые гласные"
+};
+
+var DEMO_ASSESSMENTS = [
+  { date: "01.07.2026", homework: "Дыхание, Гортань", score: 7, recommendations: "Sirens, работа над зевком, полуприкрытые гласные", goal: "Стабилизировать опору дыхания",
+    metrics: [["Актёрское мастерство",6],["Работа с микрофоном",5],["Дыхание",7],["Сила звука",6],["Регистры",5],["Атака и окончание звука",6],["Гортань",5],["Голосовые складки",6],["Ложные голосовые складки",5],["Щитовидный хрящ",6],["Перстневидный хрящ",6],["Черпаловидный хрящ",5],["Черпало-надгортанный сфинктер",5],["Мягкое нёбо",6],["Язык",6],["Нижняя челюсть",6],["Губы",7],["Анкеровка",10]] },
+  { date: "14.07.2026", homework: "Дыхание, Регистры, Ложные голосовые складки", score: null, recommendations: "", goal: "",
+    metrics: [["Актёрское мастерство",1],["Атака и окончание звука",1],["Гортань",1],["Голосовые складки",1],["Губы",1],["Анкеровка",1],["Работа с микрофоном",4],["Дыхание",8],["Сила звука",7],["Регистры",6],["Ложные голосовые складки",3],["Щитовидный хрящ",5],["Перстневидный хрящ",6],["Черпаловидный хрящ",4],["Черпало-надгортанный сфинктер",5],["Мягкое нёбо",7],["Язык",6],["Нижняя челюсть",5]] }
 ];
+
+function chipsHtml(arr) {
+  return arr.map(function (x) { return '<span class="chip-tag">' + esc(x) + "</span>"; }).join("");
+}
 
 function renderProfile() {
   var s = state;
-  var initials = ((s.firstName || "У")[0] + (s.lastName || "Ч")[0]).toUpperCase();
-  var name = ((s.lastName || "Ученик") + " " + (s.firstName || "")).trim();
+  var p = DEMO_PROFILE;
+
+  var appHomeworkDone = [];
+  if (s.quizDone) appHomeworkDone.push("Тест: " + LESSON.title);
+  if (s.warmupsDone) appHomeworkDone.push("Распевки: " + LESSON.title);
+  if (s.songDone) appHomeworkDone.push("Песня: " + LESSON.title);
+
+  var assessmentsHtml = DEMO_ASSESSMENTS.map(function (a, ai) {
+    var metrics = a.metrics.map(function (m) { return { label: m[0], score: m[1], pct: m[1] * 10 }; });
+    var lowPoints = metrics.slice().sort(function (x, y) { return x.score - y.score; }).slice(0, 3);
+    var expanded = !!(s.expandedAssessments && s.expandedAssessments[ai]);
+
+    var metricsGrid = expanded
+      ? '<div class="assessment-metrics-grid">' +
+          metrics.map(function (m) {
+            return '<div><div class="assessment-metric-row"><span>' + esc(m.label) + '</span><span class="assessment-metric-score">' + m.score + "</span></div>" +
+              '<div class="assessment-metric-bar"><div style="width:' + m.pct + '%;"></div></div></div>';
+          }).join("") +
+        "</div>"
+      : "";
+
+    var lowPointsHtml = lowPoints.map(function (lp) {
+      return '<span class="lowpoint-chip">' + esc(lp.label) + " · " + lp.score + "</span>";
+    }).join("");
+
+    return (
+      '<div class="assessment-card">' +
+        '<div class="assessment-date">Срез — ' + a.date + "</div>" +
+        '<div class="assessment-wheel-wrap" data-toggle-assessment="' + ai + '">' + renderWheel(metrics) + "</div>" +
+        '<div class="assessment-toggle" data-toggle-assessment="' + ai + '">' + (expanded ? "Свернуть список" : "Показать списком") + "</div>" +
+        metricsGrid +
+        '<div class="section-label" style="margin-top:0;">Точки роста</div>' +
+        '<div class="chips-wrap" style="margin-bottom:12px;">' + lowPointsHtml + "</div>" +
+        '<div class="assessment-line"><b>ДЗ:</b> ' + esc(a.homework) + "</div>" +
+        (a.score != null ? '<div class="assessment-line"><b>Оценка за ДЗ:</b> ' + a.score + "</div>" : "") +
+        (a.recommendations ? '<div class="assessment-line"><b>Рекомендации:</b> ' + esc(a.recommendations) + "</div>" : "") +
+        (a.goal ? '<div class="assessment-line"><b>Цель периода:</b> ' + esc(a.goal) + "</div>" : "") +
+      "</div>"
+    );
+  }).join("");
+
   app.innerHTML =
     '<div style="padding:58px 20px 130px;">' +
       '<div class="profile-head">' +
-        '<div class="profile-avatar">' + esc(initials) + "</div>" +
+        '<div class="profile-avatar">' + esc(p.short) + "</div>" +
         '<div>' +
-          '<div class="profile-name">' + esc(name) + "</div>" +
-          '<div class="profile-status">Ученик · <span style="color:var(--terra);font-weight:600;">в процессе курса</span></div>' +
+          '<div class="profile-name">' + esc(p.name) + "</div>" +
+          '<div class="profile-status">' + p.age + ' лет · <span style="color:var(--terra);font-weight:600;">' + esc(p.status) + "</span></div>" +
         "</div>" +
       "</div>" +
       '<div class="profile-cards">' +
-        '<div class="profile-card"><div class="profile-card-label">Тип занятий</div><div class="profile-card-value">Индивидуально</div></div>' +
-        '<div class="profile-card"><div class="profile-card-label">Диапазон · тембр</div><div class="profile-card-value">Уточняется на диагностике</div></div>' +
+        '<div class="profile-card"><div class="profile-card-label">Тип занятий</div><div class="profile-card-value">' + esc(p.lessonType) + "</div></div>" +
+        '<div class="profile-card"><div class="profile-card-label">Диапазон · тембр</div><div class="profile-card-value">' + esc(p.range) + '</div><div class="profile-card-sub">' + esc(p.voiceType) + "</div></div>" +
       "</div>" +
-      '<div class="section-label" style="margin-top:16px;">Колесо баланса · пример</div>' +
-      '<div class="wheel-card">' + wheelSVG(DEMO_WHEEL_METRICS) + "</div>" +
-      '<div class="wheel-legend">' +
-        DEMO_WHEEL_METRICS.map(function (m) {
-          return '<div class="wheel-legend-row"><span>' + esc(m.label) + "</span><b>" + m.score + "/10</b></div>";
-        }).join("") +
+      '<div class="section-label">Первичная цель</div>' +
+      '<div class="goal-box goal-primary">' + esc(p.primaryGoal) + "</div>" +
+      '<div class="section-label">Вторичная цель</div>' +
+      '<div class="goal-box goal-secondary">' + esc(p.focus) + "</div>" +
+      '<div class="section-label">Задачи</div>' +
+      '<div class="chips-wrap">' + chipsHtml(p.goals) + "</div>" +
+      '<div class="section-label">Особенности</div>' +
+      '<div class="chips-wrap">' + chipsHtml(p.notes) + "</div>" +
+      '<div class="section-label">Пройдённые ДЗ в приложении</div>' +
+      '<div class="chips-wrap" style="margin-bottom:22px;">' +
+        (appHomeworkDone.length ? chipsHtml(appHomeworkDone) : '<span class="chips-empty">Пока ничего не пройдено</span>') +
       "</div>" +
-      '<div class="instruction-note" style="margin-top:16px;">Это демо-версия раздела с примером данных — реальные оценки преподаватель будет вносить, когда подключим полноценный личный кабинет с базой данных.</div>' +
+      '<div class="assessments-title">Срезы · колесо баланса</div>' +
+      assessmentsHtml +
+      '<div class="instruction-note" style="margin-top:6px;">Профиль и срезы выше — пример, один в один с макетом дизайнера. Реальные данные ученика появятся, когда подключим бэкенд личного кабинета.</div>' +
     "</div>";
+
+  Array.prototype.forEach.call(app.querySelectorAll("[data-toggle-assessment]"), function (el) {
+    el.addEventListener("click", function () {
+      var ai = el.getAttribute("data-toggle-assessment");
+      state.expandedAssessments = state.expandedAssessments || {};
+      state.expandedAssessments[ai] = !state.expandedAssessments[ai];
+      render();
+    });
+  });
   wireActs();
 }
 
-/* ---------- вопросы: визуальный календарь занятости ---------- */
+/* ---------- запись на занятие: календарь → время → подтверждение (1:1 по макету) ---------- */
 
-var CAL_WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 var CAL_MONTHS = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
+var CAL_WEEKDAYS_FULL = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"];
+var CAL_WEEKDAYS_SHORT = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"];
+
+function pad2(n) { return String(n).padStart(2, "0"); }
 
 function loadScheduleForMonth(vy, vm) {
   var key = vy + "-" + vm;
   if (state.calLoadedKey === key) return;
   state.calLoadedKey = key;
-  var from = vy + "-" + String(vm + 1).padStart(2, "0") + "-01";
+  var from = vy + "-" + pad2(vm + 1) + "-01";
   var lastDay = new Date(vy, vm + 1, 0).getDate();
-  var to = vy + "-" + String(vm + 1).padStart(2, "0") + "-" + String(lastDay).padStart(2, "0");
+  var to = vy + "-" + pad2(vm + 1) + "-" + pad2(lastDay);
   fetch("/api/schedule?from=" + from + "&to=" + to)
     .then(function (r) { return r.json(); })
     .then(function (data) {
@@ -495,6 +571,63 @@ function loadScheduleForMonth(vy, vm) {
     .catch(function () {});
 }
 
+function buildCalendarCells(vy, vm, selectedDate) {
+  var firstDow = (new Date(vy, vm, 1).getDay() + 6) % 7;
+  var daysInMonth = new Date(vy, vm + 1, 0).getDate();
+  var today = new Date(); today.setHours(0, 0, 0, 0);
+  var busy = state.calBusyDates || [];
+  var cells = [];
+  for (var i = 0; i < firstDow; i++) cells.push({ empty: true });
+  for (var d = 1; d <= daysInMonth; d++) {
+    var date = new Date(vy, vm, d);
+    var dow = (date.getDay() + 6) % 7;
+    var isPast = date < today;
+    var isToday = date.getTime() === today.getTime();
+    var dateStr = vy + "-" + pad2(vm + 1) + "-" + pad2(d);
+    var isSelected = selectedDate === dateStr;
+    var fullyBooked = state.calConfigured
+      ? (!isPast && !isSelected && busy.indexOf(dateStr) !== -1)
+      : (!isPast && !isSelected && ((d + dow) % 4 === 0));
+    var clickable = !isPast && !fullyBooked;
+    var bg = "oklch(90% 0.03 235)", color = "oklch(38% 0.06 235)",
+      shadow = "3px 3px 6px oklch(70% 0.02 80/0.28), -3px -3px 6px oklch(100% 0 0/0.75)";
+    if (isSelected) { bg = "oklch(56% 0.09 235)"; color = "oklch(97% 0.01 80)"; shadow = "3px 3px 6px oklch(70% 0.02 80/0.35)"; }
+    else if (isPast) { bg = "oklch(92% 0.008 70)"; color = "oklch(70% 0.008 70)"; shadow = "none"; }
+    else if (fullyBooked) { bg = "oklch(88% 0.05 38)"; color = "oklch(45% 0.1 38)"; shadow = "3px 3px 6px oklch(70% 0.02 80/0.28), -3px -3px 6px oklch(100% 0 0/0.75)"; }
+    var ring = (isToday && !isSelected) ? "box-shadow:0 0 0 2px oklch(60% 0.13 38 / 0.55);" : "";
+    cells.push({
+      num: d, dateStr: dateStr, clickable: clickable,
+      style: "aspect-ratio:1;border-radius:50%;display:flex;align-items:center;justify-content:center;font:700 13px Manrope,sans-serif;background:" + bg + ";color:" + color + ";box-shadow:" + shadow + ";" + ring + "cursor:" + (clickable ? "pointer" : "default") + ";"
+    });
+  }
+  return cells;
+}
+
+function buildTimeSlots(dateStr, selectedTime) {
+  if (!dateStr) return [];
+  var d = parseInt(dateStr.slice(8, 10), 10);
+  var hours = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
+  return hours.map(function (h) {
+    var disabled = (d + h) % 5 === 0;
+    var isSelected = selectedTime === h;
+    var bg = "oklch(95% 0.014 80)", color = "oklch(30% 0.015 70)",
+      shadow = "5px 5px 10px oklch(70% 0.02 80/0.3), -5px -5px 10px oklch(100% 0 0/0.8)";
+    if (disabled) { bg = "oklch(90% 0.008 70)"; color = "oklch(70% 0.008 70)"; shadow = "none"; }
+    else if (isSelected) { bg = "oklch(56% 0.09 235)"; color = "oklch(97% 0.01 80)"; shadow = "4px 4px 8px oklch(70% 0.02 80/0.35)"; }
+    return {
+      h: h, disabled: disabled,
+      style: "height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;font:700 13px Manrope,sans-serif;background:" + bg + ";color:" + color + ";box-shadow:" + shadow + ";cursor:" + (disabled ? "default" : "pointer") + ";"
+    };
+  });
+}
+
+function submitBooking(dateStr, hour) {
+  var f = baseSubmitFields();
+  f.append("kind", "booking");
+  f.append("text", "Дата: " + dateStr + ", время: " + hour + ":00");
+  fetch("/api/submit", { method: "POST", body: f }).catch(function () {});
+}
+
 function renderQuestions() {
   var now = new Date();
   var vy = state.calYear != null ? state.calYear : now.getFullYear();
@@ -502,38 +635,95 @@ function renderQuestions() {
   state.calYear = vy;
   state.calMonth = vm;
 
-  var first = new Date(vy, vm, 1);
-  var startWeekday = (first.getDay() + 6) % 7;
-  var daysInMonth = new Date(vy, vm + 1, 0).getDate();
-  var todayStr = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0");
-  var busy = state.calBusyDates || [];
+  var html;
 
-  var cells = "";
-  for (var i = 0; i < startWeekday; i++) cells += '<div class="cal-cell empty"></div>';
-  for (var d = 1; d <= daysInMonth; d++) {
-    var dateStr = vy + "-" + String(vm + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0");
-    var isToday = dateStr === todayStr;
-    var isBusy = busy.indexOf(dateStr) !== -1;
-    cells += '<div class="cal-cell' + (isToday ? " today" : "") + '">' + d + (isBusy ? '<span class="cal-dot"></span>' : "") + "</div>";
-  }
-
-  app.innerHTML =
-    '<div style="padding:58px 20px 130px;">' +
-      '<div class="section-label" style="margin-top:0;">Запись</div>' +
-      '<div class="courses-title" style="font-size:22px;">Расписание преподавателя</div>' +
-      '<div class="cal-nav">' +
+  if (!state.selectedDate) {
+    var cells = buildCalendarCells(vy, vm, state.selectedDate);
+    var cellsHtml = cells.map(function (c) {
+      return c.empty
+        ? '<div style="aspect-ratio:1;"></div>'
+        : '<div' + (c.clickable ? ' data-cal-date="' + c.dateStr + '"' : "") + ' style="' + c.style + '">' + c.num + "</div>";
+    }).join("");
+    html =
+      '<div style="font:600 12.5px Inter,sans-serif;letter-spacing:.04em;text-transform:uppercase;color:oklch(52% 0.012 70 / 0.8);">Запись</div>' +
+      '<div style="font:800 27px Manrope,sans-serif;color:var(--ink);margin-top:4px;">Запись на занятие</div>' +
+      '<div style="font-size:13px;color:var(--gray);margin-top:2px;">Выберите свободную дату</div>' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:22px;">' +
         '<button class="cal-nav-btn" data-act="cal-prev">‹</button>' +
-        '<div class="cal-month-label">' + CAL_MONTHS[vm] + " " + vy + "</div>" +
+        '<div style="font:700 18px Manrope,sans-serif;color:var(--ink);text-transform:capitalize;">' + CAL_MONTHS[vm] + " " + vy + "</div>" +
         '<button class="cal-nav-btn" data-act="cal-next">›</button>' +
       "</div>" +
-      '<div class="cal-weekdays">' + CAL_WEEKDAYS.map(function (w) { return "<div>" + w + "</div>"; }).join("") + "</div>" +
-      '<div class="cal-grid">' + cells + "</div>" +
-      '<div class="cal-legend"><span class="cal-dot"></span> занято по расписанию</div>' +
+      '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:20px;">' +
+        CAL_WEEKDAYS_SHORT.map(function (w) { return '<div style="text-align:center;font:600 10.5px Inter,sans-serif;letter-spacing:.02em;color:oklch(52% 0.012 70/0.7);text-transform:uppercase;">' + w + "</div>"; }).join("") +
+      "</div>" +
+      '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:7px 6px;margin-top:8px;">' + cellsHtml + "</div>" +
+      '<div style="margin-top:20px;display:flex;gap:16px;font:500 11.5px Inter,sans-serif;color:var(--gray);">' +
+        '<div style="display:flex;align-items:center;gap:6px;"><span style="width:9px;height:9px;border-radius:50%;background:oklch(56% 0.09 235);display:inline-block;"></span>свободно</div>' +
+        '<div style="display:flex;align-items:center;gap:6px;"><span style="width:9px;height:9px;border-radius:50%;background:oklch(60% 0.13 38);display:inline-block;"></span>занято</div>' +
+      "</div>" +
       (state.calConfigured
-        ? '<div class="instruction-note" style="margin-top:16px;">Показано реальное расписание преподавателя. Автоматическая запись из приложения появится позже — пока просто напиши в чат с ботом, на какое время хочешь записаться.</div>'
-        : '<div class="instruction-note" style="margin-top:16px;">Это пока визуальный календарь без связи с реальным расписанием. Чтобы записаться на занятие — напиши преподавателю в чат с ботом.</div>') +
-      '<button class="cta" data-act="cal-open-tg" style="margin-top:14px;">Открыть чат с ботом в Telegram</button>' +
-    "</div>";
+        ? ""
+        : '<div class="instruction-note" style="margin-top:18px;">Сейчас показан демо-календарь — как только впишешь ключ HolyHope, точки «занято» станут твоим настоящим расписанием.</div>');
+  } else if (!state.calBookedFlag) {
+    var selDate = new Date(state.selectedDate + "T00:00:00");
+    var selLabel = selDate.getDate() + " " + CAL_MONTHS[selDate.getMonth()] + ", " + CAL_WEEKDAYS_FULL[(selDate.getDay() + 6) % 7];
+    var slots = buildTimeSlots(state.selectedDate, state.selectedTime);
+    var slotsHtml = slots.map(function (sl) {
+      return '<div' + (sl.disabled ? "" : ' data-slot-hour="' + sl.h + '"') + ' style="' + sl.style + '">' + sl.h + ":00</div>";
+    }).join("");
+    html =
+      '<button class="cal-nav-btn" style="width:auto;height:44px;padding:0 18px;border-radius:14px;color:var(--blue);font:600 13px Inter,sans-serif;margin-bottom:16px;" data-act="cal-clear">‹ Другая дата</button>' +
+      '<div style="font:800 24px Manrope,sans-serif;color:var(--ink);text-transform:capitalize;">' + selLabel + "</div>" +
+      '<div style="margin-top:40px;">' +
+        '<div class="section-label" style="margin-top:0;">Свободное время</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">' + slotsHtml + "</div>" +
+      "</div>" +
+      '<div style="padding:24px 0 16px;">' +
+        '<button class="cta" id="confirm-booking-btn"' + (state.selectedTime == null ? " disabled" : "") + ' style="' + (state.selectedTime == null ? "background:oklch(85% 0.01 70);box-shadow:none;" : "") + '">' +
+          (state.selectedTime == null ? "Выберите время" : "Подтвердить на " + state.selectedTime + ":00") +
+        "</button>" +
+      "</div>";
+  } else {
+    html =
+      '<div style="margin-top:6px;display:flex;flex-direction:column;gap:14px;">' +
+        '<div style="background:oklch(90% 0.04 38);border-radius:18px;padding:16px 18px;font:500 13.5px/1.5 Inter,sans-serif;color:oklch(38% 0.1 38);">' +
+          "Заявка отправлена преподавателю. Урок в день занятия отменить или перенести нельзя — планируйте заранее." +
+        "</div>" +
+        '<div class="section-label" style="margin-top:0;">Связаться с преподавателем</div>' +
+        '<div data-act="cal-open-tg" style="background:var(--bg);border-radius:18px;box-shadow:var(--raised-lg);padding:16px 18px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;">' +
+          '<div><div style="font:600 14.5px Inter,sans-serif;color:var(--ink);">Telegram</div><div style="font:500 13px Inter,sans-serif;color:var(--gray);margin-top:2px;">@' + esc(TEACHER_BOT_USERNAME) + '</div></div>' +
+          '<div style="font:600 13px Manrope,sans-serif;color:var(--terra);">Написать</div>' +
+        "</div>" +
+        '<div style="font:500 12px/1.5 Inter,sans-serif;color:var(--gray);text-align:center;margin-top:2px;">Преподавателю уже пришло уведомление в Telegram-бот.</div>' +
+        '<button class="cta" data-act="cal-clear" style="background:var(--bg);color:var(--ink);box-shadow:var(--raised-sm);">Выбрать другое время</button>' +
+      "</div>";
+  }
+
+  app.innerHTML = '<div style="padding:58px 22px 130px;">' + html + "</div>";
+
+  Array.prototype.forEach.call(app.querySelectorAll("[data-cal-date]"), function (el) {
+    el.addEventListener("click", function () {
+      state.selectedDate = el.getAttribute("data-cal-date");
+      state.selectedTime = null;
+      state.calBookedFlag = false;
+      render();
+    });
+  });
+  Array.prototype.forEach.call(app.querySelectorAll("[data-slot-hour]"), function (el) {
+    el.addEventListener("click", function () {
+      state.selectedTime = parseInt(el.getAttribute("data-slot-hour"), 10);
+      render();
+    });
+  });
+  var confirmBtn = document.getElementById("confirm-booking-btn");
+  if (confirmBtn) {
+    confirmBtn.addEventListener("click", function () {
+      if (state.selectedTime == null) return;
+      state.calBookedFlag = true;
+      submitBooking(state.selectedDate, state.selectedTime);
+      render();
+    });
+  }
 
   wireActs();
   loadScheduleForMonth(vy, vm);
@@ -558,7 +748,7 @@ function renderDock() {
   var items = [
     { screen: "profile", act: "go-profile", icon: SVG.dockPerson, label: "Кабинет" },
     { screen: "courses", act: "go-courses", icon: SVG.dockLessons, label: "Уроки", badge: badge },
-    { screen: "questions", act: "go-questions", icon: SVG.dockQuestion, label: "Вопросы" },
+    { screen: "questions", act: "go-questions", icon: SVG.dockQuestion, label: "Запись" },
     { screen: "more", act: "go-more", icon: SVG.dockMore, label: "Ещё" }
   ];
   var html = '<div class="dock">';
@@ -1504,7 +1694,10 @@ var ACTS = {
     if (m > 11) { m = 0; y += 1; }
     state.calMonth = m; state.calYear = y; render();
   },
-  "cal-open-tg": openTeacherChat
+  "cal-open-tg": openTeacherChat,
+  "cal-clear": function () {
+    state.selectedDate = null; state.selectedTime = null; state.calBookedFlag = false; render();
+  }
 };
 
 function wireActs() {
