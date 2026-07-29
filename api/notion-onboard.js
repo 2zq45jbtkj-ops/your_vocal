@@ -56,8 +56,11 @@ export default async function handler(req) {
   var tgId = (body.tgId || "").toString().trim();
   var firstName = (body.firstName || "").toString().trim();
   var lastName = (body.lastName || "").toString().trim();
-  // "YYYY-MM-DD" из <input type="date">; необязательное поле.
-  var birthDate = (body.birthDate || "").toString().trim();
+  // "YYYY-MM-DD" — на экране ученик вводит ДД.ММ.ГГГГ, в ISO конвертирует
+  // app.js (birthDateToIso) перед отправкой сюда; необязательное поле.
+  // Дополнительно проверяем формат тут же — на случай кривого/пустого значения.
+  var birthDateRaw = (body.birthDate || "").toString().trim();
+  var birthDate = /^\d{4}-\d{2}-\d{2}$/.test(birthDateRaw) ? birthDateRaw : "";
   if (!chatId || !firstName || !lastName) {
     return json({ ok: false, error: "Нужны chatId, firstName, lastName" }, 400);
   }
