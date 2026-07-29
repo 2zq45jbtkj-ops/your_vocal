@@ -218,7 +218,7 @@ export default async function handler(req) {
         .filter(function (pair) { return pair[1] != null; });
       return {
         date: formatDate(p["Дата"] && p["Дата"].date && p["Дата"].date.start),
-        homework: richText(p["ДЗ"]),
+        homework: richText(p["Пройденные Темы"]), // поле называлось "ДЗ", переименовано по просьбе Николая
         score: numberVal(p["Оценка за ДЗ"]),
         recommendations: richText(p["Рекомендации"]),
         goal: richText(p["Цель периода"]),
