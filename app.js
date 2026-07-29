@@ -310,8 +310,9 @@ function backTarget() {
     case "lesson-home": return "courses";
     case "favorites": return "courses";
     case "lesson-soon": return "courses";
-    case "admin-students": return "more";
-    case "admin-birthdays": return "more";
+    case "admin-hub": return "more";
+    case "admin-students": return "admin-hub";
+    case "admin-birthdays": return "admin-hub";
     case "lecture": case "warmups": case "song": case "quiz-result": return "lesson-home";
     case "feedback": return "song";
     case "quiz": return null; // отдельная логика
@@ -357,7 +358,7 @@ function renderName() {
     '<div class="auth-screen">' +
       backBtn("back") +
       '<div class="auth-title">Как тебя зовут?</div>' +
-      '<div class="auth-sub tight">Укажите фамилию и имя на русском, так вас увидит преподаватель в приложении.</div>' +
+      '<div class="auth-sub tight">Укажите фамилию и имя на русском, так тебя увидит преподаватель в приложении.</div>' +
       '<label class="field-label">ФАМИЛИЯ</label>' +
       '<input id="ln-input" class="field-input mb" type="text" placeholder="Иванова" value="' + esc(state.lastName) + '">' +
       '<label class="field-label">ИМЯ</label>' +
@@ -365,9 +366,11 @@ function renderName() {
       '<label class="field-label">ДАТА РОЖДЕНИЯ</label>' +
       '<input id="bd-input" class="field-input" type="tel" inputmode="numeric" autocomplete="off" placeholder="ДД.ММ.ГГГГ" maxlength="10" value="' + esc(state.birthDate) + '">' +
       '<div class="spacer"></div>' +
-      // Явный отступ над кнопкой (независимо от .spacer, который может схлопнуться
-      // на невысоких экранах) — чтобы кнопка не «слипалась» с полем даты рождения.
-      '<button id="name-next" class="cta" style="margin-top:12px;"' + (state.firstName.trim() && state.lastName.trim() ? "" : " disabled") + ">Начать обучение</button>" +
+      // Явный отступ над кнопкой (независимо от .spacer, который схлопывается
+      // при открытой клавиатуре — контента больше, чем видимой высоты). Равен
+      // нижнему padding .auth-screen (28px), чтобы при открытой клавиатуре
+      // зазор сверху и зазор до клавиатуры снизу были визуально одинаковыми.
+      '<button id="name-next" class="cta" style="margin-top:28px;"' + (state.firstName.trim() && state.lastName.trim() ? "" : " disabled") + ">Начать обучение</button>" +
     "</div>";
 
   var fn = document.getElementById("fn-input");
@@ -1350,15 +1353,16 @@ function renderMore() {
   ];
   // Виден только Николаю (chatId === ADMIN_CHAT_ID на сервере) — скрыт от учеников.
   if (s.isAdmin) {
+    // Единая точка входа для всего, что видно только преподавателю — сейчас
+    // внутри выбор ученика (имперсонация) и дни рождения, дальше сюда же
+    // будут добавляться новые admin-only функции (см. renderAdminHub).
+    // Фон иконки — var(--bgmuted), как у остальных пунктов списка: раньше
+    // тут был var(--soft-blue), который в тёмной теме не темнеет (акцентные
+    // цвета для .dark сознательно не переопределены) и «горел» слишком ярко.
     items.push({
       label: "Режим админа", isLink: true, adminEntry: true,
-      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1.5l5.5 2v4c0 3.6-2.3 6-5.5 7-3.2-1-5.5-3.4-5.5-7v-4L8 1.5z" stroke="oklch(38% 0.06 235)" stroke-width="1.4" stroke-linejoin="round"/><path d="M6 8l1.5 1.5L10.5 6" stroke="oklch(38% 0.06 235)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-      iconBg: "var(--soft-blue)"
-    });
-    items.push({
-      label: "Дни рождения", isLink: true, birthdaysEntry: true,
-      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 14v-5.5a2 2 0 012-2h6a2 2 0 012 2V14M3 14h10M3 14a1 1 0 100 2h10a1 1 0 100-2M8 6.5V3M6 3.2c0 .8.5 1 1 .5s.5-1.2 1-1.2 1 .4 1 1.2-.5 1-1 .5" stroke="oklch(38% 0.06 235)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-      iconBg: "var(--soft-blue)"
+      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1.5l5.5 2v4c0 3.6-2.3 6-5.5 7-3.2-1-5.5-3.4-5.5-7v-4L8 1.5z" stroke="var(--gray)" stroke-width="1.4" stroke-linejoin="round"/><path d="M6 8l1.5 1.5L10.5 6" stroke="var(--gray)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      iconBg: "var(--bgmuted)"
     });
   }
 
@@ -1388,12 +1392,46 @@ function renderMore() {
       if (idx === 0) { toggleDarkMode(); return; }
       if (idx === 1) { state.notifOn = !state.notifOn; saveState(); render(); return; }
       if (idx === 6) { resetProgress(); return; }
-      if (items[idx] && items[idx].adminEntry) { go("admin-students"); return; }
-      if (items[idx] && items[idx].birthdaysEntry) { go("admin-birthdays"); return; }
+      if (items[idx] && items[idx].adminEntry) { go("admin-hub"); return; }
       // «Написать в поддержку», «Правила и оферта», «Политика конфиденциальности»,
       // «О преподавателе» — в дизайн-файле это заглушки без содержимого, оставляю как есть.
     });
   });
+  wireActs();
+}
+
+/* «Режим админа» — хаб admin-only функций. Раньше пункт «Режим админа» в
+   «Ещё» сразу вёл на список учеников; теперь сначала показывает список
+   разделов (задел на будущее — сюда будут добавляться новые admin-only
+   функции, не разбросанные по верхнему уровню «Ещё»). */
+function renderAdminHub() {
+  var items = [
+    {
+      label: "Выбор ученика", act: "admin-hub-students", sub: "Пройти урок глазами ученика",
+      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="5.5" r="2.8" stroke="var(--gray)" stroke-width="1.4"/><path d="M2.8 14c0-2.9 2.3-5 5.2-5s5.2 2.1 5.2 5" stroke="var(--gray)" stroke-width="1.4" stroke-linecap="round"/></svg>'
+    },
+    {
+      label: "Дни рождения", act: "admin-hub-birthdays", sub: "Ближайшие 30 дней",
+      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 14v-5.5a2 2 0 012-2h6a2 2 0 012 2V14M3 14h10M3 14a1 1 0 100 2h10a1 1 0 100-2M8 6.5V3M6 3.2c0 .8.5 1 1 .5s.5-1.2 1-1.2 1 .4 1 1.2-.5 1-1 .5" stroke="var(--gray)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    }
+  ];
+  var itemsHtml = items.map(function (item) {
+    return (
+      '<div class="more-item" data-act="' + item.act + '">' +
+        '<div class="more-item-icon" style="background:var(--bgmuted);">' + item.icon + "</div>" +
+        '<div style="flex:1;min-width:0;">' +
+          '<div class="more-item-label">' + esc(item.label) + "</div>" +
+          '<div class="lesson-sub" style="margin-top:1px;">' + esc(item.sub) + "</div>" +
+        "</div>" +
+        SVG.chevronRight +
+      "</div>"
+    );
+  }).join("");
+  app.innerHTML =
+    '<div class="top pb8">' + backBtn("back") +
+      '<div><div class="top-title lg">Режим админа</div><div class="top-sub">Видно только преподавателю</div></div>' +
+    "</div>" +
+    '<div style="padding:8px 16px 130px;display:flex;flex-direction:column;gap:10px;">' + itemsHtml + "</div>";
   wireActs();
 }
 
@@ -3045,6 +3083,8 @@ var ACTS = {
   "filter-inprogress": function () { state.coursesFilter = state.coursesFilter === "inProgress" ? null : "inProgress"; render(); },
   "filter-completed": function () { state.coursesFilter = state.coursesFilter === "completed" ? null : "completed"; render(); },
   "go-favorites": function () { go("favorites"); },
+  "admin-hub-students": function () { go("admin-students"); },
+  "admin-hub-birthdays": function () { go("admin-birthdays"); },
   "undo-unstar": undoUnstar,
   "cal-prev": function () {
     var m = state.calMonth - 1, y = state.calYear;
@@ -3115,6 +3155,7 @@ function render() {
     case "profile": renderProfile(); break;
     case "questions": renderQuestions(); break;
     case "more": renderMore(); break;
+    case "admin-hub": renderAdminHub(); break;
     case "admin-students": renderAdminStudents(); break;
     case "admin-birthdays": renderAdminBirthdays(); break;
     case "lesson-home": renderLessonHome(); break;
