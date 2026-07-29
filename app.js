@@ -29,6 +29,7 @@ var state = {
   tgId: "", chatId: null, firstName: "", lastName: "",
   notionLoadedFor: null, notionConfigured: null, notionFound: null,
   notionProfile: null, notionAssessments: null,
+  notionUnlockedLessons: [], notionProgressByLesson: {}, comingSoonLessonNum: null,
   quizIndex: 0, quizAnswers: [], quizScore: 0,
   quizDone: false, warmupsDone: false, songDone: false,
   lectureViewed: false, celebrated: false,
@@ -298,6 +299,7 @@ function backTarget() {
     case "name": return "tg";
     case "lesson-home": return "courses";
     case "favorites": return "courses";
+    case "lesson-soon": return "courses";
     case "lecture": case "warmups": case "song": case "quiz-result": return "lesson-home";
     case "feedback": return "song";
     case "quiz": return null; // отдельная логика
@@ -371,19 +373,38 @@ function renderName() {
    же флагу songDone, что и автопроверка интерактивной разметки — она
    выставляется в момент, когда ученик завершает разметку и жмёт
    «Завершить урок»). Те же 4 флага использует и степпер на lesson-home —
-   один источник правды для прогресса везде. */
-function lessonStepsDone() {
-  var s = state, n = 0;
-  if (s.lectureViewed) n++;
-  if (s.quizDone) n++;
-  if (s.warmupsDone) n++;
-  if (s.songDone) n++;
-  return n;
+   один источник правды для прогресса везде.
+
+   Урок n по умолчанию — открытый сейчас урок (LESSON.id||1): для него шаги
+   берём из локальных флагов устройства (актуальны мгновенно). Для любого
+   другого номера — из progressByLesson, который приходит из базы «Прогресс»
+   в Notion (см. loadStudentProfile/api/notion-student.js). Так работает и
+   для уроков, которых пока физически нет в приложении (данные появятся,
+   когда Николай добавит контент) — счётчики и разблокировка уже готовы. */
+function lessonStepsDone(n) {
+  var lessonId = (LESSON && LESSON.id) || 1;
+  if (n == null) n = lessonId;
+  if (n === lessonId) {
+    var s = state, c = 0;
+    if (s.lectureViewed) c++;
+    if (s.quizDone) c++;
+    if (s.warmupsDone) c++;
+    if (s.songDone) c++;
+    return c;
+  }
+  var p = state.notionProgressByLesson && state.notionProgressByLesson[n];
+  if (!p) return 0;
+  var c2 = 0;
+  if (p.lecture) c2++;
+  if (p.quiz) c2++;
+  if (p.warmups) c2++;
+  if (p.song) c2++;
+  return c2;
 }
-function lessonStatus() {
-  var n = lessonStepsDone();
-  if (n === 0) return "not-started";
-  if (n === 4) return "completed";
+function lessonStatus(n) {
+  var steps = lessonStepsDone(n);
+  if (steps === 0) return "not-started";
+  if (steps === 4) return "completed";
   return "in-progress";
 }
 /* первый непройденный шаг — для входа в урок из фильтра «В работе» сразу
@@ -397,25 +418,38 @@ function firstIncompleteStepScreen() {
   return "lesson-home";
 }
 
-/* число уроков в работе/завершённых — сейчас есть только открытый урок 1,
-   но логика уже готова к появлению следующих (все будущие уроки заперты
-   и в подсчёт не входят, пока для них нет реальных данных) */
+/* Число уроков в работе/завершённых — по ВСЕМ 30 урокам (не только открытому
+   сейчас): урок 1 — по локальным флагам, остальные — по progressByLesson из
+   Notion. Запертые уроки сюда никогда не попадают — у них 0 шагов и статус
+   not-started, который не считается ни в completed, ни в inProgress. */
 function lessonStats() {
-  var status = lessonStatus();
-  return {
-    completed: status === "completed" ? 1 : 0,
-    inProgress: status === "in-progress" ? 1 : 0
-  };
+  var completed = 0, inProgress = 0;
+  for (var n = 1; n <= TOTAL_LESSONS; n++) {
+    if (!lessonUnlocked(n)) continue;
+    var st = lessonStatus(n);
+    if (st === "completed") completed++;
+    else if (st === "in-progress") inProgress++;
+  }
+  return { completed: completed, inProgress: inProgress };
 }
 
-function roadmapCardHtml(mode) {
+function roadmapCardHtml(mode, n) {
   var s = state;
-  var act = mode === "review" ? "open-lesson-review" : mode === "continue" ? "open-lesson-continue" : "open-lesson";
+  var isOpenLesson = LESSON && n === (LESSON.id || 1);
+  var act;
+  if (isOpenLesson) {
+    act = mode === "review" ? "open-lesson-review" : mode === "continue" ? "open-lesson-continue" : "open-lesson";
+  } else {
+    act = "open-lesson-num"; // номер урока берём из data-lesson-num на карточке
+  }
+  var p = isOpenLesson
+    ? { lecture: s.lectureViewed, quiz: s.quizDone, warmups: s.warmupsDone, song: s.songDone }
+    : (state.notionProgressByLesson && state.notionProgressByLesson[n]) || {};
   var steps = [
-    { label: "Лекция «" + esc(LESSON.title) + "»", done: s.lectureViewed },
-    { label: "Тест", done: s.quizDone },
-    { label: "Распевки", done: s.warmupsDone },
-    { label: "Песня", done: s.songDone }
+    { label: isOpenLesson ? "Лекция «" + esc(LESSON.title) + "»" : "Лекция", done: !!p.lecture },
+    { label: "Тест", done: !!p.quiz },
+    { label: "Распевки", done: !!p.warmups },
+    { label: "Песня", done: !!p.song }
   ];
   var stepsHtml = steps.map(function (st) {
     return '<div class="roadmap-step">' +
@@ -423,10 +457,12 @@ function roadmapCardHtml(mode) {
       '<span>' + st.label + "</span>" +
     "</div>";
   }).join("");
+  var title = isOpenLesson ? "Урок " + n + " · " + esc(LESSON.title) : "Урок " + n;
+  var sub = steps.every(function (st) { return st.done; }) ? "Завершён" : (steps.some(function (st) { return st.done; }) ? "В процессе" : "Открыт");
   return (
-    '<div class="roadmap-card" data-act="' + act + '">' +
-      '<div class="roadmap-title">Урок 1 · ' + esc(LESSON.title) + "</div>" +
-      '<div class="roadmap-sub">' + (s.songDone ? "Завершён" : "В процессе") + "</div>" +
+    '<div class="roadmap-card" data-act="' + act + '"' + (isOpenLesson ? "" : ' data-lesson-num="' + n + '"') + '>' +
+      '<div class="roadmap-title">' + title + "</div>" +
+      '<div class="roadmap-sub">' + sub + "</div>" +
       stepsHtml +
     "</div>"
   );
@@ -449,41 +485,61 @@ function lockedRoadmapCardHtml(n) {
   );
 }
 
-/* Без фильтра — все уроки по порядку, включая запертые. С активным фильтром —
-   только незапертые уроки нужного статуса (заперты уроки 2-30 никогда не
-   попадают ни в «В работе», ни в «Завершено», у них нет реального прогресса).
-   Пустая строка означает "нечего показывать" — вызывающий код рисует
-   текст пустого состояния вместо скроллера. */
+/* Без фильтра — все 30 уроков по порядку, запертые с замком. С активным
+   фильтром — только разблокированные уроки нужного статуса (запертые никогда
+   не попадают ни в «В работе», ни в «Завершено»). Пустая строка означает
+   "нечего показывать" — вызывающий код рисует текст пустого состояния. */
 function roadmapScrollHtml(filter) {
   if (!filter) {
-    var html = roadmapCardHtml(null);
-    for (var i = 2; i <= TOTAL_LESSONS; i++) html += lockedRoadmapCardHtml(i);
+    var html = "";
+    for (var i = 1; i <= TOTAL_LESSONS; i++) {
+      html += lessonUnlocked(i) ? roadmapCardHtml(null, i) : lockedRoadmapCardHtml(i);
+    }
     return html;
   }
-  var status = lessonStatus();
-  if (filter === "inProgress" && status === "in-progress") return roadmapCardHtml("continue");
-  if (filter === "completed" && status === "completed") return roadmapCardHtml("review");
-  return "";
+  var out = "";
+  for (var n = 1; n <= TOTAL_LESSONS; n++) {
+    if (!lessonUnlocked(n)) continue;
+    var status = lessonStatus(n);
+    var isOpenLesson = LESSON && n === (LESSON.id || 1);
+    if (filter === "inProgress" && status === "in-progress") {
+      out += roadmapCardHtml(isOpenLesson ? "continue" : null, n);
+    } else if (filter === "completed" && status === "completed") {
+      out += roadmapCardHtml(isOpenLesson ? "review" : null, n);
+    }
+  }
+  return out;
 }
 
 function lessonsGridHtml() {
-  var tile1 =
-    '<div class="lesson-tile" data-act="open-lesson">' +
-      '<div class="lesson-dot" style="background:oklch(56% 0.09 235);">1</div>' +
-      '<div class="lesson-tile-name">' + esc(LESSON.title) + "</div>" +
-    "</div>";
-  var rest = "";
-  for (var i = 2; i <= TOTAL_LESSONS; i++) {
-    rest +=
-      '<div class="lesson-tile locked">' +
-        '<div class="lesson-dot" style="background:var(--line);">' + SVG.lock + "</div>" +
-        '<div class="lesson-tile-name">Урок ' + i + "</div>" +
-      "</div>";
+  var tiles = "";
+  for (var n = 1; n <= TOTAL_LESSONS; n++) {
+    var isOpenLesson = LESSON && n === (LESSON.id || 1);
+    if (isOpenLesson) {
+      tiles +=
+        '<div class="lesson-tile" data-act="open-lesson">' +
+          '<div class="lesson-dot" style="background:oklch(56% 0.09 235);">' + n + "</div>" +
+          '<div class="lesson-tile-name">' + esc(LESSON.title) + "</div>" +
+        "</div>";
+    } else if (lessonUnlocked(n)) {
+      tiles +=
+        '<div class="lesson-tile" data-act="open-lesson-num" data-lesson-num="' + n + '">' +
+          '<div class="lesson-dot" style="background:oklch(56% 0.09 235);">' + n + "</div>" +
+          '<div class="lesson-tile-name">Урок ' + n + "</div>" +
+        "</div>";
+    } else {
+      tiles +=
+        '<div class="lesson-tile locked">' +
+          '<div class="lesson-dot" style="background:var(--line);">' + SVG.lock + "</div>" +
+          '<div class="lesson-tile-name">Урок ' + n + "</div>" +
+        "</div>";
+    }
   }
-  return '<div class="courses-grid">' + tile1 + rest + "</div>";
+  return '<div class="courses-grid">' + tiles + "</div>";
 }
 
 function renderCourses() {
+  loadStudentProfile(); // подтягивает unlockedLessons/progressByLesson для разблокировки
   var stats = lessonStats();
   var filter = state.coursesFilter; // "inProgress" | "completed" | null — переключатель фильтра дорожной карты
   var favCount = Object.keys(state.favorites || {}).length;
@@ -665,10 +721,49 @@ function loadStudentProfile() {
       if (data && data.found) {
         state.notionProfile = data.profile;
         state.notionAssessments = data.assessments;
+        state.notionUnlockedLessons = data.unlockedLessons || [];
+        state.notionProgressByLesson = data.progressByLesson || {};
       }
-      if (state.screen === "profile") render();
+      if (state.screen === "profile" || state.screen === "courses") render();
     })
     .catch(function () {});
+}
+
+/* Отправка прогресса шага в Notion (база «Прогресс») — тихо, без ожидания
+   ответа: если не настроено или сеть подвела, просто ничего не запишется,
+   на локальном прохождении урока это никак не сказывается. */
+function sendProgressToNotion(lessonNum, step) {
+  if (!state.chatId) return;
+  fetch("/api/notion-progress", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ chatId: state.chatId, lessonNum: lessonNum, step: step })
+  }).catch(function () {});
+}
+
+/* Пройден ли урок n целиком (все 4 шага) — общий источник со счётчиками
+   выше (lessonStepsDone), чтобы не разъезжались два разных подсчёта. */
+function lessonFullyDone(n) {
+  return lessonStepsDone(n) === 4;
+}
+
+/* Разблокировка урока n: первый урок всегда открыт; следующий открывается,
+   когда предыдущий пройден целиком; плюс персональный override из Notion
+   («Доп. открытые уроки» у ученика) открывает урок вне очереди. */
+function lessonUnlocked(n) {
+  if (n === 1) return true;
+  if (state.notionUnlockedLessons && state.notionUnlockedLessons.indexOf(n) !== -1) return true;
+  return lessonFullyDone(n - 1);
+}
+
+/* Открыть урок по номеру: для урока 1 (единственного с реальным контентом
+   сейчас) — обычный экран урока; для любого другого разблокированного, но
+   пока пустого урока — заглушка «Материалы скоро появятся», чтобы не падать
+   на отсутствующих данных. */
+function openLessonByNumber(n) {
+  if (n === (LESSON && LESSON.id || 1)) { go("lesson-home"); return; }
+  state.comingSoonLessonNum = n;
+  go("lesson-soon");
 }
 
 function renderProfile() {
@@ -1069,7 +1164,7 @@ function renderMore() {
 
 function renderComingSoon(title, icon) {
   app.innerHTML =
-    '<div class="result-screen" style="padding-bottom:110px;">' +
+    '<div class="result-screen" style="padding-bottom:130px;">' +
       '<div class="result-badge">' + icon + "</div>" +
       '<div class="result-title">' + esc(title) + "</div>" +
       '<div class="result-sub">Скоро</div>' +
@@ -1077,11 +1172,17 @@ function renderComingSoon(title, icon) {
   wireActs();
 }
 
+/* Урок разблокирован (по очереди или персонально из Notion), но контент
+   для него ещё не добавлен в приложение — просто ждём. */
+function renderLessonSoon() {
+  renderComingSoon("Урок " + (state.comingSoonLessonNum || ""), SVG.dockLessons("var(--gray)"));
+}
+
 /* Главные 4 вкладки дока. */
 var MAIN_TAB_SCREENS = ["courses", "profile", "questions", "more"];
 /* Подэкраны урока и избранное относятся к вкладке «Уроки» — она подсвечивается
    и на них, даже если открыт конкретный шаг урока, а не список уроков. */
-var LESSON_SUB_SCREENS = ["lesson-home", "lecture", "quiz", "quiz-result", "warmups", "song", "feedback", "favorites"];
+var LESSON_SUB_SCREENS = ["lesson-home", "lecture", "quiz", "quiz-result", "warmups", "song", "feedback", "favorites", "lesson-soon"];
 /* Дока нет ТОЛЬКО на экранах входа — на всех остальных она закреплена всегда. */
 var NO_DOCK_SCREENS = ["tg", "name"];
 
@@ -1166,7 +1267,7 @@ function stepHeader(title, stepNum, pct) {
 }
 
 function renderLecture() {
-  if (!state.lectureViewed) { state.lectureViewed = true; saveState(); }
+  if (!state.lectureViewed) { state.lectureViewed = true; saveState(); sendProgressToNotion((LESSON.id || 1), "lecture"); }
   var html = stepHeader("Лекция «" + esc(LESSON.title) + "»", 1, 25);
   html += '<div class="lecture-body">';
   var num = 0;
@@ -1254,6 +1355,7 @@ function renderQuiz() {
     state.quizDone = true;
     state.quizScore = score;
     saveState();
+    sendProgressToNotion((LESSON.id || 1), "quiz");
     submitQuizResult(score, questions.length, wrongDetails);
     go("quiz-result");
   });
@@ -2619,8 +2721,8 @@ var ACTS = {
   "go-warmups": function () { go("warmups"); },
   "go-warmups-free": function () { go("warmups"); },
   "go-song": function () { go("song"); },
-  "finish-warmups": function () { state.warmupsDone = true; saveState(); go("song"); },
-  "finish-lesson": function () { state.songDone = true; saveState(); submitSongMarks(); go("feedback"); },
+  "finish-warmups": function () { state.warmupsDone = true; saveState(); sendProgressToNotion((LESSON.id || 1), "warmups"); go("song"); },
+  "finish-lesson": function () { state.songDone = true; saveState(); sendProgressToNotion((LESSON.id || 1), "song"); submitSongMarks(); go("feedback"); },
   "reset-progress": resetProgress,
   "go-profile": function () { go("profile"); },
   "go-courses": function () { go("courses"); },
@@ -2649,7 +2751,13 @@ var ACTS = {
 function wireActs() {
   Array.prototype.forEach.call(app.querySelectorAll("[data-act]"), function (el) {
     el.addEventListener("click", function () {
-      var fn = ACTS[el.getAttribute("data-act")];
+      var act = el.getAttribute("data-act");
+      // карточки/плитки разблокированных уроков без контента — номер в data-lesson-num
+      if (act === "open-lesson-num") {
+        openLessonByNumber(parseInt(el.getAttribute("data-lesson-num"), 10));
+        return;
+      }
+      var fn = ACTS[act];
       if (fn) fn();
     });
   });
@@ -2682,6 +2790,7 @@ function render() {
     case "questions": renderQuestions(); break;
     case "more": renderMore(); break;
     case "lesson-home": renderLessonHome(); break;
+    case "lesson-soon": renderLessonSoon(); break;
     case "lecture": renderLecture(); break;
     case "quiz": renderQuiz(); break;
     case "quiz-result": renderQuizResult(); break;
