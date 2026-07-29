@@ -540,6 +540,10 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 .chip .mark-circle.short { font-size: 10px; }
 .chip.sel-V { background: var(--soft-terra); box-shadow: var(--inset-sm); }
 .chip.sel-v { background: var(--soft-blue); box-shadow: var(--inset-sm); }
+/* в тёмной теме светлые пастельные soft-terra/soft-blue почти не видны на выборе —
+   насыщенный тёмный терракотовый/синий + светлый текст, в светлой теме не трогаем */
+html.dark .chip.sel-V, body.dark .chip.sel-V { background: var(--terra); color: var(--white-text); }
+html.dark .chip.sel-v, body.dark .chip.sel-v { background: var(--blue); color: var(--white-text); }
 
 .photo-upload {
   display: flex; align-items: center; gap: 10px; background: var(--bg);

@@ -256,8 +256,9 @@ var SVG = {
   chevron: '<svg width="8" height="14" viewBox="0 0 8 14" fill="none"><path d="M1 1l6 6-6 6" stroke="var(--disabled)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   stepCheck: '<svg width="13" height="10" viewBox="0 0 13 10" fill="none"><path d="M1 5l4 4 7-8" stroke="var(--white-text)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   doc: '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="2" y="1" width="10" height="12" rx="1.5" stroke="var(--white-text)" stroke-width="1.4"/><path d="M4.5 5h5M4.5 7.5h5M4.5 10h3" stroke="var(--white-text)" stroke-width="1.2" stroke-linecap="round"/></svg>',
-  // на .celebrate-badge/.result-badge (не реагируют на тему, см. styles.css) — оставлен фиксированным
-  resultCheck: '<svg width="26" height="20" viewBox="0 0 26 20" fill="none"><path d="M2 10l8 8L24 2" stroke="oklch(28% 0.015 70)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  // «Тест пройден»: в дизайне цвет ровно var(--blue) — работает и на .result-badge
+  // (фон var(--bg), следует теме), и на .celebrate-badge (фон var(--soft-terra), фикс)
+  resultCheck: '<svg width="26" height="20" viewBox="0 0 26 20" fill="none"><path d="M2 10l8 8L24 2" stroke="var(--blue)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   seekBack: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 4v6h6" stroke="oklch(56% 0.09 235)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 15a8 8 0 1 0 2-9.5L4 10" stroke="oklch(56% 0.09 235)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   seekFwd: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M20 4v6h-6" stroke="oklch(56% 0.09 235)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M19.5 15a8 8 0 1 1-2-9.5L20 10" stroke="oklch(56% 0.09 235)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   play: '<svg width="12" height="14" viewBox="0 0 12 14" fill="none"><path d="M1 1l10 6-10 6V1z" fill="var(--white-text)"/></svg>',
@@ -928,8 +929,8 @@ function renderQuestions() {
             '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">' + slotsHtml + "</div>" +
           "</div>" +
         "</div>" +
-        '<div style="padding:24px 0 16px;margin-top:auto;">' +
-          '<button class="cta" id="confirm-booking-btn"' + (state.selectedTime == null ? " disabled" : "") + ' style="' + (state.selectedTime == null ? "background:oklch(85% 0.01 70);box-shadow:none;" : "") + '">' +
+        '<div style="padding:24px 0 6px;margin-top:auto;">' +
+          '<button class="cta" id="confirm-booking-btn"' + (state.selectedTime == null ? " disabled" : "") + '>' +
             (state.selectedTime == null ? "Выберите время" : "Подтвердить на " + state.selectedTime) +
           "</button>" +
         "</div>" +
@@ -984,21 +985,32 @@ function renderQuestions() {
 
 function renderMore() {
   var s = state;
+  // «Тёмная тема»: бейдж/иконка нарочно инвертированы относительно текущей темы —
+  // тёмный бейдж на светлом фоне, светлый бейдж на тёмном (наоборот, чем bgmuted/ink
+  // обычно себя ведут), чтобы значок луны сразу читался как переключатель темы.
+  var darkRowIconBg = s.darkMode ? "oklch(90% 0.012 75)" : "oklch(34% 0.012 235)";
+  var darkRowIconColor = s.darkMode ? "oklch(28% 0.015 70)" : "oklch(92% 0.008 235)";
+  // «Уведомления»/«Написать в поддержку»: в тёмной теме — свои тёмные насыщенные
+  // бейджи вместо светлых пастельных, в светлой теме цвета как в дизайне, не трогаем.
+  var notifIconBg = s.darkMode ? "oklch(32% 0.06 235)" : "var(--soft-blue)";
+  var notifIconColor = s.darkMode ? "oklch(85% 0.04 235)" : "oklch(38% 0.06 235)";
+  var supportIconBg = s.darkMode ? "oklch(32% 0.08 38)" : "var(--soft-terra)";
+  var supportIconColor = s.darkMode ? "oklch(85% 0.06 38)" : "oklch(38% 0.1 38)";
   var items = [
     {
       label: "Тёмная тема", isToggle: true, on: s.darkMode,
-      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M13.5 9.5A6 6 0 016.5 2.5a6 6 0 108.5 6.9 6 6 0 01-1.5.1z" stroke="var(--gray)" stroke-width="1.4" stroke-linejoin="round"/></svg>',
-      iconBg: "var(--bgmuted)"
+      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M13.5 9.5A6 6 0 016.5 2.5a6 6 0 108.5 6.9 6 6 0 01-1.5.1z" stroke="' + darkRowIconColor + '" stroke-width="1.4" stroke-linejoin="round"/></svg>',
+      iconBg: darkRowIconBg
     },
     {
       label: "Уведомления", isToggle: true, on: s.notifOn,
-      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1a4 4 0 00-4 4v2.5L2.5 10h11L12 7.5V5a4 4 0 00-4-4z" stroke="oklch(38% 0.06 235)" stroke-width="1.4" stroke-linejoin="round"/><path d="M6.2 12.5a1.9 1.9 0 003.6 0" stroke="oklch(38% 0.06 235)" stroke-width="1.4" stroke-linecap="round"/></svg>',
-      iconBg: "var(--soft-blue)"
+      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1a4 4 0 00-4 4v2.5L2.5 10h11L12 7.5V5a4 4 0 00-4-4z" stroke="' + notifIconColor + '" stroke-width="1.4" stroke-linejoin="round"/><path d="M6.2 12.5a1.9 1.9 0 003.6 0" stroke="' + notifIconColor + '" stroke-width="1.4" stroke-linecap="round"/></svg>',
+      iconBg: notifIconBg
     },
     {
       label: "Написать в поддержку", isLink: true,
-      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 3h12v8H5l-3 3V3z" stroke="oklch(38% 0.1 38)" stroke-width="1.4" stroke-linejoin="round"/></svg>',
-      iconBg: "var(--soft-terra)"
+      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 3h12v8H5l-3 3V3z" stroke="' + supportIconColor + '" stroke-width="1.4" stroke-linejoin="round"/></svg>',
+      iconBg: supportIconBg
     },
     {
       label: "Правила и оферта", isLink: true,
