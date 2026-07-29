@@ -1095,7 +1095,10 @@ function renderDock() {
   if (NO_DOCK_SCREENS.indexOf(state.screen) !== -1) return;
   var stats = lessonStats();
   var activeTab = activeDockTab();
-  var badge = stats.completed ? '<span class="dock-badge">' + stats.completed + "</span>" : "";
+  // По просьбе Николая: бейдж на доке показывает не «пройдено», а сколько
+  // уроков начаты, но не закрыты до конца (1-3 из 4 шагов) — сколько ещё
+  // доделать ученику, а не сколько уже сдано.
+  var badge = stats.inProgress ? '<span class="dock-badge">' + stats.inProgress + "</span>" : "";
   var items = [
     { screen: "profile", act: "go-profile", icon: SVG.dockPerson, label: "Кабинет" },
     { screen: "courses", act: "go-courses", icon: SVG.dockLessons, label: "Уроки", badge: badge },
