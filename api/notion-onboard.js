@@ -56,6 +56,8 @@ export default async function handler(req) {
   var tgId = (body.tgId || "").toString().trim();
   var firstName = (body.firstName || "").toString().trim();
   var lastName = (body.lastName || "").toString().trim();
+  // "YYYY-MM-DD" из <input type="date">; необязательное поле.
+  var birthDate = (body.birthDate || "").toString().trim();
   if (!chatId || !firstName || !lastName) {
     return json({ ok: false, error: "Нужны chatId, firstName, lastName" }, 400);
   }
@@ -75,14 +77,21 @@ export default async function handler(req) {
     var fullName = (lastName + " " + firstName).trim();
     var title = tgId ? fullName + " (" + tgId + ")" : fullName;
 
+    var studentProps = {
+      "Имя": { title: [{ text: { content: title } }] },
+      "Telegram chat_id": { rich_text: [{ text: { content: String(chatId) } }] }
+      // Возраст/Статус/Тип занятий/Диапазон/Тип голоса/цели/задачи/особенности —
+      // намеренно не заполняем, дозаполняет Николай вручную.
+    };
+    // Дату рождения ученик вводит сам на этом же экране — если указал,
+    // «Возраст (авто)» в Notion (formula) посчитается сам, без правки Николаем.
+    if (birthDate) {
+      studentProps["Дата рождения"] = { date: { start: birthDate } };
+    }
+
     var createStudentRes = await notionRequest(token, "POST", "pages", {
       parent: { type: "data_source_id", data_source_id: STUDENTS_DATA_SOURCE_ID },
-      properties: {
-        "Имя": { title: [{ text: { content: title } }] },
-        "Telegram chat_id": { rich_text: [{ text: { content: String(chatId) } }] }
-        // Возраст/Статус/Тип занятий/Диапазон/Тип голоса/цели/задачи/особенности —
-        // намеренно не заполняем, дозаполняет Николай вручную.
-      }
+      properties: studentProps
     });
     if (!createStudentRes.ok) return json({ ok: false, configured: true, error: "Notion API (создание ученика): " + JSON.stringify(createStudentRes.data) }, 502);
     var studentId = createStudentRes.data.id;
