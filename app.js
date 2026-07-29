@@ -364,8 +364,43 @@ function renderName() {
   }
   fn.addEventListener("input", upd);
   ln.addEventListener("input", upd);
-  btn.addEventListener("click", function () { saveState(); go("courses"); });
+  btn.addEventListener("click", function () {
+    saveState();
+    btn.disabled = true;
+    var prevLabel = btn.textContent;
+    btn.textContent = "Создаём профиль…";
+    // Автосоздание карточки ученика в Notion (первый вход) — не должно
+    // блокировать студента, если Notion не настроен/недоступен: в любом
+    // случае идём дальше в приложение.
+    createStudentInNotion()
+      .catch(function () {})
+      .then(function () {
+        btn.textContent = prevLabel;
+        go("courses");
+      });
+  });
   wireActs();
+}
+
+/* Разовое автосоздание строки ученика (+ стартового среза) в Notion —
+   вызывается с экрана «Как вас зовут?» сразу после ввода имени/фамилии.
+   Идемпотентно на сервере (см. api/notion-onboard.js), поэтому безопасно
+   даже если вызовется повторно. */
+function createStudentInNotion() {
+  if (!state.chatId) return Promise.resolve();
+  return fetch("/api/notion-onboard", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      chatId: state.chatId, tgId: state.tgId,
+      firstName: state.firstName, lastName: state.lastName
+    })
+  }).then(function (r) { return r.json().catch(function () { return null; }); })
+    .then(function () {
+      // Сбрасываем кэш loadStudentProfile(), чтобы Кабинет/Уроки сразу
+      // подтянули только что созданную карточку, а не старый found:false.
+      state.notionLoadedFor = null;
+    });
 }
 
 /* Статус урока = число пройденных из 4 шагов (Лекция/Тест/Распевки/Песня).
@@ -855,7 +890,7 @@ function renderProfile() {
           (state.notionConfigured === false
             ? "Показан демо-профиль. Чтобы подключить реальные данные из Notion, доверши разовую настройку (NOTION_TOKEN в Vercel) — я всё остальное уже сделал."
             : (state.notionFound === false
-              ? "Показан демо-профиль. Для этого ученика (chat_id " + esc(String(state.chatId || "")) + ") пока нет строки в базе «Ученики» в Notion."
+              ? "Показан демо-профиль. Карточка ученика ещё не создалась в Notion — попробуйте зайти в приложение ещё раз."
               : "Загружаю профиль…")) +
         "</div>") +
     "</div>";
