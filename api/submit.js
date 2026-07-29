@@ -89,9 +89,11 @@ export default async function handler(req) {
   var tgId = (form.get("tgId") || "").toString();
   var studentChatId = (form.get("chatId") || "").toString();
   var lessonTitle = (form.get("lessonTitle") || "").toString();
+  var isAdminTest = !!form.get("adminTest");
   var who = (lastName + " " + firstName).trim() || "Без имени";
   var tagKey = studentHashtag(lastName, firstName);
-  var head = "#" + tagKey + "\n" + who + " (" + (tgId || "TG ID не указан") + ")\nУрок: " + lessonTitle;
+  var head = (isAdminTest ? "🛠 ТЕСТ АДМИНА (не настоящий ученик)\n" : "") +
+    "#" + tagKey + "\n" + who + " (" + (tgId || "TG ID не указан") + ")\nУрок: " + lessonTitle;
 
   // Запоминаем ученика (для быстрых ответов из бота), не блокируем ответ ученику из-за этого.
   await rememberStudent(tagKey, studentChatId, firstName, lastName, tgId).catch(function () {});
