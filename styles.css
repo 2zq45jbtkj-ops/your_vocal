@@ -18,13 +18,49 @@
   --bgmuted: oklch(90% 0.012 75);
   --star-fav: oklch(84% 0.15 92); /* жёлтый — цвет звезды «избранное» */
 
-  --sh-d: oklch(70% 0.02 80 / 0.32);
-  --sh-l: oklch(100% 0 0 / 0.85);
-  --raised-sm: 4px 4px 8px oklch(70% 0.02 80 / 0.3), -4px -4px 8px oklch(100% 0 0 / 0.75);
+  --tx3: oklch(35% 0.015 70);
+  --dock-bg: oklch(91% 0.01 75);
+
+  /* базовые фрагменты теней без альфы — каждый box-shadow ниже подставляет
+     свою альфу через var(--sh-base)/var(--sh-hi-base), поэтому смена темы
+     на .dark пересчитывает вообще все тени в файле сразу, включая точечные
+     inset-полоски прогресс-баров, а не только --raised/--inset. */
+  --sh-base: 70% 0.02 80;
+  --sh-hi-base: 100% 0 0;
+  --sh-d: oklch(var(--sh-base) / 0.32);
+  --sh-l: oklch(var(--sh-hi-base) / 0.85);
+  --raised-sm: 4px 4px 8px oklch(var(--sh-base) / 0.3), -4px -4px 8px oklch(var(--sh-hi-base) / 0.75);
   --raised: 6px 6px 12px var(--sh-d), -6px -6px 12px var(--sh-l);
-  --raised-lg: 8px 8px 16px oklch(70% 0.02 80 / 0.4), -8px -8px 16px oklch(100% 0 0 / 0.85);
-  --inset: inset 4px 4px 8px oklch(70% 0.02 80 / 0.35), inset -4px -4px 8px oklch(100% 0 0 / 0.8);
-  --inset-sm: inset 3px 3px 6px oklch(70% 0.02 80 / 0.28), inset -3px -3px 6px oklch(100% 0 0 / 0.7);
+  --raised-lg: 8px 8px 16px oklch(var(--sh-base) / 0.4), -8px -8px 16px oklch(var(--sh-hi-base) / 0.85);
+  --inset: inset 4px 4px 8px oklch(var(--sh-base) / 0.35), inset -4px -4px 8px oklch(var(--sh-hi-base) / 0.8);
+  --inset-sm: inset 3px 3px 6px oklch(var(--sh-base) / 0.28), inset -3px -3px 6px oklch(var(--sh-hi-base) / 0.7);
+}
+
+/* ---------- тёмная тема ----------
+   Токены bg/tx1(ink)/tx2(gray)/tx2a(gray-mute)/tx3/bgmuted/shd/shl — ровно
+   THEME_DARK из дизайн-файла (getThemeVars). Акцентные цвета (terra/blue/
+   star-fav/red) дизайн намеренно не переопределяет для тёмной темы — не
+   трогаем их. line/disabled/locked дизайн не описывает отдельно; locked
+   совпадает с tx4 из дизайна (65%→50%) — взял его же; line/disabled/dock-bg —
+   тот же сдвиг «на сколько светлее/темнее фона», что и в светлой теме.
+   --sh-base/--sh-hi-base каскадируются в --sh-d/--sh-l и во все составные
+   тени (--raised*/--inset*) автоматически, отдельно их не переопределяю. */
+html.dark, body.dark {
+  --bg: oklch(28% 0.012 235);
+  --ink: oklch(92% 0.008 235);
+  --gray: oklch(66% 0.01 235);
+  --gray-mute: oklch(66% 0.01 235 / 0.8);
+  --tx3: oklch(82% 0.008 235);
+  --line: oklch(40% 0.012 235);
+  --disabled: oklch(45% 0.01 235);
+  --locked: oklch(50% 0.01 235);
+  --bgmuted: oklch(34% 0.012 235);
+  --dock-bg: oklch(32% 0.012 235);
+
+  --sh-base: 12% 0.01 235;
+  --sh-hi-base: 40% 0.012 235;
+  --sh-d: oklch(var(--sh-base) / 0.55);
+  --sh-l: oklch(var(--sh-hi-base) / 0.5);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -152,7 +188,7 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 .dock {
   position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
   width: calc(100% - 36px); max-width: 394px; display: flex; gap: 8px;
-  background: oklch(91% 0.01 75); border-radius: 26px;
+  background: var(--dock-bg); border-radius: 26px;
   box-shadow: var(--raised-lg);
   padding: 8px;
   z-index: 500;
@@ -179,7 +215,7 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
   width: 36px; height: 36px; border-radius: 50%; color: var(--white-text);
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
   font-size: 14px; font-weight: 700; font-family: 'Manrope', sans-serif;
-  box-shadow: 3px 3px 6px oklch(70% 0.02 80 / 0.3);
+  box-shadow: 3px 3px 6px oklch(var(--sh-base) / 0.3);
 }
 .lesson-body { flex: 1; }
 .lesson-name { font-size: 14.5px; font-weight: 700; color: var(--ink); }
@@ -198,13 +234,13 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 /* прогресс шага урока */
 .step-progress-wrap { padding: 0 20px 12px; }
 .step-progress-wrap.tight { padding-bottom: 4px; }
-.step-progress { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; box-shadow: inset 1.5px 1.5px 3px oklch(70% 0.02 80 / 0.3); }
+.step-progress { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; box-shadow: inset 1.5px 1.5px 3px oklch(var(--sh-base) / 0.3); }
 .step-progress > div { height: 100%; background: var(--blue); border-radius: 3px; }
 
 /* ---------- прогресс урока ---------- */
 .lesson-progress-wrap { padding: 0 20px 16px; }
 .lesson-progress-label { font-size: 12px; color: var(--gray); margin-bottom: 6px; font-weight: 600; }
-.lesson-progress-bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; box-shadow: inset 1.5px 1.5px 3px oklch(70% 0.02 80 / 0.3); }
+.lesson-progress-bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; box-shadow: inset 1.5px 1.5px 3px oklch(var(--sh-base) / 0.3); }
 .lesson-progress-bar > div { height: 100%; background: var(--terra); border-radius: 3px; transition: width .3s ease; }
 
 /* ---------- степпер урока ---------- */
@@ -215,7 +251,7 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 .step-dot {
   width: 30px; height: 30px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-  box-shadow: 2px 2px 5px oklch(70% 0.02 80 / 0.3);
+  box-shadow: 2px 2px 5px oklch(var(--sh-base) / 0.3);
 }
 .step-line { width: 2px; flex: 1; background: var(--line); margin: 2px 0; }
 .step-body { padding-bottom: 18px; flex: 1; }
@@ -263,7 +299,7 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 }
 .quiz-ring-big-inner span { font: 800 30px 'Manrope', sans-serif; color: var(--ink); }
 .quiz-counter { font-size: 11px; color: var(--gray); font-weight: 600; white-space: nowrap; }
-.quiz-progress { height: 5px; background: var(--line); border-radius: 3px; overflow: hidden; margin-bottom: 16px; box-shadow: inset 1px 1px 2px oklch(70% 0.02 80 / 0.3); }
+.quiz-progress { height: 5px; background: var(--line); border-radius: 3px; overflow: hidden; margin-bottom: 16px; box-shadow: inset 1px 1px 2px oklch(var(--sh-base) / 0.3); }
 .quiz-progress > div { height: 100%; background: var(--terra); border-radius: 3px; }
 .quiz-card { background: var(--bg); border: none; border-radius: 20px; padding: 18px; box-shadow: var(--raised-lg); }
 .quiz-q { font-size: 14.5px; font-weight: 700; color: var(--ink); margin-bottom: 14px; line-height: 1.4; font-family: 'Manrope', sans-serif; }
@@ -308,7 +344,7 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 }
 .play-btn {
   width: 38px; height: 38px; border-radius: 50%; border: none; background: var(--blue);
-  box-shadow: 4px 4px 8px oklch(70% 0.02 80 / 0.35);
+  box-shadow: 4px 4px 8px oklch(var(--sh-base) / 0.35);
   display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
 }
 .play-btn.playing { background: var(--terra); }
@@ -394,16 +430,16 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 .tempo-slider, .pitch-slider {
   -webkit-appearance: none; appearance: none; flex: 1; height: 5px;
   border-radius: 3px; background: var(--line); outline: none; cursor: pointer;
-  box-shadow: inset 1px 1px 2px oklch(70% 0.02 80 / 0.3);
+  box-shadow: inset 1px 1px 2px oklch(var(--sh-base) / 0.3);
 }
 .tempo-slider::-webkit-slider-thumb, .pitch-slider::-webkit-slider-thumb {
   -webkit-appearance: none; appearance: none; width: 18px; height: 18px;
   border-radius: 50%; background: var(--blue); cursor: pointer;
-  border: 2px solid var(--bg); box-shadow: 2px 2px 5px oklch(70% 0.02 80 / 0.4);
+  border: 2px solid var(--bg); box-shadow: 2px 2px 5px oklch(var(--sh-base) / 0.4);
 }
 .tempo-slider::-moz-range-thumb, .pitch-slider::-moz-range-thumb {
   width: 18px; height: 18px; border-radius: 50%; background: var(--blue);
-  cursor: pointer; border: 2px solid var(--bg); box-shadow: 2px 2px 5px oklch(70% 0.02 80 / 0.4);
+  cursor: pointer; border: 2px solid var(--bg); box-shadow: 2px 2px 5px oklch(var(--sh-base) / 0.4);
 }
 .pitch-slider::-webkit-slider-thumb { background: var(--terra); }
 .pitch-slider::-moz-range-thumb { background: var(--terra); }
@@ -465,7 +501,7 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 .song-player-row { margin-bottom: 8px; }
 .song-seek {
   display: block; width: 100%; margin-bottom: 14px; height: 6px;
-  box-shadow: inset 1px 1px 2px oklch(70% 0.02 80 / 0.3);
+  box-shadow: inset 1px 1px 2px oklch(var(--sh-base) / 0.3);
 }
 .song-seek::-webkit-slider-thumb { width: 22px; height: 22px; }
 .song-seek::-moz-range-thumb { width: 22px; height: 22px; }
@@ -565,7 +601,7 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 .profile-avatar {
   width: 56px; height: 56px; border-radius: 50%; background: var(--blue); color: var(--white-text);
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-  font: 800 18px 'Manrope', sans-serif; box-shadow: 5px 5px 10px oklch(70% 0.02 80/0.32);
+  font: 800 18px 'Manrope', sans-serif; box-shadow: 5px 5px 10px oklch(var(--sh-base) / 0.32);
 }
 .profile-name { font: 800 19px 'Manrope', sans-serif; color: var(--ink); }
 .profile-status { font-size: 12.5px; color: var(--gray); margin-top: 2px; }
@@ -608,7 +644,7 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
   background: var(--soft-terra); color: var(--ink-terra); font: 600 11.5px 'Inter', sans-serif;
   padding: 5px 11px; border-radius: 12px;
 }
-.assessment-line { font-size: 12px; color: oklch(35% 0.015 70); margin-bottom: 4px; }
+.assessment-line { font-size: 12px; color: var(--tx3); margin-bottom: 4px; }
 
 /* ---------- запись на занятие ---------- */
 .cal-nav-btn {
@@ -630,7 +666,7 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 }
 .fav-play-btn {
   width: 38px; height: 38px; border-radius: 50%; border: none; background: var(--blue);
-  box-shadow: 3px 3px 6px oklch(70% 0.02 80/0.32); display: flex; align-items: center; justify-content: center;
+  box-shadow: 3px 3px 6px oklch(var(--sh-base) / 0.32); display: flex; align-items: center; justify-content: center;
   cursor: pointer; flex-shrink: 0;
 }
 .fav-play-btn.playing { background: var(--terra); }

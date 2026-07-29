@@ -72,9 +72,20 @@ function saveState() {
   } catch (e) {}
 }
 
-/* «Тёмная тема» — отдельный ключ localStorage, как в дизайн-файле (vocalAppDarkMode) */
+/* «Тёмная тема» — отдельный ключ localStorage, как в дизайн-файле (vocalAppDarkMode).
+   Сама тема — класс .dark на <html>, все цвета/тени переопределены через
+   CSS-переменные в styles.css (см. блок html.dark в начале файла). */
 function loadDarkMode() {
   try { state.darkMode = localStorage.getItem("vocalAppDarkMode") === "1"; } catch (e) {}
+}
+function applyDarkMode() {
+  document.documentElement.classList.toggle("dark", !!state.darkMode);
+  if (tg) {
+    try {
+      tg.setHeaderColor(state.darkMode ? "#232A2E" : "#F1EEE8");
+      tg.setBackgroundColor(state.darkMode ? "#232A2E" : "#F1EEE8");
+    } catch (e) {}
+  }
 }
 function toggleDarkMode() {
   state.darkMode = !state.darkMode;
@@ -241,17 +252,19 @@ function openTeacherChat() {
 var SVG = {
   back: '<svg width="11" height="18" viewBox="0 0 11 18" fill="none"><path d="M9 1L2 9l7 8" stroke="oklch(56% 0.09 235)" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   telegram: '<svg width="52" height="52" viewBox="0 0 240 240" xmlns="http://www.w3.org/2000/svg"><linearGradient id="tgg" x1="53.72" y1="49" x2="191" y2="186" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#37aee2"/><stop offset="1" stop-color="#1e96c8"/></linearGradient><circle cx="120" cy="120" r="120" fill="url(#tgg)"/><path fill="#c8daea" d="M98 175c-3.888 0-3.227-1.468-4.568-5.17L82 132.207 152.988 87"/><path fill="#a9c9dd" d="M98 175c3 0 4.325-1.372 6-3l16-15.558-19.958-12.035"/><path fill="#fff" d="M100.04 154.41l48.36 35.729c5.519 3.045 9.501 1.468 10.876-5.123l19.685-92.788c1.977-8.085-3.077-11.746-8.359-9.32l-115.59 44.571c-7.891 3.165-7.843 7.567-1.438 9.523l29.663 9.259 68.673-43.325c3.242-1.966 6.218-.909 3.776 1.258"/></svg>',
-  lock: '<svg width="14" height="16" viewBox="0 0 14 16" fill="none"><rect x="1" y="7" width="12" height="8" rx="2" stroke="oklch(65% 0.01 70)" stroke-width="1.5"/><path d="M4 7V4.5a3 3 0 016 0V7" stroke="oklch(65% 0.01 70)" stroke-width="1.5"/></svg>',
-  chevron: '<svg width="8" height="14" viewBox="0 0 8 14" fill="none"><path d="M1 1l6 6-6 6" stroke="oklch(75% 0.01 70)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  stepCheck: '<svg width="13" height="10" viewBox="0 0 13 10" fill="none"><path d="M1 5l4 4 7-8" stroke="oklch(97% 0.01 80)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  doc: '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="2" y="1" width="10" height="12" rx="1.5" stroke="oklch(95% 0.014 80)" stroke-width="1.4"/><path d="M4.5 5h5M4.5 7.5h5M4.5 10h3" stroke="oklch(95% 0.014 80)" stroke-width="1.2" stroke-linecap="round"/></svg>',
+  lock: '<svg width="14" height="16" viewBox="0 0 14 16" fill="none"><rect x="1" y="7" width="12" height="8" rx="2" stroke="var(--locked)" stroke-width="1.5"/><path d="M4 7V4.5a3 3 0 016 0V7" stroke="var(--locked)" stroke-width="1.5"/></svg>',
+  chevron: '<svg width="8" height="14" viewBox="0 0 8 14" fill="none"><path d="M1 1l6 6-6 6" stroke="var(--disabled)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  stepCheck: '<svg width="13" height="10" viewBox="0 0 13 10" fill="none"><path d="M1 5l4 4 7-8" stroke="var(--white-text)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  doc: '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="2" y="1" width="10" height="12" rx="1.5" stroke="var(--white-text)" stroke-width="1.4"/><path d="M4.5 5h5M4.5 7.5h5M4.5 10h3" stroke="var(--white-text)" stroke-width="1.2" stroke-linecap="round"/></svg>',
+  // на .celebrate-badge/.result-badge (не реагируют на тему, см. styles.css) — оставлен фиксированным
   resultCheck: '<svg width="26" height="20" viewBox="0 0 26 20" fill="none"><path d="M2 10l8 8L24 2" stroke="oklch(28% 0.015 70)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   seekBack: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 4v6h6" stroke="oklch(56% 0.09 235)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 15a8 8 0 1 0 2-9.5L4 10" stroke="oklch(56% 0.09 235)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   seekFwd: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M20 4v6h-6" stroke="oklch(56% 0.09 235)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M19.5 15a8 8 0 1 1-2-9.5L20 10" stroke="oklch(56% 0.09 235)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  play: '<svg width="12" height="14" viewBox="0 0 12 14" fill="none"><path d="M1 1l10 6-10 6V1z" fill="oklch(95% 0.014 80)"/></svg>',
-  pause: '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="1" width="4" height="10" rx="1" fill="oklch(95% 0.014 80)"/><rect x="7" y="1" width="4" height="10" rx="1" fill="oklch(95% 0.014 80)"/></svg>',
-  upload: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 11V2m0 0L4.5 5.5M8 2l3.5 3.5" stroke="oklch(28% 0.015 70)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12v1a2 2 0 002 2h8a2 2 0 002-2v-1" stroke="oklch(28% 0.015 70)" stroke-width="1.6" stroke-linecap="round"/></svg>',
+  play: '<svg width="12" height="14" viewBox="0 0 12 14" fill="none"><path d="M1 1l10 6-10 6V1z" fill="var(--white-text)"/></svg>',
+  pause: '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="1" width="4" height="10" rx="1" fill="var(--white-text)"/><rect x="7" y="1" width="4" height="10" rx="1" fill="var(--white-text)"/></svg>',
+  upload: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 11V2m0 0L4.5 5.5M8 2l3.5 3.5" stroke="var(--ink)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12v1a2 2 0 002 2h8a2 2 0 002-2v-1" stroke="var(--ink)" stroke-width="1.6" stroke-linecap="round"/></svg>',
   uploadTerra: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 11V2m0 0L4.5 5.5M8 2l3.5 3.5" stroke="oklch(38% 0.1 38)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12v1a2 2 0 002 2h8a2 2 0 002-2v-1" stroke="oklch(38% 0.1 38)" stroke-width="1.6" stroke-linecap="round"/></svg>',
+  // на .hw-icon с фоном var(--soft-blue)/var(--soft-terra) (не реагируют на тему) — оставлен фиксированным
   hwCheck: '<svg width="15" height="12" viewBox="0 0 15 12" fill="none"><path d="M1 6l4 4 9-9" stroke="oklch(28% 0.015 70)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   micIcon: function (color) { return '<svg width="12" height="16" viewBox="0 0 12 16" fill="none"><rect x="3" y="1" width="6" height="10" rx="3" stroke="' + color + '" stroke-width="1.4"/><path d="M1.5 8.5a4.5 4.5 0 009 0M6 13v2" stroke="' + color + '" stroke-width="1.4" stroke-linecap="round"/></svg>'; },
   notesIcon: function (color) { return '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="4" cy="11" r="2.2" stroke="' + color + '" stroke-width="1.4"/><circle cx="11" cy="9" r="2.2" stroke="' + color + '" stroke-width="1.4"/><path d="M6.2 11V2.5L13.2 1v6.5" stroke="' + color + '" stroke-width="1.4"/></svg>'; },
@@ -259,10 +272,10 @@ var SVG = {
   dockLessons: function (c) { return '<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="14" height="14" rx="3" stroke="' + c + '" stroke-width="1.6"/><path d="M6.5 8h7M6.5 12h4.5" stroke="' + c + '" stroke-width="1.6" stroke-linecap="round"/></svg>'; },
   dockQuestion: function (c) { return '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="5" width="17" height="15" rx="2.5" stroke="' + c + '" stroke-width="1.6"/><path d="M3.5 9.5h17M8 2.5v4M16 2.5v4" stroke="' + c + '" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="13.5" r="1.1" fill="' + c + '"/><circle cx="12" cy="13.5" r="1.1" fill="' + c + '"/></svg>'; },
   dockMore: function (c) { return '<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="4.5" cy="10" r="1.6" fill="' + c + '"/><circle cx="10" cy="10" r="1.6" fill="' + c + '"/><circle cx="15.5" cy="10" r="1.6" fill="' + c + '"/></svg>'; },
-  gear: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 5.2a2.8 2.8 0 100 5.6 2.8 2.8 0 000-5.6z" stroke="oklch(52% 0.012 70)" stroke-width="1.3"/><path d="M8 1.3v1.4M8 13.3v1.4M14.7 8h-1.4M2.7 8H1.3M12.5 3.5l-1 1M4.5 11.5l-1 1M12.5 12.5l-1-1M4.5 4.5l-1-1" stroke="oklch(52% 0.012 70)" stroke-width="1.3" stroke-linecap="round"/></svg>',
-  chevronRight: '<svg width="7" height="12" viewBox="0 0 8 14" fill="none"><path d="M1 1l6 6-6 6" stroke="oklch(75% 0.01 70)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  gear: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 5.2a2.8 2.8 0 100 5.6 2.8 2.8 0 000-5.6z" stroke="var(--gray)" stroke-width="1.3"/><path d="M8 1.3v1.4M8 13.3v1.4M14.7 8h-1.4M2.7 8H1.3M12.5 3.5l-1 1M4.5 11.5l-1 1M12.5 12.5l-1-1M4.5 4.5l-1-1" stroke="var(--gray)" stroke-width="1.3" stroke-linecap="round"/></svg>',
+  chevronRight: '<svg width="7" height="12" viewBox="0 0 8 14" fill="none"><path d="M1 1l6 6-6 6" stroke="var(--disabled)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   star: function (filled) {
-    var stroke = filled ? "oklch(84% 0.15 92)" : "oklch(52% 0.012 70)";
+    var stroke = filled ? "oklch(84% 0.15 92)" : "var(--gray)";
     var fill = filled ? "oklch(84% 0.15 92)" : "none";
     return '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 1.3l1.9 4.1 4.5.5-3.4 3 .9 4.4L8 11.2l-3.9 2.1.9-4.4-3.4-3 4.5-.5L8 1.3z" stroke="' + stroke + '" fill="' + fill + '" stroke-width="1.2" stroke-linejoin="round"/></svg>';
   }
@@ -822,11 +835,13 @@ function buildCalendarCells(vy, vm, selectedDate) {
     var isDayOff = dow === 0 || dow === 1; // пн/вт — выходной, не бронируется вообще
     var isBusy = state.calConfigured && !isPast && !isSelected && !isDayOff && busy.indexOf(dateStr) !== -1;
     var clickable = !isPast && !isDayOff;
+    // свободный день — фирменная сине-мятная «таблетка», не зависит от темы
+    // (как акцентные цвета terra/blue), только внешняя тень следует теме
     var bg = "oklch(90% 0.03 235)", color = "oklch(38% 0.06 235)",
-      shadow = "3px 3px 6px oklch(70% 0.02 80/0.28), -3px -3px 6px oklch(100% 0 0/0.75)";
-    if (isSelected) { bg = "oklch(56% 0.09 235)"; color = "oklch(97% 0.01 80)"; shadow = "3px 3px 6px oklch(70% 0.02 80/0.35)"; }
-    else if (isPast || isDayOff) { bg = "oklch(92% 0.008 70)"; color = "oklch(70% 0.008 70)"; shadow = "none"; }
-    else if (isBusy) { bg = "oklch(88% 0.05 38)"; color = "oklch(45% 0.1 38)"; shadow = "3px 3px 6px oklch(70% 0.02 80/0.28), -3px -3px 6px oklch(100% 0 0/0.75)"; }
+      shadow = "3px 3px 6px oklch(var(--sh-base)/0.28), -3px -3px 6px oklch(var(--sh-hi-base)/0.75)";
+    if (isSelected) { bg = "var(--blue)"; color = "var(--white-text)"; shadow = "3px 3px 6px oklch(var(--sh-base)/0.35)"; }
+    else if (isPast || isDayOff) { bg = "var(--bg)"; color = "var(--locked)"; shadow = "none"; }
+    else if (isBusy) { bg = "oklch(88% 0.05 38)"; color = "oklch(45% 0.1 38)"; shadow = "3px 3px 6px oklch(var(--sh-base)/0.28), -3px -3px 6px oklch(var(--sh-hi-base)/0.75)"; }
     var ring = (isToday && !isSelected) ? "box-shadow:0 0 0 2px oklch(60% 0.13 38 / 0.55);" : "";
     cells.push({
       num: d, dateStr: dateStr, clickable: clickable,
@@ -841,9 +856,9 @@ function buildTimeSlots(dateStr, selectedTime) {
   var slots = slotsForDate(dateStr);
   return slots.map(function (t) {
     var isSelected = selectedTime === t;
-    var bg = "oklch(95% 0.014 80)", color = "oklch(30% 0.015 70)",
-      shadow = "5px 5px 10px oklch(70% 0.02 80/0.3), -5px -5px 10px oklch(100% 0 0/0.8)";
-    if (isSelected) { bg = "oklch(56% 0.09 235)"; color = "oklch(97% 0.01 80)"; shadow = "4px 4px 8px oklch(70% 0.02 80/0.35)"; }
+    var bg = "var(--bg)", color = "var(--ink)",
+      shadow = "5px 5px 10px oklch(var(--sh-base)/0.3), -5px -5px 10px oklch(var(--sh-hi-base)/0.8)";
+    if (isSelected) { bg = "var(--blue)"; color = "var(--white-text)"; shadow = "4px 4px 8px oklch(var(--sh-base)/0.35)"; }
     return {
       t: t,
       style: "height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;font:700 13px Manrope,sans-serif;background:" + bg + ";color:" + color + ";box-shadow:" + shadow + ";cursor:pointer;"
@@ -875,7 +890,7 @@ function renderQuestions() {
         : '<div' + (c.clickable ? ' data-cal-date="' + c.dateStr + '"' : "") + ' style="' + c.style + '">' + c.num + "</div>";
     }).join("");
     html =
-      '<div style="font:600 12.5px Inter,sans-serif;letter-spacing:.04em;text-transform:uppercase;color:oklch(52% 0.012 70 / 0.8);">Запись</div>' +
+      '<div style="font:600 12.5px Inter,sans-serif;letter-spacing:.04em;text-transform:uppercase;color:var(--gray-mute);">Запись</div>' +
       '<div style="font:800 27px Manrope,sans-serif;color:var(--ink);margin-top:4px;">Запись на занятие</div>' +
       '<div style="font-size:13px;color:var(--gray);margin-top:2px;">Выберите свободную дату</div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:22px;">' +
@@ -884,7 +899,7 @@ function renderQuestions() {
         '<button class="cal-nav-btn" data-act="cal-next">›</button>' +
       "</div>" +
       '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:20px;">' +
-        CAL_WEEKDAYS_SHORT.map(function (w) { return '<div style="text-align:center;font:600 10.5px Inter,sans-serif;letter-spacing:.02em;color:oklch(52% 0.012 70/0.7);text-transform:uppercase;">' + w + "</div>"; }).join("") +
+        CAL_WEEKDAYS_SHORT.map(function (w) { return '<div style="text-align:center;font:600 10.5px Inter,sans-serif;letter-spacing:.02em;color:var(--gray-mute);text-transform:uppercase;">' + w + "</div>"; }).join("") +
       "</div>" +
       '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:7px 6px;margin-top:8px;">' + cellsHtml + "</div>" +
       '<div style="margin-top:20px;display:flex;gap:16px;font:500 11.5px Inter,sans-serif;color:var(--gray);">' +
@@ -1078,7 +1093,7 @@ function renderDock() {
   var html = '<div class="dock">';
   items.forEach(function (it) {
     var active = activeTab === it.screen;
-    var color = active ? "oklch(60% 0.13 38)" : "oklch(52% 0.012 70)";
+    var color = active ? "oklch(60% 0.13 38)" : "var(--gray)";
     html += '<button class="dock-item' + (active ? " active" : "") + '" data-act="' + it.act + '">' +
       (it.badge || "") + it.icon(color) + "<span>" + it.label + "</span></button>";
   });
@@ -1118,12 +1133,12 @@ function renderLessonHome() {
       stepRow({ act: "go-lecture", dotBg: "oklch(60% 0.13 38)", icon: SVG.stepCheck, name: "Лекция «" + esc(LESSON.title) + "»", sub: subs.lecture }) +
       stepRow({ act: "go-quiz", dotBg: s.quizDone ? "oklch(60% 0.13 38)" : "oklch(56% 0.09 235)", icon: s.quizDone ? SVG.stepCheck : SVG.doc, name: "Тест", sub: s.quizDone ? "Пройден · " + s.quizScore + "/" + LESSON.quiz.questions.length : subs.quiz }) +
       stepRow({ act: "go-warmups", locked: false, lockedText: false,
-        dotBg: s.warmupsDone ? "oklch(60% 0.13 38)" : (s.quizDone ? "oklch(56% 0.09 235)" : "#fff"),
-        icon: s.warmupsDone ? SVG.stepCheck : SVG.micIcon(s.quizDone ? "oklch(95% 0.014 80)" : "oklch(65% 0.01 70)"),
+        dotBg: s.warmupsDone ? "oklch(60% 0.13 38)" : (s.quizDone ? "oklch(56% 0.09 235)" : "var(--bg)"),
+        icon: s.warmupsDone ? SVG.stepCheck : SVG.micIcon(s.quizDone ? "var(--white-text)" : "var(--locked)"),
         name: "Распевки «" + esc(LESSON.title) + "»", sub: subs.warmups }) +
       stepRow({ act: "go-song", locked: false, lockedText: false, last: true,
-        dotBg: s.songDone ? "oklch(60% 0.13 38)" : (s.warmupsDone ? "oklch(56% 0.09 235)" : "#fff"),
-        icon: s.songDone ? SVG.stepCheck : SVG.notesIcon(s.warmupsDone ? "oklch(95% 0.014 80)" : "oklch(65% 0.01 70)"),
+        dotBg: s.songDone ? "oklch(60% 0.13 38)" : (s.warmupsDone ? "oklch(56% 0.09 235)" : "var(--bg)"),
+        icon: s.songDone ? SVG.stepCheck : SVG.notesIcon(s.warmupsDone ? "var(--white-text)" : "var(--locked)"),
         name: "Упражнение с песней", sub: subs.song }) +
     "</div>";
   wireActs();
@@ -2629,6 +2644,7 @@ var lastRenderedScreen = null;
 var lastRenderedQuizIndex = null;
 
 function render() {
+  applyDarkMode();
   stopAllMedia();
   // Прокручиваем наверх только при переходе на другой шаг/вопрос — не при
   // мелких действиях на том же экране (ответ в тесте, метка в песне и
