@@ -352,23 +352,56 @@ function renderName() {
   wireActs();
 }
 
-/* число пройденных/начатых уроков — сейчас есть только урок 1,
-   но логика уже готова к появлению следующих */
-function lessonStats() {
-  var completed = 0, inProgress = 0;
-  var pct = progressPercent();
-  if (pct === 100) completed++;
-  else if (pct > 0) inProgress++;
-  return { completed: completed, inProgress: inProgress };
+/* Статус урока = число пройденных из 4 шагов (Лекция/Тест/Распевки/Песня).
+   0 = не начат, 1-3 = в работе, 4 = завершён (Песня засчитывается по тому
+   же флагу songDone, что и автопроверка интерактивной разметки — она
+   выставляется в момент, когда ученик завершает разметку и жмёт
+   «Завершить урок»). Те же 4 флага использует и степпер на lesson-home —
+   один источник правды для прогресса везде. */
+function lessonStepsDone() {
+  var s = state, n = 0;
+  if (s.lectureViewed) n++;
+  if (s.quizDone) n++;
+  if (s.warmupsDone) n++;
+  if (s.songDone) n++;
+  return n;
+}
+function lessonStatus() {
+  var n = lessonStepsDone();
+  if (n === 0) return "not-started";
+  if (n === 4) return "completed";
+  return "in-progress";
+}
+/* первый непройденный шаг — для входа в урок из фильтра «В работе» сразу
+   с нужного места, а не с начала */
+function firstIncompleteStepScreen() {
+  var s = state;
+  if (!s.lectureViewed) return "lecture";
+  if (!s.quizDone) return "quiz";
+  if (!s.warmupsDone) return "warmups";
+  if (!s.songDone) return "song";
+  return "lesson-home";
 }
 
-function roadmapCardHtml() {
+/* число уроков в работе/завершённых — сейчас есть только открытый урок 1,
+   но логика уже готова к появлению следующих (все будущие уроки заперты
+   и в подсчёт не входят, пока для них нет реальных данных) */
+function lessonStats() {
+  var status = lessonStatus();
+  return {
+    completed: status === "completed" ? 1 : 0,
+    inProgress: status === "in-progress" ? 1 : 0
+  };
+}
+
+function roadmapCardHtml(mode) {
   var s = state;
+  var act = mode === "review" ? "open-lesson-review" : mode === "continue" ? "open-lesson-continue" : "open-lesson";
   var steps = [
-    { label: "Лекция «" + esc(LESSON.title) + "»", done: true },
+    { label: "Лекция «" + esc(LESSON.title) + "»", done: s.lectureViewed },
     { label: "Тест", done: s.quizDone },
-    { label: "Распевки", done: !!(s.warmupFiles && s.warmupFiles.length) },
-    { label: "Песня", done: !!(s.songFiles && s.songFiles.length) }
+    { label: "Распевки", done: s.warmupsDone },
+    { label: "Песня", done: s.songDone }
   ];
   var stepsHtml = steps.map(function (st) {
     return '<div class="roadmap-step">' +
@@ -377,9 +410,9 @@ function roadmapCardHtml() {
     "</div>";
   }).join("");
   return (
-    '<div class="roadmap-card" data-act="open-lesson">' +
+    '<div class="roadmap-card" data-act="' + act + '">' +
       '<div class="roadmap-title">Урок 1 · ' + esc(LESSON.title) + "</div>" +
-      '<div class="roadmap-sub">' + (s.songFiles && s.songFiles.length ? "Завершён" : "В процессе") + "</div>" +
+      '<div class="roadmap-sub">' + (s.songDone ? "Завершён" : "В процессе") + "</div>" +
       stepsHtml +
     "</div>"
   );
@@ -402,10 +435,21 @@ function lockedRoadmapCardHtml(n) {
   );
 }
 
-function roadmapScrollHtml() {
-  var html = roadmapCardHtml();
-  for (var i = 2; i <= TOTAL_LESSONS; i++) html += lockedRoadmapCardHtml(i);
-  return html;
+/* Без фильтра — все уроки по порядку, включая запертые. С активным фильтром —
+   только незапертые уроки нужного статуса (заперты уроки 2-30 никогда не
+   попадают ни в «В работе», ни в «Завершено», у них нет реального прогресса).
+   Пустая строка означает "нечего показывать" — вызывающий код рисует
+   текст пустого состояния вместо скроллера. */
+function roadmapScrollHtml(filter) {
+  if (!filter) {
+    var html = roadmapCardHtml(null);
+    for (var i = 2; i <= TOTAL_LESSONS; i++) html += lockedRoadmapCardHtml(i);
+    return html;
+  }
+  var status = lessonStatus();
+  if (filter === "inProgress" && status === "in-progress") return roadmapCardHtml("continue");
+  if (filter === "completed" && status === "completed") return roadmapCardHtml("review");
+  return "";
 }
 
 function lessonsGridHtml() {
@@ -427,8 +471,17 @@ function lessonsGridHtml() {
 
 function renderCourses() {
   var stats = lessonStats();
-  var filter = state.coursesFilter; // "inProgress" | "completed" | null — пилюли чисто визуальные, как в макете
+  var filter = state.coursesFilter; // "inProgress" | "completed" | null — переключатель фильтра дорожной карты
   var favCount = Object.keys(state.favorites || {}).length;
+
+  var roadmapInner = roadmapScrollHtml(filter);
+  var roadmapBody = roadmapInner
+    ? '<div class="roadmap-scroll">' + roadmapInner + "</div>"
+    : '<div class="courses-empty">' +
+        (filter === "inProgress"
+          ? "Пока нет незавершённых уроков — начните любой открытый урок"
+          : "Здесь появятся уроки, которые вы закончите полностью") +
+      "</div>";
 
   app.innerHTML =
     '<div class="courses-head">' +
@@ -447,7 +500,7 @@ function renderCourses() {
     "</div>" +
     '<div class="roadmap-wrap">' +
       '<div class="roadmap-label">Дорожная карта урока · листайте →</div>' +
-      '<div class="roadmap-scroll">' + roadmapScrollHtml() + "</div>" +
+      roadmapBody +
     "</div>" +
     lessonsGridHtml();
   wireActs();
@@ -2527,6 +2580,10 @@ function resetProgress() {
 var ACTS = {
   "back": handleBack,
   "open-lesson": function () { go("lesson-home"); },
+  // из фильтра «Завершено»: заново с первого шага (для повторения)
+  "open-lesson-review": function () { go("lecture"); },
+  // из фильтра «В работе»: сразу на первый непройденный шаг
+  "open-lesson-continue": function () { go(firstIncompleteStepScreen()); },
   "go-lecture": function () { go("lecture"); },
   "go-quiz": function () { go("quiz"); },
   "go-warmups": function () { go("warmups"); },
