@@ -337,7 +337,7 @@ function renderTg() {
     '<div class="auth-screen">' +
       '<div class="auth-logo">' + SVG.telegram + "</div>" +
       '<div class="auth-title">Вход в курс</div>' +
-      '<div class="auth-sub">Введите ваш Telegram ID — так преподаватель свяжет аккаунт с вашим профилем ученика.</div>' +
+      '<div class="auth-sub">Введи свой Telegram ID — так преподаватель свяжет аккаунт с твоим профилем ученика.</div>' +
       '<label class="field-label">TELEGRAM ID</label>' +
       '<input id="tg-input" class="field-input" type="text" placeholder="@username" value="' + esc(state.tgId) + '">' +
       '<div class="spacer"></div>' +
@@ -358,7 +358,7 @@ function renderName() {
     '<div class="auth-screen">' +
       backBtn("back") +
       '<div class="auth-title">Как тебя зовут?</div>' +
-      '<div class="auth-sub tight">Укажите фамилию и имя на русском, так тебя увидит преподаватель в приложении.</div>' +
+      '<div class="auth-sub tight">Укажи фамилию и имя на русском, так тебя увидит преподаватель в приложении.</div>' +
       '<label class="field-label">ФАМИЛИЯ</label>' +
       '<input id="ln-input" class="field-input mb" type="text" placeholder="Иванова" value="' + esc(state.lastName) + '">' +
       '<label class="field-label">ИМЯ</label>' +
@@ -434,7 +434,7 @@ function birthDateToIso(display) {
 }
 
 /* Разовое автосоздание строки ученика (+ стартового среза) в Notion —
-   вызывается с экрана «Как вас зовут?» сразу после ввода имени/фамилии.
+   вызывается с экрана «Как тебя зовут?» сразу после ввода имени/фамилии.
    Идемпотентно на сервере (см. api/notion-onboard.js), поэтому безопасно
    даже если вызовется повторно. */
 function createStudentInNotion() {
@@ -636,8 +636,8 @@ function renderCourses() {
     ? '<div class="roadmap-scroll">' + roadmapInner + "</div>"
     : '<div class="courses-empty">' +
         (filter === "inProgress"
-          ? "Пока нет незавершённых уроков — начните любой открытый урок"
-          : "Здесь появятся уроки, которые вы закончите полностью") +
+          ? "Пока нет незавершённых уроков — начни любой открытый урок"
+          : "Здесь появятся уроки, которые ты закончишь полностью") +
       "</div>";
 
   app.innerHTML =
@@ -656,7 +656,7 @@ function renderCourses() {
       '<button class="filter-btn' + (filter === "completed" ? " active-terra" : "") + '" data-act="filter-completed">✓ Завершено · ' + stats.completed + "</button>" +
     "</div>" +
     '<div class="roadmap-wrap">' +
-      '<div class="roadmap-label">Дорожная карта урока · листайте →</div>' +
+      '<div class="roadmap-label">Дорожная карта урока · листай →</div>' +
       roadmapBody +
     "</div>" +
     lessonsGridHtml();
@@ -1077,7 +1077,7 @@ function renderProfile() {
           (state.notionConfigured === false
             ? "Показан демо-профиль. Чтобы подключить реальные данные из Notion, доверши разовую настройку (NOTION_TOKEN в Vercel) — я всё остальное уже сделал."
             : (state.notionFound === false
-              ? "Показан демо-профиль. Карточка ученика ещё не создалась в Notion — попробуйте зайти в приложение ещё раз."
+              ? "Показан демо-профиль. Карточка ученика ещё не создалась в Notion — попробуй зайти в приложение ещё раз."
               : "Загружаю профиль…")) +
         "</div>") +
     "</div>";
@@ -1210,7 +1210,7 @@ function renderQuestions() {
     html =
       '<div style="font:600 12.5px Inter,sans-serif;letter-spacing:.04em;text-transform:uppercase;color:var(--gray-mute);">Запись</div>' +
       '<div style="font:800 27px Manrope,sans-serif;color:var(--ink);margin-top:4px;">Запись на занятие</div>' +
-      '<div style="font-size:13px;color:var(--gray);margin-top:2px;">Выберите свободную дату</div>' +
+      '<div style="font-size:13px;color:var(--gray);margin-top:2px;">Выбери свободную дату</div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:22px;">' +
         '<button class="cal-nav-btn" data-act="cal-prev">‹</button>' +
         '<div style="font:700 18px Manrope,sans-serif;color:var(--ink);text-transform:capitalize;">' + CAL_MONTHS[vm] + " " + vy + "</div>" +
@@ -1248,7 +1248,7 @@ function renderQuestions() {
         "</div>" +
         '<div style="padding:24px 0 6px;margin-top:auto;">' +
           '<button class="cta" id="confirm-booking-btn"' + (state.selectedTime == null ? " disabled" : "") + '>' +
-            (state.selectedTime == null ? "Выберите время" : "Подтвердить на " + state.selectedTime) +
+            (state.selectedTime == null ? "Выбери время 😇" : "Подтвердить на " + state.selectedTime) +
           "</button>" +
         "</div>" +
       "</div>";
@@ -1256,7 +1256,7 @@ function renderQuestions() {
     html =
       '<div style="margin-top:6px;display:flex;flex-direction:column;gap:14px;">' +
         '<div style="background:oklch(90% 0.04 38);border-radius:18px;padding:16px 18px;font:500 13.5px/1.5 Inter,sans-serif;color:oklch(38% 0.1 38);">' +
-          "Заявка отправлена преподавателю. Урок в день занятия отменить или перенести нельзя — планируйте заранее." +
+          "Заявка отправлена преподавателю. Урок в день занятия отменить или перенести нельзя — планируй заранее 🙏🏻" +
         "</div>" +
         '<div class="section-label" style="margin-top:0;">Связаться с преподавателем</div>' +
         '<div data-act="cal-open-tg" style="background:var(--bg);border-radius:18px;box-shadow:var(--raised-lg);padding:16px 18px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;">' +
