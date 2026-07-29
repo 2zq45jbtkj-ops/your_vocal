@@ -26,12 +26,12 @@ var TEACHER_BOT_USERNAME = "your_vocal_teacher_bot";
 
 var state = {
   screen: "tg",
-  tgId: "", chatId: null, firstName: "", lastName: "",
+  tgId: "", chatId: null, firstName: "", lastName: "", birthDate: "",
   notionLoadedFor: null, notionConfigured: null, notionFound: null,
   notionProfile: null, notionAssessments: null,
   notionUnlockedLessons: [], notionProgressByLesson: {}, comingSoonLessonNum: null,
   // «Режим админа» — см. loadIsAdmin/enterAdminMode ниже
-  isAdmin: false, isAdminLoadedFor: null, adminStudentsList: null,
+  isAdmin: false, isAdminLoadedFor: null, adminStudentsList: null, adminBirthdaysList: null,
   adminMode: false, adminStudentName: "", adminSnapshot: null,
   quizIndex: 0, quizAnswers: [], quizScore: 0,
   quizDone: false, warmupsDone: false, songDone: false,
@@ -64,6 +64,7 @@ function saveState() {
   try {
     localStorage.setItem("vocal-app", JSON.stringify({
       tgId: state.tgId, chatId: state.chatId, firstName: state.firstName, lastName: state.lastName,
+      birthDate: state.birthDate,
       quizIndex: state.quizIndex, quizAnswers: state.quizAnswers,
       quizScore: state.quizScore, quizDone: state.quizDone,
       warmupsDone: state.warmupsDone, songDone: state.songDone,
@@ -310,6 +311,7 @@ function backTarget() {
     case "favorites": return "courses";
     case "lesson-soon": return "courses";
     case "admin-students": return "more";
+    case "admin-birthdays": return "more";
     case "lecture": case "warmups": case "song": case "quiz-result": return "lesson-home";
     case "feedback": return "song";
     case "quiz": return null; // отдельная логика
@@ -359,21 +361,26 @@ function renderName() {
       '<label class="field-label">ФАМИЛИЯ (сначала)</label>' +
       '<input id="ln-input" class="field-input mb" type="text" placeholder="Иванова" value="' + esc(state.lastName) + '">' +
       '<label class="field-label">ИМЯ (потом)</label>' +
-      '<input id="fn-input" class="field-input" type="text" placeholder="Мария" value="' + esc(state.firstName) + '">' +
+      '<input id="fn-input" class="field-input mb" type="text" placeholder="Мария" value="' + esc(state.firstName) + '">' +
+      '<label class="field-label">ДАТА РОЖДЕНИЯ (необязательно)</label>' +
+      '<input id="bd-input" class="field-input" type="date" value="' + esc(state.birthDate) + '">' +
       '<div class="spacer"></div>' +
       '<button id="name-next" class="cta"' + (state.firstName.trim() && state.lastName.trim() ? "" : " disabled") + ">Начать обучение</button>" +
     "</div>";
 
   var fn = document.getElementById("fn-input");
   var ln = document.getElementById("ln-input");
+  var bd = document.getElementById("bd-input");
   var btn = document.getElementById("name-next");
   function upd() {
     state.firstName = fn.value;
     state.lastName = ln.value;
+    state.birthDate = bd.value;
     btn.disabled = !(state.firstName.trim() && state.lastName.trim());
   }
   fn.addEventListener("input", upd);
   ln.addEventListener("input", upd);
+  bd.addEventListener("input", upd);
   btn.addEventListener("click", function () {
     saveState();
     btn.disabled = true;
@@ -403,7 +410,8 @@ function createStudentInNotion() {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       chatId: state.chatId, tgId: state.tgId,
-      firstName: state.firstName, lastName: state.lastName
+      firstName: state.firstName, lastName: state.lastName,
+      birthDate: state.birthDate
     })
   }).then(function (r) { return r.json().catch(function () { return null; }); })
     .then(function () {
@@ -803,6 +811,20 @@ function loadAdminStudentsList() {
     .then(function (data) {
       state.adminStudentsList = (data && data.students) || [];
       if (state.screen === "admin-students") render();
+    })
+    .catch(function () {});
+}
+
+/* Ближайшие дни рождения учеников (≤30 дней) — «Режим админа». Дата берётся
+   из поля «Дата рождения» в Notion (ученик вписывает сам на онбординге, или
+   Николай вручную) — см. api/notion-birthdays.js. */
+function loadAdminBirthdays() {
+  if (state.adminBirthdaysList || !state.chatId) return;
+  fetch("/api/notion-birthdays?chatId=" + encodeURIComponent(state.chatId))
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      state.adminBirthdaysList = (data && data.birthdays) || [];
+      if (state.screen === "admin-birthdays") render();
     })
     .catch(function () {});
 }
@@ -1302,6 +1324,11 @@ function renderMore() {
       icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1.5l5.5 2v4c0 3.6-2.3 6-5.5 7-3.2-1-5.5-3.4-5.5-7v-4L8 1.5z" stroke="oklch(38% 0.06 235)" stroke-width="1.4" stroke-linejoin="round"/><path d="M6 8l1.5 1.5L10.5 6" stroke="oklch(38% 0.06 235)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
       iconBg: "var(--soft-blue)"
     });
+    items.push({
+      label: "Дни рождения", isLink: true, birthdaysEntry: true,
+      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 14v-5.5a2 2 0 012-2h6a2 2 0 012 2V14M3 14h10M3 14a1 1 0 100 2h10a1 1 0 100-2M8 6.5V3M6 3.2c0 .8.5 1 1 .5s.5-1.2 1-1.2 1 .4 1 1.2-.5 1-1 .5" stroke="oklch(38% 0.06 235)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      iconBg: "var(--soft-blue)"
+    });
   }
 
   var itemsHtml = items.map(function (item, i) {
@@ -1331,6 +1358,7 @@ function renderMore() {
       if (idx === 1) { state.notifOn = !state.notifOn; saveState(); render(); return; }
       if (idx === 6) { resetProgress(); return; }
       if (items[idx] && items[idx].adminEntry) { go("admin-students"); return; }
+      if (items[idx] && items[idx].birthdaysEntry) { go("admin-birthdays"); return; }
       // «Написать в поддержку», «Правила и оферта», «Политика конфиденциальности»,
       // «О преподавателе» — в дизайн-файле это заглушки без содержимого, оставляю как есть.
     });
@@ -1366,6 +1394,41 @@ function renderAdminStudents() {
   app.innerHTML =
     '<div class="top pb8">' + backBtn("back") +
       '<div><div class="top-title lg">Режим админа</div><div class="top-sub">Выбери ученика, чтобы пройти урок его глазами</div></div>' +
+    "</div>" +
+    '<div style="padding:8px 16px 130px;display:flex;flex-direction:column;gap:10px;">' + body + "</div>";
+  wireActs();
+}
+
+/* «Дни рождения» — те, у кого до дня рождения ≤30 дней (см. api/notion-birthdays.js).
+   Дата рождения либо ученик вписал сам на онбординге, либо Николай — вручную
+   в Notion в поле «Дата рождения». */
+function renderAdminBirthdays() {
+  loadAdminBirthdays();
+  var list = state.adminBirthdaysList;
+  var body;
+  if (list === null) {
+    body = '<div class="courses-empty">Загружаю дни рождения…</div>';
+  } else if (!list.length) {
+    body = '<div class="courses-empty">В ближайшие 30 дней дней рождения нет (или ни у кого не указана дата рождения).</div>';
+  } else {
+    body = list.map(function (b) {
+      var parts = b.birthDate.split("-");
+      var dateLabel = parts[2] + "." + parts[1];
+      var whenLabel = b.daysUntil === 0 ? "сегодня!" : b.daysUntil === 1 ? "завтра" : "через " + b.daysUntil + " дн.";
+      var sub = dateLabel + " · " + whenLabel + " · исполнится " + b.turningAge;
+      return (
+        '<div class="lesson-card">' +
+          '<div class="lesson-dot" style="background:oklch(56% 0.09 235);">🎂</div>' +
+          '<div class="lesson-body"><div class="lesson-name">' + esc(b.name) + "</div>" +
+            '<div class="lesson-sub">' + esc(sub) + "</div>" +
+          "</div>" +
+        "</div>"
+      );
+    }).join("");
+  }
+  app.innerHTML =
+    '<div class="top pb8">' + backBtn("back") +
+      '<div><div class="top-title lg">Дни рождения</div><div class="top-sub">Ближайшие 30 дней, по дате «Дата рождения» в Notion</div></div>' +
     "</div>" +
     '<div style="padding:8px 16px 130px;display:flex;flex-direction:column;gap:10px;">' + body + "</div>";
   wireActs();
@@ -3022,6 +3085,7 @@ function render() {
     case "questions": renderQuestions(); break;
     case "more": renderMore(); break;
     case "admin-students": renderAdminStudents(); break;
+    case "admin-birthdays": renderAdminBirthdays(); break;
     case "lesson-home": renderLessonHome(); break;
     case "lesson-soon": renderLessonSoon(); break;
     case "blocked": renderBlocked(); break;
