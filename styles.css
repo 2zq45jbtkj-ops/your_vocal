@@ -205,6 +205,23 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
   font-size: 9px; font-weight: 700; border-radius: 8px; min-width: 15px; height: 15px;
   display: flex; align-items: center; justify-content: center; padding: 0 3px;
 }
+
+/* «Режим админа»: плашка на любом экране, пока Николай зашёл в кабинет
+   ученика для диагностики — вставляется первым элементом в #app (обычный
+   поток документа, не fixed), поэтому весь остальной контент экрана
+   автоматически сдвигается вниз, без правок padding на каждом экране. */
+.admin-banner {
+  position: sticky; top: 0; z-index: 900;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--terra); color: var(--white-text);
+  padding: 10px 16px; font: 600 12.5px 'Inter', sans-serif;
+}
+.admin-banner span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-banner button {
+  border: none; background: oklch(100% 0 0 / 0.22); color: var(--white-text);
+  font: 600 11.5px 'Inter', sans-serif; padding: 7px 12px; border-radius: 12px;
+  cursor: pointer; flex-shrink: 0;
+}
 .lesson-card {
   display: flex; align-items: center; gap: 12px; background: var(--bg);
   border: none; border-radius: 18px; padding: 14px 16px;

@@ -30,6 +30,9 @@ var state = {
   notionLoadedFor: null, notionConfigured: null, notionFound: null,
   notionProfile: null, notionAssessments: null,
   notionUnlockedLessons: [], notionProgressByLesson: {}, comingSoonLessonNum: null,
+  // «Режим админа» — см. loadIsAdmin/enterAdminMode ниже
+  isAdmin: false, isAdminLoadedFor: null, adminStudentsList: null,
+  adminMode: false, adminStudentName: "", adminSnapshot: null,
   quizIndex: 0, quizAnswers: [], quizScore: 0,
   quizDone: false, warmupsDone: false, songDone: false,
   lectureViewed: false, celebrated: false,
@@ -54,6 +57,10 @@ var audioEls = {};
 var songAudioEls = {};
 
 function saveState() {
+  // В «Режиме админа» (Николай зашёл в кабинет ученика для диагностики) —
+  // ничего не пишем в общий localStorage, иначе тестовые действия админа
+  // перезаписали бы его собственный логин/прогресс на этом устройстве.
+  if (state.adminMode) return;
   try {
     localStorage.setItem("vocal-app", JSON.stringify({
       tgId: state.tgId, chatId: state.chatId, firstName: state.firstName, lastName: state.lastName,
@@ -185,6 +192,7 @@ function baseSubmitFields() {
   f.append("firstName", state.firstName || "");
   f.append("lastName", state.lastName || "");
   f.append("tgId", state.tgId || "");
+  if (state.adminMode) f.append("adminTest", "1"); // видно в api/submit.js — отмечает тестовое действие Николая
   f.append("chatId", state.chatId || "");
   f.append("lessonTitle", LESSON ? LESSON.title : "");
   return f;
@@ -300,6 +308,7 @@ function backTarget() {
     case "lesson-home": return "courses";
     case "favorites": return "courses";
     case "lesson-soon": return "courses";
+    case "admin-students": return "more";
     case "lecture": case "warmups": case "song": case "quiz-result": return "lesson-home";
     case "feedback": return "song";
     case "quiz": return null; // отдельная логика
@@ -764,6 +773,89 @@ function loadStudentProfile() {
     .catch(function () {});
 }
 
+/* «Режим админа» — Николай заходит под своим Telegram chat_id и, если он
+   совпадает с ADMIN_CHAT_ID на сервере, видит скрытый от учеников пункт в
+   «Ещё» и может выбрать любого ученика, чтобы пройти урок/тест/распевки
+   «его глазами» и найти техническую проблему за него. */
+function loadIsAdmin() {
+  var chatId = state.chatId;
+  if (!chatId || state.isAdminLoadedFor === chatId) return;
+  state.isAdminLoadedFor = chatId;
+  fetch("/api/notion-is-admin?chatId=" + encodeURIComponent(chatId))
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      state.isAdmin = !!(data && data.isAdmin);
+      if (state.screen === "more") render();
+    })
+    .catch(function () {});
+}
+
+function loadAdminStudentsList() {
+  if (state.adminStudentsList || !state.chatId) return;
+  fetch("/api/notion-students-list?chatId=" + encodeURIComponent(state.chatId))
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      state.adminStudentsList = (data && data.students) || [];
+      if (state.screen === "admin-students") render();
+    })
+    .catch(function () {});
+}
+
+/* Снимаем «слепок» собственного состояния Николая, переключаемся на
+   ученика: его chatId/имя, локальный прогресс урока 1 — с чистого листа
+   (или из его же прогресса в Notion, если он там уже есть), чтобы Николай
+   реально прошёл шаги как этот ученик. saveState() на время режима ничего
+   не пишет в localStorage — см. защиту в saveState(). */
+function enterAdminMode(student) {
+  state.adminSnapshot = {
+    chatId: state.chatId, tgId: state.tgId, firstName: state.firstName, lastName: state.lastName,
+    quizIndex: state.quizIndex, quizAnswers: state.quizAnswers, quizScore: state.quizScore,
+    quizDone: state.quizDone, warmupsDone: state.warmupsDone, songDone: state.songDone,
+    lectureViewed: state.lectureViewed, celebrated: state.celebrated,
+    warmupFiles: state.warmupFiles, songFiles: state.songFiles, songPlacements: state.songPlacements,
+    favorites: state.favorites,
+    notionLoadedFor: state.notionLoadedFor, notionProfile: state.notionProfile,
+    notionAssessments: state.notionAssessments, notionUnlockedLessons: state.notionUnlockedLessons,
+    notionProgressByLesson: state.notionProgressByLesson
+  };
+
+  var lessonId = (LESSON && LESSON.id) || 1;
+  var p = null; // прогресс ученика по уроку 1 из Notion, если уже есть
+  fetch("/api/notion-student?chatId=" + encodeURIComponent(student.chatId))
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data && data.found) p = (data.progressByLesson && data.progressByLesson[lessonId]) || null;
+    })
+    .catch(function () {})
+    .then(function () {
+      state.adminMode = true;
+      state.adminStudentName = student.name;
+      state.chatId = student.chatId;
+      state.tgId = student.name;
+      state.firstName = student.name; state.lastName = "";
+      state.quizIndex = 0; state.quizAnswers = []; state.quizScore = 0;
+      state.lectureViewed = !!(p && p.lecture);
+      state.quizDone = !!(p && p.quiz);
+      state.warmupsDone = !!(p && p.warmups);
+      state.songDone = !!(p && p.song);
+      state.celebrated = false;
+      state.warmupFiles = []; state.songFiles = []; state.songPlacements = {};
+      state.favorites = {};
+      state.notionLoadedFor = null; state.notionProfile = null; state.notionAssessments = null;
+      state.notionUnlockedLessons = []; state.notionProgressByLesson = {};
+      go("courses");
+    });
+}
+
+function exitAdminMode() {
+  var s = state.adminSnapshot;
+  state.adminMode = false;
+  state.adminStudentName = "";
+  state.adminSnapshot = null;
+  if (s) { for (var k in s) { state[k] = s[k]; } }
+  go("more");
+}
+
 /* Отправка прогресса шага в Notion (база «Прогресс») — тихо, без ожидания
    ответа: если не настроено или сеть подвела, просто ничего не запишется,
    на локальном прохождении урока это никак не сказывается. */
@@ -1115,6 +1207,7 @@ function renderQuestions() {
 
 function renderMore() {
   var s = state;
+  loadIsAdmin();
   // «Тёмная тема»: бейдж/иконка нарочно инвертированы относительно текущей темы —
   // тёмный бейдж на светлом фоне, светлый бейдж на тёмном (наоборот, чем bgmuted/ink
   // обычно себя ведут), чтобы значок луны сразу читался как переключатель темы.
@@ -1163,6 +1256,14 @@ function renderMore() {
       iconBg: "var(--soft-red)"
     }
   ];
+  // Виден только Николаю (chatId === ADMIN_CHAT_ID на сервере) — скрыт от учеников.
+  if (s.isAdmin) {
+    items.push({
+      label: "Режим админа", isLink: true, adminEntry: true,
+      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1.5l5.5 2v4c0 3.6-2.3 6-5.5 7-3.2-1-5.5-3.4-5.5-7v-4L8 1.5z" stroke="oklch(38% 0.06 235)" stroke-width="1.4" stroke-linejoin="round"/><path d="M6 8l1.5 1.5L10.5 6" stroke="oklch(38% 0.06 235)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      iconBg: "var(--soft-blue)"
+    });
+  }
 
   var itemsHtml = items.map(function (item, i) {
     var right = item.isToggle
@@ -1190,10 +1291,43 @@ function renderMore() {
       if (idx === 0) { toggleDarkMode(); return; }
       if (idx === 1) { state.notifOn = !state.notifOn; saveState(); render(); return; }
       if (idx === 6) { resetProgress(); return; }
+      if (items[idx] && items[idx].adminEntry) { go("admin-students"); return; }
       // «Написать в поддержку», «Правила и оферта», «Политика конфиденциальности»,
       // «О преподавателе» — в дизайн-файле это заглушки без содержимого, оставляю как есть.
     });
   });
+  wireActs();
+}
+
+/* «Режим админа» → список учеников. Только для Николая — эндпоинт сам
+   проверяет chatId на сервере, но экран всё равно недостижим для учеников,
+   т.к. пункт меню, который сюда ведёт, у них не показывается вовсе. */
+function renderAdminStudents() {
+  loadAdminStudentsList();
+  var list = state.adminStudentsList;
+  var body;
+  if (list === null) {
+    body = '<div class="courses-empty">Загружаю список учеников…</div>';
+  } else if (!list.length) {
+    body = '<div class="courses-empty">Пока нет ни одного ученика с привязанным Telegram — список пуст.</div>';
+  } else {
+    body = list.map(function (st) {
+      var sub = [st.age ? st.age + " лет" : "", st.status || ""].filter(Boolean).join(" · ");
+      return (
+        '<div class="lesson-card" data-act="admin-pick-student" data-admin-chat="' + esc(st.chatId) + '" data-admin-name="' + esc(st.name) + '">' +
+          '<div class="lesson-dot" style="background:oklch(56% 0.09 235);">' + esc((st.name || "?")[0]) + "</div>" +
+          '<div class="lesson-body"><div class="lesson-name">' + esc(st.name) + "</div>" +
+            (sub ? '<div class="lesson-sub">' + esc(sub) + "</div>" : "") +
+          "</div>" +
+        "</div>"
+      );
+    }).join("");
+  }
+  app.innerHTML =
+    '<div class="top pb8">' + backBtn("back") +
+      '<div><div class="top-title lg">Режим админа</div><div class="top-sub">Выбери ученика, чтобы пройти урок его глазами</div></div>' +
+    "</div>" +
+    '<div style="padding:8px 16px 130px;display:flex;flex-direction:column;gap:10px;">' + body + "</div>";
   wireActs();
 }
 
@@ -2792,6 +2926,10 @@ function wireActs() {
         openLessonByNumber(parseInt(el.getAttribute("data-lesson-num"), 10));
         return;
       }
+      if (act === "admin-pick-student") {
+        enterAdminMode({ chatId: el.getAttribute("data-admin-chat"), name: el.getAttribute("data-admin-name") });
+        return;
+      }
       var fn = ACTS[act];
       if (fn) fn();
     });
@@ -2824,6 +2962,7 @@ function render() {
     case "profile": renderProfile(); break;
     case "questions": renderQuestions(); break;
     case "more": renderMore(); break;
+    case "admin-students": renderAdminStudents(); break;
     case "lesson-home": renderLessonHome(); break;
     case "lesson-soon": renderLessonSoon(); break;
     case "lecture": renderLecture(); break;
@@ -2834,8 +2973,25 @@ function render() {
     case "feedback": renderFeedback(); break;
     default: renderTg();
   }
+  renderAdminBanner();
   renderDock();
   maybeCelebrate();
+}
+
+/* Заметная плашка сверху на ЛЮБОМ экране, пока Николай в «Режиме админа» —
+   чтобы никогда не забыть, что он сейчас не в своём кабинете. */
+function renderAdminBanner() {
+  if (!state.adminMode) return;
+  var html =
+    '<div class="admin-banner">' +
+      '<span>Ты в кабинете: ' + esc(state.adminStudentName) + "</span>" +
+      '<button id="admin-exit-btn">Выйти из режима админа</button>' +
+    "</div>";
+  app.insertAdjacentHTML("afterbegin", html);
+  // Вешаем слушатель точечно только на новую кнопку — повторный wireActs()
+  // задвоил бы обработчики уже привязанных на экране элементов.
+  var btn = document.getElementById("admin-exit-btn");
+  if (btn) btn.addEventListener("click", exitAdminMode);
 }
 
 /* ---------- запуск ---------- */
