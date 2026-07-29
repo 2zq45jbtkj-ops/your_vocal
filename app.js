@@ -356,14 +356,14 @@ function renderName() {
   app.innerHTML =
     '<div class="auth-screen">' +
       backBtn("back") +
-      '<div class="auth-title">Как вас зовут?</div>' +
-      '<div class="auth-sub tight">Укажите фамилию и имя на русском, строго в этом порядке — так вас увидит преподаватель.</div>' +
-      '<label class="field-label">ФАМИЛИЯ (сначала)</label>' +
+      '<div class="auth-title">Как тебя зовут?</div>' +
+      '<div class="auth-sub tight">Укажите фамилию и имя на русском, так вас увидит преподаватель в приложении.</div>' +
+      '<label class="field-label">ФАМИЛИЯ</label>' +
       '<input id="ln-input" class="field-input mb" type="text" placeholder="Иванова" value="' + esc(state.lastName) + '">' +
-      '<label class="field-label">ИМЯ (потом)</label>' +
+      '<label class="field-label">ИМЯ</label>' +
       '<input id="fn-input" class="field-input mb" type="text" placeholder="Мария" value="' + esc(state.firstName) + '">' +
-      '<label class="field-label">ДАТА РОЖДЕНИЯ (необязательно)</label>' +
-      '<input id="bd-input" class="field-input" type="date" value="' + esc(state.birthDate) + '">' +
+      '<label class="field-label">ДАТА РОЖДЕНИЯ</label>' +
+      '<input id="bd-input" class="field-input" type="tel" inputmode="numeric" autocomplete="off" placeholder="ДД.ММ.ГГГГ" maxlength="10" value="' + esc(state.birthDate) + '">' +
       '<div class="spacer"></div>' +
       '<button id="name-next" class="cta"' + (state.firstName.trim() && state.lastName.trim() ? "" : " disabled") + ">Начать обучение</button>" +
     "</div>";
@@ -375,12 +375,18 @@ function renderName() {
   function upd() {
     state.firstName = fn.value;
     state.lastName = ln.value;
-    state.birthDate = bd.value;
     btn.disabled = !(state.firstName.trim() && state.lastName.trim());
   }
   fn.addEventListener("input", upd);
   ln.addEventListener("input", upd);
-  bd.addEventListener("input", upd);
+  // Без нативного календаря (на мобильном он «плыл» — Reset/галочка съезжали,
+  // накладывались на текст): просто цифровая клавиатура (type=tel) и маска
+  // ДД.ММ.ГГГГ — точки расставляются сами по мере ввода цифр.
+  bd.addEventListener("input", function () {
+    bd.value = formatBirthDateInput(bd.value);
+    bd.setSelectionRange(bd.value.length, bd.value.length); // курсор всегда в конце — ввод только «дописыванием» цифр
+    state.birthDate = bd.value;
+  });
   btn.addEventListener("click", function () {
     saveState();
     btn.disabled = true;
@@ -399,6 +405,29 @@ function renderName() {
   wireActs();
 }
 
+/* Маска даты рождения: пользователь вводит только цифры (номерная клавиатура,
+   без нативного календаря — на мобильном он визуально ломался), точки
+   расставляются сами. Формат строго ДД.ММ.ГГГГ (день-месяц-год, не американский). */
+function formatBirthDateInput(raw) {
+  var digits = raw.replace(/\D/g, "").slice(0, 8); // ДДММГГГГ, максимум 8 цифр
+  var day = digits.slice(0, 2), month = digits.slice(2, 4), year = digits.slice(4, 8);
+  var out = day;
+  if (month) out += "." + month;
+  if (year) out += "." + year;
+  return out;
+}
+
+/* «ДД.ММ.ГГГГ» -> «ГГГГ-ММ-ДД» (формат, который ждёт Notion date-свойство).
+   Пустая строка, если дата не введена целиком или невалидна — тогда
+   api/notion-onboard.js просто не заполнит «Дата рождения» у ученика. */
+function birthDateToIso(display) {
+  var m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(display || "");
+  if (!m) return "";
+  var day = parseInt(m[1], 10), month = parseInt(m[2], 10), year = parseInt(m[3], 10);
+  if (month < 1 || month > 12 || day < 1 || day > 31 || year < 1900 || year > 2100) return "";
+  return m[3] + "-" + m[2] + "-" + m[1];
+}
+
 /* Разовое автосоздание строки ученика (+ стартового среза) в Notion —
    вызывается с экрана «Как вас зовут?» сразу после ввода имени/фамилии.
    Идемпотентно на сервере (см. api/notion-onboard.js), поэтому безопасно
@@ -411,7 +440,7 @@ function createStudentInNotion() {
     body: JSON.stringify({
       chatId: state.chatId, tgId: state.tgId,
       firstName: state.firstName, lastName: state.lastName,
-      birthDate: state.birthDate
+      birthDate: birthDateToIso(state.birthDate) // «ДД.ММ.ГГГГ» с экрана -> «ГГГГ-ММ-ДД» для Notion
     })
   }).then(function (r) { return r.json().catch(function () { return null; }); })
     .then(function () {
