@@ -1,15 +1,22 @@
-/* Карточка ученика (Кабинет: профиль + Срезы) из Notion.
+/* Карточка ученика (Кабинет: профиль + Срезы) + данные для разблокировки
+   уроков (Уроки: последовательное открытие + персональный override) — из Notion.
 
-   Данные ведёт сам Николай в двух связанных базах Notion — «Ученики»
-   и «Срезы» (создал их структуру Claude через Notion MCP). Правки в
+   Данные ведёт сам Николай в трёх связанных базах Notion — «Ученики»,
+   «Срезы» и «Прогресс» (создал их структуру Claude через Notion MCP). Правки в
    Notion сразу видны в приложении — эта функция дёргает Notion API
-   "вживую" при каждом открытии экрана «Кабинет», без промежуточного
+   "вживую" при каждом открытии экрана «Кабинет»/«Уроки», без промежуточного
    кэша/файла.
+
+   «Прогресс» — одна строка на пару (ученик, номер урока), чекбоксы по 4
+   шагам (Лекция/Тест/Распевки/Песня); туда же app.js дозаписывает прогресс
+   через api/notion-progress.js по мере прохождения. «Доп. открытые уроки» —
+   текстовое поле в «Ученики» со списком номеров через запятую (например
+   "10, 15") — персональная разблокировка вне очереди.
 
    Разовая настройка (делает сам Николай, это его секрет — сюда не пишем):
    1. notion.so/my-integrations -> New integration -> скопировать Secret.
-   2. В обеих базах («Ученики» и «Срезы») через "..." -> Connections
-      подключить эту интеграцию.
+   2. Во всех трёх базах («Ученики», «Срезы», «Прогресс») через "..." ->
+      Connections подключить эту интеграцию.
    3. В Vercel: Project Settings -> Environment Variables ->
       NOTION_TOKEN = вставленный secret.
 
@@ -21,6 +28,7 @@ export const config = { runtime: "edge" };
 
 var STUDENTS_DATA_SOURCE_ID = "1f7a4505-f823-4aa0-b7d5-a2a70bd0b261";
 var ASSESSMENTS_DATA_SOURCE_ID = "61be3937-4c4a-4654-9955-4e30ab9c58d2";
+var PROGRESS_DATA_SOURCE_ID = "726838f7-738f-47dc-84a7-8a67739be77c";
 var NOTION_VERSION = "2025-09-03";
 
 // Порядок и состав метрик "Срезов" — фиксированная рубрика, колонки в Notion.
@@ -80,6 +88,16 @@ function formatDate(iso) {
   var d = iso.slice(0, 10).split("-");
   return d[2] + "." + d[1] + "." + d[0];
 }
+function checkboxVal(prop) {
+  return !!(prop && prop.checkbox);
+}
+// "10, 15" -> [10, 15]; мусор/пустое -> []
+function parseLessonNumbers(text) {
+  return String(text || "")
+    .split(",")
+    .map(function (s) { return parseInt(s.trim(), 10); })
+    .filter(function (n) { return !isNaN(n) && n > 0; });
+}
 
 export default async function handler(req) {
   var url = new URL(req.url);
@@ -115,6 +133,28 @@ export default async function handler(req) {
       goals: multiSelectNames(sp["Задачи"]),
       notes: multiSelectNames(sp["Особенности"])
     };
+    var unlockedLessons = parseLessonNumbers(richText(sp["Доп. открытые уроки"]));
+
+    var progressRes = await notionFetch(token, "data_sources/" + PROGRESS_DATA_SOURCE_ID + "/query", {
+      filter: { property: "Ученик", relation: { contains: studentPage.id } },
+      page_size: 100
+    });
+    if (!progressRes.ok) {
+      return json({ ok: false, configured: true, error: "Notion API (прогресс): " + JSON.stringify(progressRes.data) }, 502);
+    }
+    // { "1": { lecture:true, quiz:true, warmups:false, song:false }, "2": {...} }
+    var progressByLesson = {};
+    (progressRes.data.results || []).forEach(function (page) {
+      var p = page.properties;
+      var n = numberVal(p["Номер урока"]);
+      if (n == null) return;
+      progressByLesson[n] = {
+        lecture: checkboxVal(p["Лекция"]),
+        quiz: checkboxVal(p["Тест"]),
+        warmups: checkboxVal(p["Распевки"]),
+        song: checkboxVal(p["Песня"])
+      };
+    });
 
     var assessRes = await notionFetch(token, "data_sources/" + ASSESSMENTS_DATA_SOURCE_ID + "/query", {
       filter: { property: "Ученик", relation: { contains: studentPage.id } },
@@ -140,7 +180,10 @@ export default async function handler(req) {
       };
     });
 
-    return json({ ok: true, configured: true, found: true, profile: profile, assessments: assessments });
+    return json({
+      ok: true, configured: true, found: true, profile: profile, assessments: assessments,
+      unlockedLessons: unlockedLessons, progressByLesson: progressByLesson
+    });
   } catch (e) {
     return json({ ok: false, configured: true, error: String(e && e.message ? e.message : e) }, 500);
   }
