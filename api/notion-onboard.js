@@ -70,8 +70,9 @@ export default async function handler(req) {
       return json({ ok: true, configured: true, alreadyExists: true });
     }
 
-    // «Мария Иванова (@username)» — если username/ID из Telegram недоступен, скобки просто не добавляются
-    var fullName = (firstName + " " + lastName).trim();
+    // «Иванова Мария (@username)» — строго Фамилия Имя, единообразно со всем
+    // приложением; если username/ID из Telegram недоступен, скобки не добавляются
+    var fullName = (lastName + " " + firstName).trim();
     var title = tgId ? fullName + " (" + tgId + ")" : fullName;
 
     var createStudentRes = await notionRequest(token, "POST", "pages", {
