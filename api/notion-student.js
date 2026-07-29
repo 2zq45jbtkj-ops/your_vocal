@@ -13,6 +13,14 @@
    текстовое поле в «Ученики» со списком номеров через запятую (например
    "10, 15") — персональная разблокировка вне очереди.
 
+   Сама строка в «Ученики» (и стартовая строка в «Срезы») создаётся
+   автоматически при первом входе ученика — см. api/notion-onboard.js.
+
+   Метрики "Срезов" (колесо баланса) — список колонок читается из схемы базы
+   живьём (resolveMetricColumns): если Николай добавит новую колонку-число в
+   «Срезы», она подхватится сама, без правки кода. Колесо на экране рисует
+   ровно те метрики, что заполнены в конкретном срезе — не хардкод на 18.
+
    Разовая настройка (делает сам Николай, это его секрет — сюда не пишем):
    1. notion.so/my-integrations -> New integration -> скопировать Secret.
    2. Во всех трёх базах («Ученики», «Срезы», «Прогресс») через "..." ->
@@ -20,9 +28,10 @@
    3. В Vercel: Project Settings -> Environment Variables ->
       NOTION_TOKEN = вставленный secret.
 
-   Требуется также сопоставление ученика в Notion с чатом в Telegram:
-   в базе «Ученики» есть текстовое поле "Telegram chat_id" — один раз
-   вписывается туда вручную (или бот сам подставит при первом заходе). */
+   Требуется также сопоставление ученика в Notion с чатом в Telegram: в базе
+   «Ученики» есть текстовое поле "Telegram chat_id" — заполняется само при
+   первом заходе ученика (см. api/notion-onboard.js), вручную вписывать не
+   нужно. */
 
 export const config = { runtime: "edge" };
 
@@ -31,14 +40,19 @@ var ASSESSMENTS_DATA_SOURCE_ID = "61be3937-4c4a-4654-9955-4e30ab9c58d2";
 var PROGRESS_DATA_SOURCE_ID = "726838f7-738f-47dc-84a7-8a67739be77c";
 var NOTION_VERSION = "2025-09-03";
 
-// Порядок и состав метрик "Срезов" — фиксированная рубрика, колонки в Notion.
-var METRIC_COLUMNS = [
+// Известный порядок метрик "Срезов" на сегодня — стартовая часть общего
+// списка колонок-метрик. Колонки НЕ входящие сюда, но добавленные Николаем
+// в Notion позже, подхватываются динамически (см. resolveMetricColumns) —
+// без правки кода, просто дописываются в конец.
+var KNOWN_METRIC_COLUMNS = [
   "Актёрское мастерство", "Работа с микрофоном", "Дыхание", "Сила звука",
   "Регистры", "Атака и окончание звука", "Гортань", "Голосовые складки",
   "Ложные голосовые складки", "Щитовидный хрящ", "Перстневидный хрящ",
   "Черпаловидный хрящ", "Черпало-надгортанный сфинктер", "Мягкое нёбо",
   "Язык", "Нижняя челюсть", "Губы", "Анкеровка"
 ];
+// Колонки-числа в базе «Срезы», которые НЕ являются метриками колеса баланса.
+var NON_METRIC_NUMBER_KEYS = ["Оценка за ДЗ"];
 
 function json(obj, status) {
   return new Response(JSON.stringify(obj), {
@@ -59,6 +73,37 @@ function notionFetch(token, path, body) {
   }).then(function (res) {
     return res.json().then(function (data) { return { ok: res.ok, status: res.status, data: data }; });
   });
+}
+
+function notionGet(token, path) {
+  return fetch("https://api.notion.com/v1/" + path, {
+    method: "GET",
+    headers: {
+      "Authorization": "Bearer " + token,
+      "Notion-Version": NOTION_VERSION
+    }
+  }).then(function (res) {
+    return res.json().then(function (data) { return { ok: res.ok, status: res.status, data: data }; });
+  });
+}
+
+/* Живой список колонок-метрик "Срезов": известные 18 (в привычном порядке)
+   + любые новые NUMBER-колонки, которые Николай добавит в Notion позже
+   (кроме "Оценка за ДЗ" — это не метрика колеса). Порядок и подписи у всех
+   учеников одинаковые, потому что список строится один раз из схемы базы,
+   а не из данных конкретного среза. */
+async function resolveMetricColumns(token) {
+  var res = await notionGet(token, "data_sources/" + ASSESSMENTS_DATA_SOURCE_ID);
+  var columns = KNOWN_METRIC_COLUMNS.slice();
+  if (res.ok && res.data && res.data.properties) {
+    Object.keys(res.data.properties).forEach(function (key) {
+      var prop = res.data.properties[key];
+      if (prop.type === "number" && NON_METRIC_NUMBER_KEYS.indexOf(key) === -1 && columns.indexOf(key) === -1) {
+        columns.push(key);
+      }
+    });
+  }
+  return columns;
 }
 
 function richText(prop) {
@@ -165,9 +210,10 @@ export default async function handler(req) {
       return json({ ok: false, configured: true, error: "Notion API (срезы): " + JSON.stringify(assessRes.data) }, 502);
     }
 
+    var metricColumns = await resolveMetricColumns(token);
     var assessments = (assessRes.data.results || []).map(function (page) {
       var p = page.properties;
-      var metrics = METRIC_COLUMNS
+      var metrics = metricColumns
         .map(function (label) { return [label, numberVal(p[label])]; })
         .filter(function (pair) { return pair[1] != null; });
       return {
