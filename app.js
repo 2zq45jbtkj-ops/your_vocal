@@ -365,7 +365,9 @@ function renderName() {
       '<label class="field-label">ДАТА РОЖДЕНИЯ</label>' +
       '<input id="bd-input" class="field-input" type="tel" inputmode="numeric" autocomplete="off" placeholder="ДД.ММ.ГГГГ" maxlength="10" value="' + esc(state.birthDate) + '">' +
       '<div class="spacer"></div>' +
-      '<button id="name-next" class="cta"' + (state.firstName.trim() && state.lastName.trim() ? "" : " disabled") + ">Начать обучение</button>" +
+      // Явный отступ над кнопкой (независимо от .spacer, который может схлопнуться
+      // на невысоких экранах) — чтобы кнопка не «слипалась» с полем даты рождения.
+      '<button id="name-next" class="cta" style="margin-top:12px;"' + (state.firstName.trim() && state.lastName.trim() ? "" : " disabled") + ">Начать обучение</button>" +
     "</div>";
 
   var fn = document.getElementById("fn-input");
