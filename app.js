@@ -284,6 +284,7 @@ var SVG = {
   dockMore: function (c) { return '<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="4.5" cy="10" r="1.6" fill="' + c + '"/><circle cx="10" cy="10" r="1.6" fill="' + c + '"/><circle cx="15.5" cy="10" r="1.6" fill="' + c + '"/></svg>'; },
   gear: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 5.2a2.8 2.8 0 100 5.6 2.8 2.8 0 000-5.6z" stroke="var(--gray)" stroke-width="1.3"/><path d="M8 1.3v1.4M8 13.3v1.4M14.7 8h-1.4M2.7 8H1.3M12.5 3.5l-1 1M4.5 11.5l-1 1M12.5 12.5l-1-1M4.5 4.5l-1-1" stroke="var(--gray)" stroke-width="1.3" stroke-linecap="round"/></svg>',
   chevronRight: '<svg width="7" height="12" viewBox="0 0 8 14" fill="none"><path d="M1 1l6 6-6 6" stroke="var(--disabled)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  trash: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M2.5 4h11M6 4V2.5h4V4M3.5 4l.6 9a1.5 1.5 0 001.5 1.4h4.8a1.5 1.5 0 001.5-1.4l.6-9" stroke="oklch(53% 0.18 25)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   star: function (filled) {
     var stroke = filled ? "oklch(84% 0.15 92)" : "var(--gray)";
     var fill = filled ? "oklch(84% 0.15 92)" : "none";
@@ -354,11 +355,11 @@ function renderName() {
     '<div class="auth-screen">' +
       backBtn("back") +
       '<div class="auth-title">Как вас зовут?</div>' +
-      '<div class="auth-sub tight">Укажите имя и фамилию на русском — так вас увидит преподаватель.</div>' +
-      '<label class="field-label">ИМЯ</label>' +
-      '<input id="fn-input" class="field-input mb" type="text" placeholder="Мария" value="' + esc(state.firstName) + '">' +
-      '<label class="field-label">ФАМИЛИЯ</label>' +
-      '<input id="ln-input" class="field-input" type="text" placeholder="Иванова" value="' + esc(state.lastName) + '">' +
+      '<div class="auth-sub tight">Укажите фамилию и имя на русском, строго в этом порядке — так вас увидит преподаватель.</div>' +
+      '<label class="field-label">ФАМИЛИЯ (сначала)</label>' +
+      '<input id="ln-input" class="field-input mb" type="text" placeholder="Иванова" value="' + esc(state.lastName) + '">' +
+      '<label class="field-label">ИМЯ (потом)</label>' +
+      '<input id="fn-input" class="field-input" type="text" placeholder="Мария" value="' + esc(state.firstName) + '">' +
       '<div class="spacer"></div>' +
       '<button id="name-next" class="cta"' + (state.firstName.trim() && state.lastName.trim() ? "" : " disabled") + ">Начать обучение</button>" +
     "</div>";
@@ -767,8 +768,13 @@ function loadStudentProfile() {
         state.notionAssessments = data.assessments;
         state.notionUnlockedLessons = data.unlockedLessons || [];
         state.notionProgressByLesson = data.progressByLesson || {};
+        // Статус «Завершил» — доступ закрыт. В режиме админа это НЕ применяется:
+        // Николай должен свободно смотреть кабинет деактивированного ученика.
+        if (!state.adminMode && data.profile.status === "Завершил") {
+          state.screen = "blocked";
+        }
       }
-      if (state.screen === "profile" || state.screen === "courses") render();
+      if (["profile", "courses", "blocked"].indexOf(state.screen) !== -1) render();
     })
     .catch(function () {});
 }
@@ -854,6 +860,39 @@ function exitAdminMode() {
   state.adminSnapshot = null;
   if (s) { for (var k in s) { state[k] = s[k]; } }
   go("more");
+}
+
+/* «Удалить данные ученика» — два ПОСЛЕДОВАТЕЛЬНЫХ предупреждения (не два
+   клика по одной кнопке), второе — уже финальное, с явным «назад пути нет».
+   Само действие — деактивация + сброс прогресса, см. api/notion-deactivate-student.js
+   (настоящего удаления страниц Notion API не даёт). */
+function deleteStudentWithConfirm(chatId, name) {
+  var step1 = confirm(
+    "Закрыть доступ ученику «" + name + "» и стереть весь его прогресс по урокам?\n\n" +
+    "Профиль в Notion останется (статус сменится на «Завершил»), но весь прогресс будет обнулён."
+  );
+  if (!step1) return;
+  var step2 = confirm(
+    "Это последнее предупреждение. Прогресс ученика «" + name + "» будет стёрт без возможности отменить.\n\nТочно продолжить?"
+  );
+  if (!step2) return;
+
+  fetch("/api/notion-deactivate-student", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ chatId: state.chatId, targetChatId: chatId })
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data && data.ok) {
+        alert("Готово: «" + name + "» деактивирован, прогресс сброшен (" + (data.resetCount || 0) + " строк).");
+        state.adminStudentsList = null; // перезагрузить список со свежим статусом
+        render();
+      } else {
+        alert("Не получилось: " + ((data && data.error) || "неизвестная ошибка"));
+      }
+    })
+    .catch(function () { alert("Не получилось: сеть/сервер не ответили."); });
 }
 
 /* Отправка прогресса шага в Notion (база «Прогресс») — тихо, без ожидания
@@ -1319,6 +1358,7 @@ function renderAdminStudents() {
           '<div class="lesson-body"><div class="lesson-name">' + esc(st.name) + "</div>" +
             (sub ? '<div class="lesson-sub">' + esc(sub) + "</div>" : "") +
           "</div>" +
+          '<button class="icon-btn" data-act="admin-delete-student" data-admin-chat="' + esc(st.chatId) + '" data-admin-name="' + esc(st.name) + '" title="Удалить данные ученика">' + SVG.trash + "</button>" +
         "</div>"
       );
     }).join("");
@@ -1347,13 +1387,24 @@ function renderLessonSoon() {
   renderComingSoon("Урок " + (state.comingSoonLessonNum || ""), SVG.dockLessons("var(--gray)"));
 }
 
+/* Статус ученика в Notion переключён на «Завершил» (см. api/notion-deactivate-student.js) —
+   доступ к приложению закрыт. Дока нет, назад идти некуда. */
+function renderBlocked() {
+  app.innerHTML =
+    '<div class="result-screen" style="padding-bottom:40px;">' +
+      '<div class="result-badge">' + SVG.lock + "</div>" +
+      '<div class="result-title">Доступ закрыт</div>' +
+      '<div class="result-sub">Занятия завершены. Если это ошибка — свяжитесь с преподавателем.</div>' +
+    "</div>";
+}
+
 /* Главные 4 вкладки дока. */
 var MAIN_TAB_SCREENS = ["courses", "profile", "questions", "more"];
 /* Подэкраны урока и избранное относятся к вкладке «Уроки» — она подсвечивается
    и на них, даже если открыт конкретный шаг урока, а не список уроков. */
 var LESSON_SUB_SCREENS = ["lesson-home", "lecture", "quiz", "quiz-result", "warmups", "song", "feedback", "favorites", "lesson-soon"];
 /* Дока нет ТОЛЬКО на экранах входа — на всех остальных она закреплена всегда. */
-var NO_DOCK_SCREENS = ["tg", "name"];
+var NO_DOCK_SCREENS = ["tg", "name", "blocked"];
 
 function activeDockTab() {
   if (MAIN_TAB_SCREENS.indexOf(state.screen) !== -1) return state.screen;
@@ -2919,7 +2970,11 @@ var ACTS = {
 
 function wireActs() {
   Array.prototype.forEach.call(app.querySelectorAll("[data-act]"), function (el) {
-    el.addEventListener("click", function () {
+    el.addEventListener("click", function (e) {
+      // элементы с data-act иногда вложены друг в друга (например кнопка
+      // удаления внутри кликабельной строки ученика) — без этого клик по
+      // вложенному элементу срабатывал бы дважды, по нему и по родителю.
+      e.stopPropagation();
       var act = el.getAttribute("data-act");
       // карточки/плитки разблокированных уроков без контента — номер в data-lesson-num
       if (act === "open-lesson-num") {
@@ -2928,6 +2983,10 @@ function wireActs() {
       }
       if (act === "admin-pick-student") {
         enterAdminMode({ chatId: el.getAttribute("data-admin-chat"), name: el.getAttribute("data-admin-name") });
+        return;
+      }
+      if (act === "admin-delete-student") {
+        deleteStudentWithConfirm(el.getAttribute("data-admin-chat"), el.getAttribute("data-admin-name"));
         return;
       }
       var fn = ACTS[act];
@@ -2965,6 +3024,7 @@ function render() {
     case "admin-students": renderAdminStudents(); break;
     case "lesson-home": renderLessonHome(); break;
     case "lesson-soon": renderLessonSoon(); break;
+    case "blocked": renderBlocked(); break;
     case "lecture": renderLecture(); break;
     case "quiz": renderQuiz(); break;
     case "quiz-result": renderQuizResult(); break;
