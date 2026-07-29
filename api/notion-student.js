@@ -175,8 +175,9 @@ export default async function handler(req) {
       voiceType: richText(sp["Тип голоса"]),
       primaryGoal: richText(sp["Первичная цель"]),
       focus: richText(sp["Вторичная цель"]),
-      goals: multiSelectNames(sp["Задачи"]),
-      notes: multiSelectNames(sp["Особенности"])
+      // поля переименованы в Notion: "Задачи"→"Проблемы в пении", "Особенности"→"Физ. особенности голоса"
+      goals: multiSelectNames(sp["Проблемы в пении"]),
+      notes: multiSelectNames(sp["Физ. особенности голоса"])
     };
     var unlockedLessons = parseLessonNumbers(richText(sp["Доп. открытые уроки"]));
 
