@@ -1049,7 +1049,7 @@ function renderProfile() {
         '<div class="profile-avatar">' + esc(p.short) + "</div>" +
         '<div>' +
           '<div class="profile-name">' + esc(p.name) + "</div>" +
-          '<div class="profile-status">' + (p.age != null ? p.age + " лет · " : "") + '<span style="color:var(--terra);font-weight:600;">' + esc(p.status) + "</span></div>" +
+          '<div class="profile-status">' + (p.age != null ? p.age + " лет · " : "") + (p.birthDate ? esc(p.birthDate) + " · " : "") + '<span style="color:var(--terra);font-weight:600;">' + esc(p.status) + "</span></div>" +
         "</div>" +
       "</div>" +
       '<div class="cabinet-inset">' +
