@@ -169,10 +169,17 @@ export default async function handler(req) {
       short: initials(titleText(sp["Имя"])),
       name: titleText(sp["Имя"]),
       age: numberVal(sp["Возраст"]),
+      // «Возраст (авто)» — formula-поле в Notion, formula-значения не отдаются
+      // через обычный page-properties ответ API так же просто, как число —
+      // пока используем ручное «Возраст»; авто-возраст можно добавить отдельно,
+      // если понадобится показывать именно его.
+      birthDate: formatDate(sp["Дата рождения"] && sp["Дата рождения"].date && sp["Дата рождения"].date.start),
       status: selectName(sp["Статус"]),
-      lessonType: richText(sp["Тип занятий"]),
-      range: richText(sp["Диапазон · тембр"]),
-      voiceType: richText(sp["Тип голоса"]),
+      // поля переведены в select в Notion — раньше тут был richText(), из-за
+      // чего эти три поля показывались пустыми после конвертации типа.
+      lessonType: selectName(sp["Тип занятий"]),
+      range: selectName(sp["Диапазон · тембр"]),
+      voiceType: selectName(sp["Тип голоса"]),
       primaryGoal: richText(sp["Первичная цель"]),
       focus: richText(sp["Вторичная цель"]),
       // поля переименованы в Notion: "Задачи"→"Проблемы в пении", "Особенности"→"Физ. особенности голоса"
