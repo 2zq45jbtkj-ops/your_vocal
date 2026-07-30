@@ -3055,10 +3055,26 @@ function renderSong() {
 
 /* ---------- обвязка ---------- */
 
+/* Случайный, гарантированно новый chat_id для «Сбросить и войти как другой
+   ученик» — с префиксом "test_", чтобы такие тестовые карточки в Notion
+   было легко узнать и почистить пачкой (по имени в поле «Telegram chat_id»),
+   не путая их с настоящими учениками. */
+function genTestChatId() {
+  return "test_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
 function resetProgress() {
-  if (!confirm("Сбросить весь прогресс и данные ученика на этом устройстве?")) return;
+  if (!confirm(
+    "Сбросить прогресс на этом устройстве и войти как новый тестовый ученик?\n\n" +
+    "Приложение откроется заново с экрана «Как тебя зовут?» — с новым тестовым " +
+    "ID, не с твоим настоящим Telegram-аккаунтом. Так можно проверить онбординг " +
+    "заново, как его увидит настоящий новый ученик."
+  )) return;
   try { localStorage.removeItem("vocal-app"); } catch (e) {}
-  location.href = location.pathname;
+  // ?testChatId=... в адресе — эту заготовку читает код инициализации ниже
+  // и подставляет её ВМЕСТО настоящего tg.initDataUnsafe.user.id (иначе внутри
+  // реального Telegram chat_id всё равно снова стал бы твоим собственным).
+  location.href = location.pathname + "?testChatId=" + encodeURIComponent(genTestChatId());
 }
 
 var ACTS = {
@@ -3212,8 +3228,18 @@ fetch("data/lesson-01.json")
     state.quizAnswers = new Array(data.quiz.questions.length).fill(null);
     loadState();
     loadDarkMode();
-    // подставляем Telegram-username, если открыто внутри Telegram
-    if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
+    // «Сбросить и войти как другой ученик» (см. resetProgress/genTestChatId):
+    // ?testChatId=... в адресе — специально сгенерированный, заведомо не
+    // существующий в Notion chat_id. Он ПЕРЕКРЫВАЕТ настоящий
+    // tg.initDataUnsafe.user.id, иначе внутри реального Telegram приложение
+    // всё равно узнало бы своего настоящего владельца и пропустило онбординг.
+    var testChatId = new URLSearchParams(location.search).get("testChatId");
+    if (testChatId) {
+      state.chatId = testChatId;
+      state.tgId = testChatId;
+      state.screen = "name"; // сразу к форме — вводить тестовый ID вручную незачем
+    } else if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
+      // подставляем Telegram-username, если открыто внутри Telegram
       var u = tg.initDataUnsafe.user;
       state.chatId = u.id || state.chatId;
       if (!state.tgId) state.tgId = u.username ? "@" + u.username : String(u.id || "");
