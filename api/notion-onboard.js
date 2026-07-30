@@ -6,9 +6,12 @@
    добавляем только справочно, в скобках, чтобы Николаю было легче сверить
    кто есть кто: "Мария Иванова (@username)").
 
-   Идемпотентно: если строка с этим Telegram chat_id уже есть в «Ученики» —
-   ничего не создаётся повторно (защита от дублей при перезаходе/повторной
-   отправке формы).
+   Идемпотентно: если строка с этим Telegram chat_id уже есть в «Ученики_Бот» —
+   новая не создаётся (защита от дублей при перезаходе/повторной отправке
+   формы). Но не полностью «глухо»: если у существующей строки ещё нет даты
+   рождения, а в этом запросе она пришла — дозаписываем именно это поле,
+   ничего больше не трогая (баг был найден: раньше уже зарегистрированные
+   ученики, повторно прошедшие форму, теряли дату рождения молча).
 
    Заодно создаёт связанную стартовую строку в «Срезы», чтобы таблица среза
    была готова, когда Николай будет заполнять первую оценку.
@@ -71,7 +74,25 @@ export default async function handler(req) {
       page_size: 1
     });
     if (!existingRes.ok) return json({ ok: false, configured: true, error: "Notion API (поиск ученика): " + JSON.stringify(existingRes.data) }, 502);
-    if (existingRes.data.results && existingRes.data.results[0]) {
+    var existingPage = existingRes.data.results && existingRes.data.results[0];
+    if (existingPage) {
+      // Строка уже была (ученик регистрировался ещё до появления поля «Дата
+      // рождения», либо просто повторно прошёл экран «Как тебя зовут?») —
+      // новую не создаём, но раньше это означало, что ВСЁ из формы, включая
+      // дату рождения, молча терялось. Теперь: если в Notion поле «Дата
+      // рождения» ещё пустое, а в этом запросе оно пришло — дописываем его.
+      // Уже заполненную дату не трогаем и не перезаписываем.
+      var existingDateProp = existingPage.properties["Дата рождения"];
+      var existingBirthDate = existingDateProp && existingDateProp.date && existingDateProp.date.start;
+      if (!existingBirthDate && birthDate) {
+        var patchRes = await notionRequest(token, "PATCH", "pages/" + existingPage.id, {
+          properties: { "Дата рождения": { date: { start: birthDate } } }
+        });
+        if (!patchRes.ok) {
+          return json({ ok: true, configured: true, alreadyExists: true, birthDateUpdated: false, error: JSON.stringify(patchRes.data) });
+        }
+        return json({ ok: true, configured: true, alreadyExists: true, birthDateUpdated: true });
+      }
       return json({ ok: true, configured: true, alreadyExists: true });
     }
 
