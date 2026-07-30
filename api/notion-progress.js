@@ -10,7 +10,15 @@
    lessonUnlocked()).
 
    Тот же NOTION_TOKEN и подключение интеграции к базам, что и у
-   notion-student.js — отдельной настройки не требует. */
+   notion-student.js — отдельной настройки не требует.
+
+   Автопереход статуса «Пробный» -> «Активный» (по просьбе Николая): после
+   каждой отметки шага проверяем ВСЕ строки прогресса ученика — если урок 1
+   пройден полностью (все 4 шага) И есть хоть какой-то прогресс по любому
+   уроку с номером больше 1, статус меняется на «Активный». Работает только
+   в эту сторону и только если сейчас стоит именно «Пробный» — «Завершил» и
+   «Пауза», выставленные Николаем вручную, никогда не трогаем и не
+   перезаписываем. */
 
 export const config = { runtime: "edge" };
 
@@ -38,6 +46,50 @@ function notionRequest(token, method, path, body) {
   }).then(function (res) {
     return res.json().then(function (data) { return { ok: res.ok, status: res.status, data: data }; });
   });
+}
+
+function checkboxVal(prop) {
+  return !!(prop && prop.checkbox);
+}
+function selectName(prop) {
+  return (prop && prop.select && prop.select.name) || "";
+}
+function numberVal(prop) {
+  return prop && typeof prop.number === "number" ? prop.number : null;
+}
+
+/* «Пробный» -> «Активный»: урок 1 пройден целиком (4/4 шага) и есть хоть
+   какой-то прогресс по любому уроку с номером больше 1. Не завязано на
+   конкретный "урок 2" — сработает и когда в приложении появятся другие уроки. */
+async function maybePromoteStatus(token, studentPage) {
+  var currentStatus = selectName(studentPage.properties["Статус"]);
+  if (currentStatus !== "Пробный") return; // трогаем только этот переход
+
+  var allRes = await notionRequest(token, "POST", "data_sources/" + PROGRESS_DATA_SOURCE_ID + "/query", {
+    filter: { property: "Ученик", relation: { contains: studentPage.id } },
+    page_size: 100
+  });
+  if (!allRes.ok) return; // не валим основной запрос из-за этой проверки
+
+  var lesson1Done = false;
+  var hasOtherLessonProgress = false;
+  (allRes.data.results || []).forEach(function (page) {
+    var p = page.properties;
+    var n = numberVal(p["Номер урока"]);
+    if (n == null) return;
+    var lecture = checkboxVal(p["Лекция"]);
+    var quiz = checkboxVal(p["Тест"]);
+    var warmups = checkboxVal(p["Распевки"]);
+    var song = checkboxVal(p["Песня"]);
+    if (n === 1 && lecture && quiz && warmups && song) lesson1Done = true;
+    if (n > 1 && (lecture || quiz || warmups || song)) hasOtherLessonProgress = true;
+  });
+
+  if (lesson1Done && hasOtherLessonProgress) {
+    await notionRequest(token, "PATCH", "pages/" + studentPage.id, {
+      properties: { "Статус": { select: { name: "Активный" } } }
+    });
+  }
 }
 
 export default async function handler(req) {
@@ -96,6 +148,8 @@ export default async function handler(req) {
       });
       if (!createRes.ok) return json({ ok: false, configured: true, error: "Notion API (прогресс, создание): " + JSON.stringify(createRes.data) }, 502);
     }
+
+    await maybePromoteStatus(token, studentPage);
 
     return json({ ok: true, configured: true, found: true });
   } catch (e) {
