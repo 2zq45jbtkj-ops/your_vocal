@@ -172,6 +172,50 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 }
 .roadmap-step-dot.done { background: var(--terra); }
 .roadmap-step span { font-size: 12px; color: var(--ink); }
+/* Новая «Дорожная карта урока»: одна карточка + пагинация номерами (заменяет
+   прежний горизонтальный свайп карточек .roadmap-scroll/.roadmap-card, тот
+   CSS оставлен ниже нетронутым на случай отката). */
+.roadmap-single-card {
+  background: var(--bg); border-radius: 24px; box-shadow: var(--raised-lg);
+  padding: 20px 20px 24px; margin: 8px 18px 16px; cursor: pointer; min-height: 280px;
+}
+.roadmap-single-card.locked { cursor: default; }
+.roadmap-single-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; }
+.roadmap-single-title { font: 700 17px 'Manrope', sans-serif; color: var(--ink); }
+.roadmap-single-title.locked { color: var(--locked); }
+.roadmap-single-pct { font: 700 13px 'Manrope', sans-serif; color: var(--blue); }
+.roadmap-single-sub { font-size: 12.5px; color: var(--gray); margin: 2px 0 14px; }
+.roadmap-single-bar { height: 6px; background: var(--bgmuted); border-radius: 3px; overflow: hidden; margin-bottom: 20px; }
+.roadmap-single-bar > div { height: 100%; background: var(--blue); border-radius: 3px; }
+.roadmap-single-step { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.roadmap-single-step:last-child { margin-bottom: 0; }
+.roadmap-single-dot {
+  width: 36px; height: 36px; border-radius: 50%; background: var(--line);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  box-shadow: 3px 3px 6px oklch(var(--sh-base) / 0.3);
+}
+.roadmap-single-dot.done { background: var(--terra); }
+.roadmap-single-dot.current { background: var(--blue); }
+.roadmap-single-step-label { font-size: 14px; color: var(--ink); }
+.roadmap-single-step-label.locked { color: var(--locked); }
+
+.roadmap-pager { display: flex; align-items: center; gap: 10px; padding: 4px 18px 130px; }
+.roadmap-pager-btn {
+  width: 48px; height: 44px; border-radius: 16px; border: none; background: var(--bg);
+  box-shadow: var(--raised-sm); display: flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0;
+}
+.roadmap-pager-btn[disabled] { opacity: .4; cursor: default; }
+.roadmap-pager-track {
+  flex: 1; display: flex; justify-content: center; gap: 8px; background: var(--bg);
+  border-radius: 16px; box-shadow: var(--inset-sm); height: 44px; align-items: center;
+}
+.roadmap-pager-num {
+  width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font: 700 11.5px 'Manrope', sans-serif; color: var(--gray); cursor: pointer; flex-shrink: 0;
+}
+.roadmap-pager-num.active { background: var(--blue); color: var(--white-text); }
+
 .courses-grid { padding: 16px 18px 130px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .lesson-tile {
   background: var(--bg); border-radius: 18px; box-shadow: var(--raised);

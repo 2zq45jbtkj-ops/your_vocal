@@ -44,6 +44,7 @@ var state = {
   // то же самое, но для плеера в упражнении с песней — свой набор настроек.
   songTempoMap: {}, songPitchMap: {}, songLoopMap: {}, songAutoplayNext: false,
   favorites: {}, // "lessonId-w-n" / "lessonId-s-ti" -> { lessonTitle, label }
+  roadmapPage: null, // какой урок сейчас показан карточкой на «Уроках» (пагинация ‹ 1 2 3 4 5 ›)
   darkMode: false, notifOn: true, // раздел «Ещё»; darkMode хранится отдельным ключом (см. loadDarkMode)
   // transient (не сохраняется):
   playerIdx: null, playerElapsed: 0, durations: {}, openSettings: {},
@@ -598,6 +599,114 @@ function roadmapScrollHtml(filter) {
   return out;
 }
 
+/* ---------- новая «Дорожная карта урока»: одна карточка + пагинация номерами
+   (по дизайну от Николая — заменяет прежний горизонтальный свайп карточек
+   и сетку из 30 плиток; сетка/старые функции карточек оставлены в файле
+   нетронутыми, просто больше не вызываются из renderCourses). ---------- */
+
+/* Список номеров уроков, доступных для пролистывания сейчас: без фильтра —
+   все 30 (запертые тоже показываем номером, но карточка для них — «Откроется
+   позже»); с фильтром — только разблокированные с нужным статусом (как и
+   раньше в фильтрах «В работе»/«Завершено»). */
+function roadmapEligibleLessons(filter) {
+  var out = [];
+  for (var n = 1; n <= TOTAL_LESSONS; n++) {
+    if (!filter) { out.push(n); continue; }
+    if (!lessonUnlocked(n)) continue;
+    var status = lessonStatus(n);
+    if (filter === "inProgress" && status === "in-progress") out.push(n);
+    else if (filter === "completed" && status === "completed") out.push(n);
+  }
+  return out;
+}
+
+function roadmapSingleCardHtml(n, filter) {
+  var isOpenLesson = LESSON && n === (LESSON.id || 1);
+
+  if (!lessonUnlocked(n)) {
+    var lockedStepsHtml = ["Лекция", "Тест", "Распевки", "Песня"].map(function (label) {
+      return '<div class="roadmap-single-step">' +
+        '<div class="roadmap-single-dot"></div>' +
+        '<span class="roadmap-single-step-label locked">' + label + "</span>" +
+      "</div>";
+    }).join("");
+    return (
+      '<div class="roadmap-single-card locked">' +
+        '<div class="roadmap-single-head"><div class="roadmap-single-title locked">Урок ' + n + "</div></div>" +
+        '<div class="roadmap-single-sub">Откроется позже</div>' +
+        lockedStepsHtml +
+      "</div>"
+    );
+  }
+
+  var s = state;
+  var p = isOpenLesson
+    ? { lecture: s.lectureViewed, quiz: s.quizDone, warmups: s.warmupsDone, song: s.songDone }
+    : (state.notionProgressByLesson && state.notionProgressByLesson[n]) || {};
+  var steps = [
+    { label: "Лекция", done: !!p.lecture },
+    { label: "Тест", done: !!p.quiz },
+    { label: "Распевки", done: !!p.warmups },
+    { label: "Песня", done: !!p.song }
+  ];
+  // точка: пройден — терракотовая с галочкой; первый непройденный шаг — синяя
+  // («сейчас сюда»); остальные дальше по списку — пустая/приглушённая.
+  var markedCurrent = false;
+  var stepsHtml = steps.map(function (st) {
+    var cls = "roadmap-single-dot";
+    var inner = "";
+    if (st.done) { cls += " done"; inner = SVG.stepCheck; }
+    else if (!markedCurrent) { cls += " current"; markedCurrent = true; }
+    return '<div class="roadmap-single-step">' +
+      '<div class="' + cls + '">' + inner + "</div>" +
+      '<span class="roadmap-single-step-label">' + st.label + "</span>" +
+    "</div>";
+  }).join("");
+
+  var doneCount = steps.filter(function (st) { return st.done; }).length;
+  var pct = doneCount * 25;
+  var subLabel = doneCount === 4 ? "Завершён" : (doneCount > 0 ? "В процессе" : "Открыт");
+  var title = isOpenLesson ? "Урок " + n + " · " + esc(LESSON.title) : "Урок " + n;
+  var act = isOpenLesson
+    ? (filter === "completed" ? "open-lesson-review" : filter === "inProgress" ? "open-lesson-continue" : "open-lesson")
+    : "open-lesson-num";
+
+  return (
+    '<div class="roadmap-single-card" data-act="' + act + '"' + (isOpenLesson ? "" : ' data-lesson-num="' + n + '"') + '>' +
+      '<div class="roadmap-single-head">' +
+        '<div class="roadmap-single-title">' + title + "</div>" +
+        '<div class="roadmap-single-pct">' + pct + "%</div>" +
+      "</div>" +
+      '<div class="roadmap-single-sub">' + subLabel + "</div>" +
+      '<div class="roadmap-single-bar"><div style="width:' + pct + '%;"></div></div>' +
+      stepsHtml +
+    "</div>"
+  );
+}
+
+function roadmapPagerHtml(current, eligible) {
+  var idx = eligible.indexOf(current);
+  var windowSize = 5;
+  var start = idx - Math.floor(windowSize / 2);
+  if (start < 0) start = 0;
+  if (start + windowSize > eligible.length) start = Math.max(0, eligible.length - windowSize);
+  var windowList = eligible.slice(start, start + windowSize);
+
+  var numsHtml = windowList.map(function (n) {
+    return '<div class="roadmap-pager-num' + (n === current ? " active" : "") + '" data-act="roadmap-goto" data-page="' + n + '">' + n + "</div>";
+  }).join("");
+
+  var prevDisabled = idx <= 0;
+  var nextDisabled = idx === -1 || idx >= eligible.length - 1;
+  return (
+    '<div class="roadmap-pager">' +
+      '<button class="roadmap-pager-btn" data-act="roadmap-prev"' + (prevDisabled ? " disabled" : "") + '>' + SVG.back + "</button>" +
+      '<div class="roadmap-pager-track">' + numsHtml + "</div>" +
+      '<button class="roadmap-pager-btn" data-act="roadmap-next"' + (nextDisabled ? " disabled" : "") + '>' + SVG.chevronRight + "</button>" +
+    "</div>"
+  );
+}
+
 function lessonsGridHtml() {
   var tiles = "";
   for (var n = 1; n <= TOTAL_LESSONS; n++) {
@@ -631,14 +740,23 @@ function renderCourses() {
   var filter = state.coursesFilter; // "inProgress" | "completed" | null — переключатель фильтра дорожной карты
   var favCount = Object.keys(state.favorites || {}).length;
 
-  var roadmapInner = roadmapScrollHtml(filter);
-  var roadmapBody = roadmapInner
-    ? '<div class="roadmap-scroll">' + roadmapInner + "</div>"
-    : '<div class="courses-empty">' +
-        (filter === "inProgress"
-          ? "Пока нет незавершённых уроков — начни любой открытый урок"
-          : "Здесь появятся уроки, которые ты закончишь полностью") +
+  // Новая «Дорожная карта урока»: одна карточка текущего урока + пагинация
+  // номерами снизу (‹ 1 2 3 4 5 ›) — по дизайну от Николая, вместо прежнего
+  // горизонтального свайпа карточек и сетки из 30 плиток.
+  var eligible = roadmapEligibleLessons(filter);
+  var roadmapBody;
+  if (!eligible.length) {
+    roadmapBody = '<div class="courses-empty">' +
+      (filter === "inProgress"
+        ? "Пока нет незавершённых уроков — начни любой открытый урок"
+        : "Здесь появятся уроки, которые ты закончишь полностью") +
       "</div>";
+  } else {
+    if (state.roadmapPage == null || eligible.indexOf(state.roadmapPage) === -1) {
+      state.roadmapPage = filter ? eligible[0] : (LESSON && LESSON.id || 1);
+    }
+    roadmapBody = roadmapSingleCardHtml(state.roadmapPage, filter) + roadmapPagerHtml(state.roadmapPage, eligible);
+  }
 
   app.innerHTML =
     '<div class="courses-head">' +
@@ -658,8 +776,7 @@ function renderCourses() {
     '<div class="roadmap-wrap">' +
       '<div class="roadmap-label">Дорожная карта урока · листай →</div>' +
       roadmapBody +
-    "</div>" +
-    lessonsGridHtml();
+    "</div>";
   wireActs();
 }
 
@@ -3099,6 +3216,16 @@ var ACTS = {
   "filter-inprogress": function () { state.coursesFilter = state.coursesFilter === "inProgress" ? null : "inProgress"; render(); },
   "filter-completed": function () { state.coursesFilter = state.coursesFilter === "completed" ? null : "completed"; render(); },
   "go-favorites": function () { go("favorites"); },
+  "roadmap-prev": function () {
+    var eligible = roadmapEligibleLessons(state.coursesFilter);
+    var idx = eligible.indexOf(state.roadmapPage);
+    if (idx > 0) { state.roadmapPage = eligible[idx - 1]; render(); }
+  },
+  "roadmap-next": function () {
+    var eligible = roadmapEligibleLessons(state.coursesFilter);
+    var idx = eligible.indexOf(state.roadmapPage);
+    if (idx !== -1 && idx < eligible.length - 1) { state.roadmapPage = eligible[idx + 1]; render(); }
+  },
   "admin-hub-students": function () { go("admin-students"); },
   "admin-hub-birthdays": function () { go("admin-birthdays"); },
   "undo-unstar": undoUnstar,
@@ -3129,6 +3256,11 @@ function wireActs() {
       // карточки/плитки разблокированных уроков без контента — номер в data-lesson-num
       if (act === "open-lesson-num") {
         openLessonByNumber(parseInt(el.getAttribute("data-lesson-num"), 10));
+        return;
+      }
+      if (act === "roadmap-goto") {
+        state.roadmapPage = parseInt(el.getAttribute("data-page"), 10);
+        render();
         return;
       }
       if (act === "admin-pick-student") {
