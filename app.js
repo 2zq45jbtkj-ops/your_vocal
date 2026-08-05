@@ -808,41 +808,69 @@ function roadmapGoRelative(dir) {
   render();
 }
 
-/* Свайп пальцем по карточке «Дорожной карты» — влево/вправо перелистывает
-   урок, как было раньше при горизонтальной ленте карточек (дизайн карточки
-   не меняется, добавляется только жест поверх текущей пагинации). Карточка
-   пересоздаётся при каждом render(), поэтому слушатели вешаются заново —
-   старые уходят вместе со старым DOM-узлом, отдельно снимать не нужно. */
+/* Свайп пальцем по карточке «Дорожной карты» — карточка в реальном времени
+   двигается ЗА пальцем (как раньше было с нативной horizontal-scroll-snap
+   лентой), а не просто «свайпнул — и через мгновение поменялась карточка».
+   Пока палец на экране, transform у карточки следует за пальцем 1:1; при
+   отпускании — либо докручиваем карточку до конца в сторону свайпа и меняем
+   урок, либо (если сдвинули недостаточно) пружиним обратно на место.
+   Карточка пересоздаётся при каждом render(), поэтому слушатели вешаются
+   заново — старые уходят вместе со старым DOM-узлом, отдельно снимать не
+   нужно; inline transform тоже не переживает пересоздание DOM. */
 function wireRoadmapSwipe() {
   var card = app.querySelector(".roadmap-single-card");
   if (!card) return;
   var startX = 0, startY = 0, tracking = false, swiping = false;
+
   card.addEventListener("touchstart", function (e) {
     if (e.touches.length !== 1) return;
     startX = e.touches[0].clientX;
     startY = e.touches[0].clientY;
     tracking = true;
     swiping = false;
+    card.style.transition = "none";
   }, { passive: true });
+
   card.addEventListener("touchmove", function (e) {
     if (!tracking) return;
     var dx = e.touches[0].clientX - startX;
     var dy = e.touches[0].clientY - startY;
     // Явно горизонтальный жест — перехватываем у вертикального скролла страницы.
-    if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
-      swiping = true;
+    if (!swiping && Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) swiping = true;
+    if (swiping) {
       e.preventDefault();
+      card.style.transform = "translateX(" + dx + "px)";
     }
   }, { passive: false });
+
   card.addEventListener("touchend", function (e) {
     if (!tracking) return;
     tracking = false;
     if (!swiping) return;
     e.preventDefault(); // не даём этому же жесту сработать как тап-открытие урока
     var dx = e.changedTouches[0].clientX - startX;
-    if (Math.abs(dx) < 40) return;
-    roadmapGoRelative(dx < 0 ? 1 : -1); // свайп влево — следующий урок, вправо — предыдущий
+    var dir = dx < 0 ? 1 : -1; // свайп влево — следующий урок, вправо — предыдущий
+    var eligible = roadmapEligibleLessons(state.coursesFilter);
+    var idx = eligible.indexOf(state.roadmapPage);
+    var canGo = Math.abs(dx) > 60 && idx !== -1 && idx + dir >= 0 && idx + dir < eligible.length;
+    card.style.transition = "transform .18s ease";
+    if (canGo) {
+      // Докручиваем карточку с экрана в сторону свайпа, потом меняем урок —
+      // новая карточка въезжает с противоположной стороны (см. .slide-next/.slide-prev).
+      card.style.transform = "translateX(" + (dir === 1 ? -1 : 1) * (card.offsetWidth + 40) + "px)";
+      setTimeout(function () { roadmapGoRelative(dir); }, 160);
+    } else {
+      card.style.transform = "translateX(0)"; // недостаточно далеко — пружиним обратно
+    }
   }, { passive: false });
+
+  card.addEventListener("touchcancel", function () {
+    if (!tracking) return;
+    tracking = false;
+    swiping = false;
+    card.style.transition = "transform .18s ease";
+    card.style.transform = "translateX(0)";
+  }, { passive: true });
 }
 
 /* ---------- избранные распевки: тот же плеер урока + снятие звезды с undo (1:1 по макету) ---------- */
