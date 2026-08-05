@@ -470,10 +470,19 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 }
 .settings-panel.open { grid-template-rows: 1fr; }
 .settings-panel-inner { overflow: hidden; min-height: 0; }
-.settings-panel.open .settings-panel-inner { padding-top: 10px; }
+/* .settings-box сам несёт верхний отступ (margin, не padding у .settings-panel-inner) —
+   раньше padding-top навешивался только в .open БЕЗ transition и прыгал мгновенно
+   в момент снятия класса, из-за чего при закрытии контент дёргался вверх на кадр
+   раньше, чем схлопывалась высота грид-строки. opacity/translateY анимируются той
+   же длительностью и easing'ом, что и grid-template-rows — открытие/закрытие
+   становятся зеркальными, единая точка привязки — верх панели под шапкой плеера. */
 .settings-box {
   background: var(--bg); border-radius: 14px; box-shadow: var(--inset-sm); padding: 4px 12px;
+  margin-top: 10px;
+  opacity: 0; transform: translateY(-6px);
+  transition: opacity .25s ease, transform .25s ease;
 }
+.settings-panel.open .settings-box { opacity: 1; transform: translateY(0); }
 .settings-slider-row {
   display: flex; align-items: center; gap: 10px; padding: 10px 0;
   border-bottom: 1px solid var(--line);
