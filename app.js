@@ -778,6 +778,56 @@ function renderCourses() {
       roadmapBody +
     "</div>";
   wireActs();
+  wireRoadmapSwipe();
+}
+
+/* Переход к соседнему уроку в пагинации (dir: -1 — назад, +1 — вперёд), тот
+   же список "eligible", что и у кнопок ‹ › и точек-номеров — используется и
+   кнопками, и свайпом пальцем по карточке. */
+function roadmapGoRelative(dir) {
+  var eligible = roadmapEligibleLessons(state.coursesFilter);
+  var idx = eligible.indexOf(state.roadmapPage);
+  var next = idx + dir;
+  if (idx === -1 || next < 0 || next >= eligible.length) return;
+  state.roadmapPage = eligible[next];
+  render();
+}
+
+/* Свайп пальцем по карточке «Дорожной карты» — влево/вправо перелистывает
+   урок, как было раньше при горизонтальной ленте карточек (дизайн карточки
+   не меняется, добавляется только жест поверх текущей пагинации). Карточка
+   пересоздаётся при каждом render(), поэтому слушатели вешаются заново —
+   старые уходят вместе со старым DOM-узлом, отдельно снимать не нужно. */
+function wireRoadmapSwipe() {
+  var card = app.querySelector(".roadmap-single-card");
+  if (!card) return;
+  var startX = 0, startY = 0, tracking = false, swiping = false;
+  card.addEventListener("touchstart", function (e) {
+    if (e.touches.length !== 1) return;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    tracking = true;
+    swiping = false;
+  }, { passive: true });
+  card.addEventListener("touchmove", function (e) {
+    if (!tracking) return;
+    var dx = e.touches[0].clientX - startX;
+    var dy = e.touches[0].clientY - startY;
+    // Явно горизонтальный жест — перехватываем у вертикального скролла страницы.
+    if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
+      swiping = true;
+      e.preventDefault();
+    }
+  }, { passive: false });
+  card.addEventListener("touchend", function (e) {
+    if (!tracking) return;
+    tracking = false;
+    if (!swiping) return;
+    e.preventDefault(); // не даём этому же жесту сработать как тап-открытие урока
+    var dx = e.changedTouches[0].clientX - startX;
+    if (Math.abs(dx) < 40) return;
+    roadmapGoRelative(dx < 0 ? 1 : -1); // свайп влево — следующий урок, вправо — предыдущий
+  }, { passive: false });
 }
 
 /* ---------- избранные распевки: тот же плеер урока + снятие звезды с undo (1:1 по макету) ---------- */
@@ -3216,16 +3266,8 @@ var ACTS = {
   "filter-inprogress": function () { state.coursesFilter = state.coursesFilter === "inProgress" ? null : "inProgress"; render(); },
   "filter-completed": function () { state.coursesFilter = state.coursesFilter === "completed" ? null : "completed"; render(); },
   "go-favorites": function () { go("favorites"); },
-  "roadmap-prev": function () {
-    var eligible = roadmapEligibleLessons(state.coursesFilter);
-    var idx = eligible.indexOf(state.roadmapPage);
-    if (idx > 0) { state.roadmapPage = eligible[idx - 1]; render(); }
-  },
-  "roadmap-next": function () {
-    var eligible = roadmapEligibleLessons(state.coursesFilter);
-    var idx = eligible.indexOf(state.roadmapPage);
-    if (idx !== -1 && idx < eligible.length - 1) { state.roadmapPage = eligible[idx + 1]; render(); }
-  },
+  "roadmap-prev": function () { roadmapGoRelative(-1); },
+  "roadmap-next": function () { roadmapGoRelative(1); },
   "admin-hub-students": function () { go("admin-students"); },
   "admin-hub-birthdays": function () { go("admin-birthdays"); },
   "undo-unstar": undoUnstar,
