@@ -842,6 +842,10 @@ function wireRoadmapSwipe() {
   var stage = app.querySelector(".roadmap-stage");
   var card = app.querySelector(".roadmap-single-card");
   if (!stage || !card) return;
+  // Зазор между карточками во время свайпа — тот же боковой отступ, что и у
+  // самой карточки от края экрана (.roadmap-stage { margin: ... 18px ... }),
+  // чтобы соседняя карточка не «прилипала» к текущей вплотную.
+  var GAP = 18;
   var startX = 0, startY = 0, tracking = false, swiping = false;
   var cardW = 0, peekEl = null, peekDir = 0;
 
@@ -867,7 +871,7 @@ function wireRoadmapSwipe() {
     peekEl.style.left = "0";
     peekEl.style.right = "0";
     peekEl.style.pointerEvents = "none"; // это превью, не должно перехватывать тап
-    peekEl.style.transform = "translateX(" + dir * cardW + "px)";
+    peekEl.style.transform = "translateX(" + dir * (cardW + GAP) + "px)";
     stage.appendChild(peekEl);
   }
 
@@ -893,7 +897,7 @@ function wireRoadmapSwipe() {
     var dir = dx < 0 ? 1 : (dx > 0 ? -1 : (peekDir || 1)); // влево — след. урок, вправо — предыдущий
     ensurePeek(dir);
     card.style.transform = "translateX(" + dx + "px)";
-    if (peekEl) peekEl.style.transform = "translateX(" + (dir * cardW + dx) + "px)";
+    if (peekEl) peekEl.style.transform = "translateX(" + (dir * (cardW + GAP) + dx) + "px)";
   }, { passive: false });
 
   card.addEventListener("touchend", function (e) {
@@ -916,7 +920,7 @@ function wireRoadmapSwipe() {
     } else {
       // Недостаточно далеко — обе пружинят обратно на исходные места.
       card.style.transform = "translateX(0)";
-      if (peekEl) peekEl.style.transform = "translateX(" + dir * cardW + "px)";
+      if (peekEl) peekEl.style.transform = "translateX(" + dir * (cardW + GAP) + "px)";
       var pe = peekEl;
       peekEl = null;
       setTimeout(function () { if (pe && pe.parentNode) pe.parentNode.removeChild(pe); }, 190);
