@@ -175,9 +175,15 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 /* Новая «Дорожная карта урока»: одна карточка + пагинация номерами (заменяет
    прежний горизонтальный свайп карточек .roadmap-scroll/.roadmap-card, тот
    CSS оставлен ниже нетронутым на случай отката). */
+/* .roadmap-stage — «сцена» под карточкой: во время свайпа сюда абсолютно
+   позиционируется вторая (соседняя) карточка поверх текущей, обе двигаются
+   вместе с пальцем. Все внешние отступы карточки перенесены сюда, чтобы
+   левый край текущей карточки (position: static) и соседней (position:
+   absolute, top/left/right: 0) совпадали день в день. */
+.roadmap-stage { position: relative; margin: 8px 18px 14px; }
 .roadmap-single-card {
   background: var(--bg); border-radius: 22px; box-shadow: var(--raised-lg);
-  padding: 16px 18px 18px; margin: 8px 18px 14px; cursor: pointer;
+  padding: 16px 18px 18px; margin: 0; width: 100%; box-sizing: border-box; cursor: pointer;
   /* Заперт/открыт/в процессе — везде одна и та же разметка (шапка+бар+4 шага),
      чтобы высота карточки не «прыгала» и пагинация под ней не съезжала. */
 }

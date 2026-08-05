@@ -768,7 +768,7 @@ function renderCourses() {
     if (state.roadmapPage == null || eligible.indexOf(state.roadmapPage) === -1) {
       state.roadmapPage = filter ? eligible[0] : (LESSON && LESSON.id || 1);
     }
-    roadmapBody = roadmapSingleCardHtml(state.roadmapPage, filter) + roadmapPagerHtml(state.roadmapPage, eligible);
+    roadmapBody = '<div class="roadmap-stage">' + roadmapSingleCardHtml(state.roadmapPage, filter) + "</div>" + roadmapPagerHtml(state.roadmapPage, eligible);
   }
   state.roadmapAnimDir = null; // направление уже прочитано выше — проигрывается один раз за переход
 
@@ -808,19 +808,68 @@ function roadmapGoRelative(dir) {
   render();
 }
 
-/* Свайп пальцем по карточке «Дорожной карты» — карточка в реальном времени
-   двигается ЗА пальцем (как раньше было с нативной horizontal-scroll-snap
-   лентой), а не просто «свайпнул — и через мгновение поменялась карточка».
-   Пока палец на экране, transform у карточки следует за пальцем 1:1; при
-   отпускании — либо докручиваем карточку до конца в сторону свайпа и меняем
-   урок, либо (если сдвинули недостаточно) пружиним обратно на место.
-   Карточка пересоздаётся при каждом render(), поэтому слушатели вешаются
-   заново — старые уходят вместе со старым DOM-узлом, отдельно снимать не
-   нужно; inline transform тоже не переживает пересоздание DOM. */
+/* Номер соседнего урока в пагинации (dir: -1/+1) или null, если его нет —
+   используется свайпом, чтобы знать, какую карточку «подсунуть» рядом. */
+function roadmapNeighborPage(dir) {
+  var eligible = roadmapEligibleLessons(state.coursesFilter);
+  var idx = eligible.indexOf(state.roadmapPage);
+  if (idx === -1) return null;
+  var ni = idx + dir;
+  if (ni < 0 || ni >= eligible.length) return null;
+  return eligible[ni];
+}
+
+/* Завершение свайпа: переход уже отрисован вручную (карточка уехала, соседняя
+   встала на её место) — здесь просто фиксируем новый урок в состоянии, без
+   повторной slide-анимации (roadmapAnimDir нарочно не трогаем/сбрасываем). */
+function roadmapCommitPage(n) {
+  state.roadmapPage = n;
+  state.roadmapAnimDir = null;
+  render();
+}
+
+/* Свайп пальцем по карточке «Дорожной карты» — как в нативной ленте: пока
+   палец на экране, СРАЗУ рядом с текущей карточкой стоит следующая/предыдущая
+   (в зависимости от направления) и обе едут вместе с пальцем 1:1 — не «увёл
+   палец в сторону и через мгновение выскочила новая карточка», а видно, как
+   одна выезжает, а другая уже въезжает следом. При отпускании — либо
+   докатываем обе до конца и меняем урок в состоянии (карточка уже стоит
+   ровно там, где нужно, повторно не анимируем), либо (если сдвинули
+   недостаточно) обе пружинят обратно. Карточка пересоздаётся при каждом
+   render(), поэтому слушатели вешаются заново — старые уходят вместе со
+   старым DOM-узлом, отдельно снимать не нужно. */
 function wireRoadmapSwipe() {
+  var stage = app.querySelector(".roadmap-stage");
   var card = app.querySelector(".roadmap-single-card");
-  if (!card) return;
+  if (!stage || !card) return;
   var startX = 0, startY = 0, tracking = false, swiping = false;
+  var cardW = 0, peekEl = null, peekDir = 0;
+
+  function clearPeek() {
+    if (peekEl && peekEl.parentNode) peekEl.parentNode.removeChild(peekEl);
+    peekEl = null;
+    peekDir = 0;
+  }
+
+  // Создаёт (или переставляет, если палец поменял направление на ходу)
+  // карточку-соседа, «стоящую в очереди» сразу за экраном с нужной стороны.
+  function ensurePeek(dir) {
+    if (peekEl && peekDir === dir) return;
+    clearPeek();
+    peekDir = dir;
+    var n = roadmapNeighborPage(dir);
+    if (!n) return; // края списка — соседа нет, просто тянем текущую с сопротивлением
+    var wrap = document.createElement("div");
+    wrap.innerHTML = roadmapSingleCardHtml(n, state.coursesFilter);
+    peekEl = wrap.firstChild;
+    peekEl.style.position = "absolute";
+    peekEl.style.top = "0";
+    peekEl.style.left = "0";
+    peekEl.style.right = "0";
+    peekEl.style.pointerEvents = "none"; // это превью, не должно перехватывать тап
+    peekEl.style.transform = "translateX(" + dir * cardW + "px)";
+    stage.appendChild(peekEl);
+  }
 
   card.addEventListener("touchstart", function (e) {
     if (e.touches.length !== 1) return;
@@ -828,7 +877,9 @@ function wireRoadmapSwipe() {
     startY = e.touches[0].clientY;
     tracking = true;
     swiping = false;
+    cardW = card.offsetWidth;
     card.style.transition = "none";
+    clearPeek();
   }, { passive: true });
 
   card.addEventListener("touchmove", function (e) {
@@ -837,30 +888,38 @@ function wireRoadmapSwipe() {
     var dy = e.touches[0].clientY - startY;
     // Явно горизонтальный жест — перехватываем у вертикального скролла страницы.
     if (!swiping && Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) swiping = true;
-    if (swiping) {
-      e.preventDefault();
-      card.style.transform = "translateX(" + dx + "px)";
-    }
+    if (!swiping) return;
+    e.preventDefault();
+    var dir = dx < 0 ? 1 : (dx > 0 ? -1 : (peekDir || 1)); // влево — след. урок, вправо — предыдущий
+    ensurePeek(dir);
+    card.style.transform = "translateX(" + dx + "px)";
+    if (peekEl) peekEl.style.transform = "translateX(" + (dir * cardW + dx) + "px)";
   }, { passive: false });
 
   card.addEventListener("touchend", function (e) {
     if (!tracking) return;
     tracking = false;
-    if (!swiping) return;
+    if (!swiping) { clearPeek(); return; }
     e.preventDefault(); // не даём этому же жесту сработать как тап-открытие урока
     var dx = e.changedTouches[0].clientX - startX;
-    var dir = dx < 0 ? 1 : -1; // свайп влево — следующий урок, вправо — предыдущий
-    var eligible = roadmapEligibleLessons(state.coursesFilter);
-    var idx = eligible.indexOf(state.roadmapPage);
-    var canGo = Math.abs(dx) > 60 && idx !== -1 && idx + dir >= 0 && idx + dir < eligible.length;
+    var dir = dx < 0 ? 1 : -1;
+    var neighbor = roadmapNeighborPage(dir);
+    var canGo = Math.abs(dx) > 60 && neighbor;
     card.style.transition = "transform .18s ease";
+    if (peekEl) peekEl.style.transition = "transform .18s ease";
     if (canGo) {
-      // Докручиваем карточку с экрана в сторону свайпа, потом меняем урок —
-      // новая карточка въезжает с противоположной стороны (см. .slide-next/.slide-prev).
-      card.style.transform = "translateX(" + (dir === 1 ? -1 : 1) * (card.offsetWidth + 40) + "px)";
-      setTimeout(function () { roadmapGoRelative(dir); }, 160);
+      // Докатываем: текущая уходит с экрана до конца, соседняя встаёт ровно
+      // на её место — обе уже были на виду, просто доезжают.
+      card.style.transform = "translateX(" + dir * -1 * (cardW + 40) + "px)";
+      if (peekEl) peekEl.style.transform = "translateX(0px)";
+      setTimeout(function () { roadmapCommitPage(neighbor); }, 160);
     } else {
-      card.style.transform = "translateX(0)"; // недостаточно далеко — пружиним обратно
+      // Недостаточно далеко — обе пружинят обратно на исходные места.
+      card.style.transform = "translateX(0)";
+      if (peekEl) peekEl.style.transform = "translateX(" + dir * cardW + "px)";
+      var pe = peekEl;
+      peekEl = null;
+      setTimeout(function () { if (pe && pe.parentNode) pe.parentNode.removeChild(pe); }, 190);
     }
   }, { passive: false });
 
@@ -870,6 +929,7 @@ function wireRoadmapSwipe() {
     swiping = false;
     card.style.transition = "transform .18s ease";
     card.style.transform = "translateX(0)";
+    clearPeek();
   }, { passive: true });
 }
 
