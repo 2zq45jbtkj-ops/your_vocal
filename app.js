@@ -620,62 +620,75 @@ function roadmapEligibleLessons(filter) {
   return out;
 }
 
+/* Карточка всегда одной и той же разметки (шапка с % + статус + бар + 4
+   шага) — и для запертого, и для открытого урока, и независимо от того,
+   сколько шагов пройдено. Раньше у запертого урока была короткая версия без
+   шапки/бара — из-за этого высота карточки прыгала между уроками, и
+   пагинация под ней съезжала то выше, то ниже (иногда под нижний Dock). */
 function roadmapSingleCardHtml(n, filter) {
   var isOpenLesson = LESSON && n === (LESSON.id || 1);
+  var unlocked = lessonUnlocked(n);
 
-  if (!lessonUnlocked(n)) {
-    var lockedStepsHtml = ["Лекция", "Тест", "Распевки", "Песня"].map(function (label) {
-      return '<div class="roadmap-single-step">' +
-        '<div class="roadmap-single-dot"></div>' +
-        '<span class="roadmap-single-step-label locked">' + label + "</span>" +
-      "</div>";
-    }).join("");
-    return (
-      '<div class="roadmap-single-card locked">' +
-        '<div class="roadmap-single-head"><div class="roadmap-single-title locked">Урок ' + n + "</div></div>" +
-        '<div class="roadmap-single-sub">Откроется позже</div>' +
-        lockedStepsHtml +
-      "</div>"
-    );
+  var pct = 0;
+  var subLabel = "Откроется позже";
+  // "locked" | "done" | "current" | "idle" — точка: пройден — терракотовая
+  // с галочкой; первый непройденный шаг открытого урока — синяя («сейчас
+  // сюда»); дальше по списку — пустая; весь урок заперт — тоже пустая.
+  var stepStates = ["Лекция", "Тест", "Распевки", "Песня"].map(function (label) {
+    return { label: label, state: "locked" };
+  });
+
+  if (unlocked) {
+    var s = state;
+    var p = isOpenLesson
+      ? { lecture: s.lectureViewed, quiz: s.quizDone, warmups: s.warmupsDone, song: s.songDone }
+      : (state.notionProgressByLesson && state.notionProgressByLesson[n]) || {};
+    var raw = [
+      { label: "Лекция", done: !!p.lecture },
+      { label: "Тест", done: !!p.quiz },
+      { label: "Распевки", done: !!p.warmups },
+      { label: "Песня", done: !!p.song }
+    ];
+    var markedCurrent = false;
+    stepStates = raw.map(function (st) {
+      var stepState = "idle";
+      if (st.done) stepState = "done";
+      else if (!markedCurrent) { stepState = "current"; markedCurrent = true; }
+      return { label: st.label, state: stepState };
+    });
+    var doneCount = raw.filter(function (st) { return st.done; }).length;
+    pct = doneCount * 25;
+    subLabel = doneCount === 4 ? "Завершён" : (doneCount > 0 ? "В процессе" : "Открыт");
   }
 
-  var s = state;
-  var p = isOpenLesson
-    ? { lecture: s.lectureViewed, quiz: s.quizDone, warmups: s.warmupsDone, song: s.songDone }
-    : (state.notionProgressByLesson && state.notionProgressByLesson[n]) || {};
-  var steps = [
-    { label: "Лекция", done: !!p.lecture },
-    { label: "Тест", done: !!p.quiz },
-    { label: "Распевки", done: !!p.warmups },
-    { label: "Песня", done: !!p.song }
-  ];
-  // точка: пройден — терракотовая с галочкой; первый непройденный шаг — синяя
-  // («сейчас сюда»); остальные дальше по списку — пустая/приглушённая.
-  var markedCurrent = false;
-  var stepsHtml = steps.map(function (st) {
+  var stepsHtml = stepStates.map(function (st) {
     var cls = "roadmap-single-dot";
     var inner = "";
-    if (st.done) { cls += " done"; inner = SVG.stepCheck; }
-    else if (!markedCurrent) { cls += " current"; markedCurrent = true; }
+    if (st.state === "done") { cls += " done"; inner = SVG.stepCheck; }
+    else if (st.state === "current") { cls += " current"; }
     return '<div class="roadmap-single-step">' +
       '<div class="' + cls + '">' + inner + "</div>" +
-      '<span class="roadmap-single-step-label">' + st.label + "</span>" +
+      '<span class="roadmap-single-step-label' + (st.state === "locked" ? " locked" : "") + '">' + st.label + "</span>" +
     "</div>";
   }).join("");
 
-  var doneCount = steps.filter(function (st) { return st.done; }).length;
-  var pct = doneCount * 25;
-  var subLabel = doneCount === 4 ? "Завершён" : (doneCount > 0 ? "В процессе" : "Открыт");
-  var title = isOpenLesson ? "Урок " + n + " · " + esc(LESSON.title) : "Урок " + n;
-  var act = isOpenLesson
+  var title = !unlocked ? "Урок " + n : (isOpenLesson ? "Урок " + n + " · " + esc(LESSON.title) : "Урок " + n);
+  var act = !unlocked ? "" : (isOpenLesson
     ? (filter === "completed" ? "open-lesson-review" : filter === "inProgress" ? "open-lesson-continue" : "open-lesson")
-    : "open-lesson-num";
+    : "open-lesson-num");
+  // Направление появления карточки — задаётся перед render() в
+  // roadmapGoRelative()/"roadmap-goto" (свайп или клик по цифре пагинации),
+  // проигрывается один раз и сразу сбрасывается в renderCourses().
+  var animCls = state.roadmapAnimDir === 1 ? " slide-next" : (state.roadmapAnimDir === -1 ? " slide-prev" : "");
 
   return (
-    '<div class="roadmap-single-card" data-act="' + act + '"' + (isOpenLesson ? "" : ' data-lesson-num="' + n + '"') + '>' +
+    '<div class="roadmap-single-card' + (unlocked ? "" : " locked") + animCls + '"' +
+      (act ? ' data-act="' + act + '"' : "") +
+      (act === "open-lesson-num" ? ' data-lesson-num="' + n + '"' : "") +
+    '>' +
       '<div class="roadmap-single-head">' +
-        '<div class="roadmap-single-title">' + title + "</div>" +
-        '<div class="roadmap-single-pct">' + pct + "%</div>" +
+        '<div class="roadmap-single-title' + (unlocked ? "" : " locked") + '">' + title + "</div>" +
+        '<div class="roadmap-single-pct' + (unlocked ? "" : " locked") + '">' + pct + "%</div>" +
       "</div>" +
       '<div class="roadmap-single-sub">' + subLabel + "</div>" +
       '<div class="roadmap-single-bar"><div style="width:' + pct + '%;"></div></div>' +
@@ -757,6 +770,7 @@ function renderCourses() {
     }
     roadmapBody = roadmapSingleCardHtml(state.roadmapPage, filter) + roadmapPagerHtml(state.roadmapPage, eligible);
   }
+  state.roadmapAnimDir = null; // направление уже прочитано выше — проигрывается один раз за переход
 
   app.innerHTML =
     '<div class="courses-head">' +
@@ -790,6 +804,7 @@ function roadmapGoRelative(dir) {
   var next = idx + dir;
   if (idx === -1 || next < 0 || next >= eligible.length) return;
   state.roadmapPage = eligible[next];
+  state.roadmapAnimDir = dir > 0 ? 1 : -1;
   render();
 }
 
@@ -3301,7 +3316,9 @@ function wireActs() {
         return;
       }
       if (act === "roadmap-goto") {
-        state.roadmapPage = parseInt(el.getAttribute("data-page"), 10);
+        var targetPage = parseInt(el.getAttribute("data-page"), 10);
+        state.roadmapAnimDir = targetPage > state.roadmapPage ? 1 : (targetPage < state.roadmapPage ? -1 : null);
+        state.roadmapPage = targetPage;
         render();
         return;
       }

@@ -176,27 +176,35 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
    прежний горизонтальный свайп карточек .roadmap-scroll/.roadmap-card, тот
    CSS оставлен ниже нетронутым на случай отката). */
 .roadmap-single-card {
-  background: var(--bg); border-radius: 24px; box-shadow: var(--raised-lg);
-  padding: 20px 20px 24px; margin: 8px 18px 16px; cursor: pointer; min-height: 280px;
+  background: var(--bg); border-radius: 22px; box-shadow: var(--raised-lg);
+  padding: 16px 18px 18px; margin: 8px 18px 14px; cursor: pointer;
+  /* Заперт/открыт/в процессе — везде одна и та же разметка (шапка+бар+4 шага),
+     чтобы высота карточки не «прыгала» и пагинация под ней не съезжала. */
 }
 .roadmap-single-card.locked { cursor: default; }
+.roadmap-single-card.slide-next { animation: roadmapSlideRight .22s ease; }
+.roadmap-single-card.slide-prev { animation: roadmapSlideLeft .22s ease; }
+@keyframes roadmapSlideRight { from { transform: translateX(22px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes roadmapSlideLeft { from { transform: translateX(-22px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 .roadmap-single-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; }
-.roadmap-single-title { font: 700 17px 'Manrope', sans-serif; color: var(--ink); }
+.roadmap-single-title { font: 700 16px 'Manrope', sans-serif; color: var(--ink); }
 .roadmap-single-title.locked { color: var(--locked); }
-.roadmap-single-pct { font: 700 13px 'Manrope', sans-serif; color: var(--blue); }
-.roadmap-single-sub { font-size: 12.5px; color: var(--gray); margin: 2px 0 14px; }
-.roadmap-single-bar { height: 6px; background: var(--bgmuted); border-radius: 3px; overflow: hidden; margin-bottom: 20px; }
+.roadmap-single-pct { font: 700 12.5px 'Manrope', sans-serif; color: var(--blue); }
+.roadmap-single-pct.locked { color: var(--locked); }
+.roadmap-single-sub { font-size: 12px; color: var(--gray); margin: 2px 0 12px; }
+.roadmap-single-bar { height: 5px; background: var(--bgmuted); border-radius: 3px; overflow: hidden; margin-bottom: 15px; }
 .roadmap-single-bar > div { height: 100%; background: var(--blue); border-radius: 3px; }
-.roadmap-single-step { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.roadmap-single-step { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
 .roadmap-single-step:last-child { margin-bottom: 0; }
 .roadmap-single-dot {
-  width: 36px; height: 36px; border-radius: 50%; background: var(--line);
+  width: 26px; height: 26px; border-radius: 50%; background: var(--line);
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-  box-shadow: 3px 3px 6px oklch(var(--sh-base) / 0.3);
+  box-shadow: 2px 2px 4px oklch(var(--sh-base) / 0.3);
 }
+.roadmap-single-dot svg { width: 9px; height: 7px; }
 .roadmap-single-dot.done { background: var(--terra); }
 .roadmap-single-dot.current { background: var(--blue); }
-.roadmap-single-step-label { font-size: 14px; color: var(--ink); }
+.roadmap-single-step-label { font-size: 13px; color: var(--ink); }
 .roadmap-single-step-label.locked { color: var(--locked); }
 
 .roadmap-pager { display: flex; align-items: center; gap: 10px; padding: 4px 18px 130px; }
