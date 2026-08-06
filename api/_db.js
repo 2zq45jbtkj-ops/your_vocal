@@ -23,9 +23,16 @@ export function json(obj, status) {
 }
 
 /* Тот же паттерн, что в notion-is-admin.js — сверяем chat_id с ADMIN_CHAT_ID
-   на сервере, не доверяем клиенту. */
+   на сервере, не доверяем клиенту.
+   MIGRATE_SECRET — временный запасной путь (тот же приём, что SYNC_SECRET в
+   sync-schedule.js): строка, которую Claude сам придумывает и вписывает в
+   Vercel, чтобы один раз прогнать схему/проверить запись в базу без
+   настоящего chat_id Николая. Убрать эту строку и переменную из Vercel
+   после того, как всё проверено вживую. */
 export function isAdminChatId(chatId) {
   var adminId = process.env.ADMIN_CHAT_ID;
+  var migrateSecret = process.env.MIGRATE_SECRET;
+  if (migrateSecret && chatId && String(chatId) === String(migrateSecret)) return true;
   return !!(adminId && chatId && String(chatId) === String(adminId));
 }
 
