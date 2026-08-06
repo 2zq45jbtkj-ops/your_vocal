@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Админ — Курс вокала</title>
+<style>
+/* Та же палитра, что в остальном приложении и в kabinet-tz.md п.0 —
+   никаких новых цветов. Страница рассчитана на десктопный браузер (шире, чем
+   мобильный Mini App), но не ломается и на телефоне. */
+:root{
+  --bg:#F2ECE7; --ink:#3E4A52; --blue:#6C91A6; --blue-l:#B8CCD9;
+  --rust:#AE5F3F; --rust-l:#D6A289; --muted:#9AA5AC;
+  --line:rgba(108,145,166,.22); --sh-d:rgba(163,148,138,.45); --sh-l:rgba(255,255,255,.9);
+}
+*{box-sizing:border-box}
+body{margin:0;padding:24px;background:var(--bg);color:var(--ink);font:15px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;}
+.wrap{max-width:900px;margin:0 auto}
+.card{background:var(--bg);border-radius:18px;padding:20px;margin-bottom:18px;box-shadow:6px 6px 14px var(--sh-d),-6px -6px 14px var(--sh-l)}
+.card.inset{box-shadow:inset 4px 4px 9px var(--sh-d),inset -4px -4px 9px var(--sh-l)}
+h1{font-size:20px;margin:0 0 4px}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:1.4px;color:var(--blue);margin:0 0 12px;font-weight:600}
+.sub{font-size:13px;color:var(--muted)}
+.row{display:flex;align-items:center;gap:10px}
+.between{justify-content:space-between}
+.wrapflex{flex-wrap:wrap}
+button{font:inherit;color:inherit;cursor:pointer}
+.btn{border:0;background:var(--bg);border-radius:14px;padding:9px 16px;font-size:14px;box-shadow:4px 4px 9px var(--sh-d),-4px -4px 9px var(--sh-l)}
+.btn:active{box-shadow:inset 3px 3px 7px var(--sh-d),inset -3px -3px 7px var(--sh-l)}
+.btn.primary{color:var(--rust);font-weight:600}
+.btn.round{width:36px;height:36px;padding:0;border-radius:50%;font-size:18px;display:grid;place-items:center}
+.lvltabs{display:flex;gap:8px}
+.lvltab{border:0;background:var(--bg);width:42px;height:42px;border-radius:50%;font-size:16px;font-weight:600;color:var(--muted);box-shadow:4px 4px 9px var(--sh-d),-4px -4px 9px var(--sh-l)}
+.lvltab.on{color:var(--rust);box-shadow:inset 3px 3px 7px var(--sh-d),inset -3px -3px 7px var(--sh-l)}
+svg{display:block;width:100%;max-width:520px;height:auto;margin:0 auto;touch-action:manipulation}
+.wlabel{font-size:11px;fill:var(--ink)}
+.wscore{font-size:11px;font-weight:700;fill:var(--rust)}
+.wlabel.off,.wscore.off{fill:var(--muted);font-weight:400}
+.center-letter{font-size:42px;font-weight:700;fill:var(--rust);text-anchor:middle}
+.center-sub{font-size:10px;fill:var(--muted);text-anchor:middle;letter-spacing:1px}
+.legend{display:flex;gap:16px;justify-content:center;font-size:12px;color:var(--muted);margin-top:6px}
+.sw{width:11px;height:11px;border-radius:3px;display:inline-block;vertical-align:-1px;margin-right:5px}
+.detail{margin-top:10px;font-size:13px;min-height:20px;text-align:center}
+.detail b{color:var(--rust)}
+.trow{display:grid;grid-template-columns:1fr 90px 90px 44px;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}
+.trow:last-child{border-bottom:0}
+input[type=text],input[type=date]{border:0;background:transparent;font:inherit;color:inherit;padding:8px 10px;border-radius:10px;box-shadow:inset 2px 2px 5px var(--sh-d),inset -2px -2px 5px var(--sh-l);width:100%}
+textarea{border:0;background:transparent;font:inherit;color:inherit;padding:8px 10px;border-radius:10px;box-shadow:inset 2px 2px 5px var(--sh-d),inset -2px -2px 5px var(--sh-l);width:100%;resize:vertical;min-height:44px}
+.sum{text-align:right;font-weight:700;color:var(--rust)}
+.sum.off{color:var(--muted);font-weight:400}
+.miniscale{font-size:11px;color:var(--muted);text-align:center}
+input[type=range]{-webkit-appearance:none;width:100%;background:transparent}
+input[type=range]::-webkit-slider-runnable-track{height:8px;border-radius:6px;background:var(--bg);box-shadow:inset 2px 2px 5px var(--sh-d),inset -2px -2px 5px var(--sh-l)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;margin-top:-5px;border-radius:50%;background:var(--bg);box-shadow:2px 2px 5px var(--sh-d),-2px -2px 5px var(--sh-l);border:2px solid var(--rust-l)}
+.changed{position:relative}
+.changed::after{content:"";position:absolute;left:-10px;top:50%;transform:translateY(-50%);width:5px;height:5px;border-radius:50%;background:var(--rust)}
+.cut{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.cut:last-child{border-bottom:0}
+.avg{font-size:12px;color:var(--muted)}
+.badge-lv{font-size:11px;color:var(--blue);margin-left:8px}
+.hint{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.4}
+.field{margin-bottom:10px}
+.field label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.9px;color:var(--muted);margin-bottom:5px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.student-pick{padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer;display:flex;justify-content:space-between}
+.student-pick:hover{color:var(--blue)}
+#msg{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--bg);box-shadow:var(--sh-d) 4px 4px 9px, var(--sh-l) -4px -4px 9px;border-radius:12px;padding:8px 16px;font-size:12.5px;color:var(--rust);opacity:0;transition:opacity .2s;pointer-events:none}
+#msg.show{opacity:1}
+</style>
+
+<div class="wrap" id="app">Загрузка…</div>
+<div id="msg"></div>
+
+<script>
+var params = new URLSearchParams(location.search);
+var chatId = params.get("chatId") || "";
+var studentChatId = params.get("studentChatId") || "";
+
+function toast(text) {
+  var el = document.getElementById("msg");
+  el.textContent = text;
+  el.classList.add("show");
+  setTimeout(function () { el.classList.remove("show"); }, 1800);
+}
+function esc(s) { return String(s == null ? "" : s).replace(/[<>&]/g, function (c) { return { "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]; }); }
+
+var state = { levels: [], topics: [], assessments: [], legacy: [], level: "A", openCut: null, changed: {}, students: null, studentName: "" };
+
+function api(path, opts) {
+  return fetch(path, opts).then(function (r) { return r.json(); });
+}
+
+function boot() {
+  if (!chatId) { document.getElementById("app").innerHTML = '<div class="card">Нет chatId в ссылке. Открой эту страницу из «Ещё» в приложении.</div>'; return; }
+  api("/api/notion-is-admin?chatId=" + encodeURIComponent(chatId)).then(function (d) {
+    if (!d || !d.isAdmin) { document.getElementById("app").innerHTML = '<div class="card">Доступ только для администратора.</div>'; return; }
+    if (studentChatId) loadStudent(); else loadStudentPicker();
+  });
+}
+
+function loadStudentPicker() {
+  document.getElementById("app").innerHTML = '<div class="card"><h1>Выбери ученика</h1><div id="pick">Загрузка списка…</div></div>';
+  api("/api/notion-students-list?chatId=" + encodeURIComponent(chatId)).then(function (d) {
+    var list = (d && d.students) || [];
+    var html = list.map(function (s) {
+      return '<div class="student-pick" data-chat="' + esc(s.chatId) + '" data-name="' + esc(s.name) + '"><span>' + esc(s.name) + "</span><span class=\"sub\">" + esc(s.status || "") + "</span></div>";
+    }).join("");
+    document.getElementById("pick").innerHTML = html || '<div class="hint">Список пуст или Notion не настроен.</div>';
+    Array.prototype.forEach.call(document.querySelectorAll(".student-pick"), function (el) {
+      el.addEventListener("click", function () {
+        studentChatId = el.getAttribute("data-chat");
+        state.studentName = el.getAttribute("data-name");
+        var url = new URL(location.href);
+        url.searchParams.set("studentChatId", studentChatId);
+        history.replaceState(null, "", url);
+        loadStudent();
+      });
+    });
+  });
+}
+
+function loadStudent() {
+  document.getElementById("app").innerHTML = '<div class="card">Загрузка данных ученика…</div>';
+  Promise.all([
+    api("/api/admin-topics"),
+    api("/api/admin-assessments?chatId=" + encodeURIComponent(chatId) + "&studentChatId=" + encodeURIComponent(studentChatId))
+  ]).then(function (res) {
+    var topicsRes = res[0], assessRes = res[1];
+    if (!topicsRes.configured || !assessRes.configured) {
+      document.getElementById("app").innerHTML = '<div class="card">База данных ещё не подключена (POSTGRES_URL). Создай Postgres в Vercel -> Storage и обнови страницу.</div>';
+      return;
+    }
+    state.levels = topicsRes.levels.length ? topicsRes.levels : [{ code: "A", letter: "A", sort_order: 1 }, { code: "B", letter: "B", sort_order: 2 }, { code: "C", letter: "C", sort_order: 3 }];
+    state.topics = topicsRes.topics;
+    state.assessments = assessRes.assessments;
+    state.legacy = assessRes.legacy;
+    state.level = state.levels[0].code;
+    render();
+  });
+}
+
+function lvTopics(code) { return state.topics.filter(function (t) { return t.level === code && t.is_active; }); }
+function cur() { return state.assessments.find(function (a) { return a.editable; }) || state.assessments[0]; }
+function prevOf(a) {
+  var idx = state.assessments.indexOf(a);
+  return idx >= 0 ? state.assessments[idx + 1] : null;
+}
+
+/* ---------- колесо (та же математика, что в kabinet-prototype.html) ---------- */
+var CX = 260, CY = 220, R0 = 40, R1 = 145;
+function pol(r, a) { var x = (a - 90) * Math.PI / 180; return [CX + r * Math.cos(x), CY + r * Math.sin(x)]; }
+function wedge(r0, r1, a0, a1) {
+  var p1 = pol(r1, a0), p2 = pol(r1, a1), p3 = pol(r0, a1), p4 = pol(r0, a0);
+  var la = a1 - a0 > 180 ? 1 : 0;
+  return "M" + p1[0] + " " + p1[1] + "A" + r1 + " " + r1 + " 0 " + la + " 1 " + p2[0] + " " + p2[1] +
+    "L" + p3[0] + " " + p3[1] + "A" + r0 + " " + r0 + " 0 " + la + " 0 " + p4[0] + " " + p4[1] + "Z";
+}
+function rad(v) { return R0 + (R1 - R0) * (v / 5); }
+
+function drawWheel() {
+  var lvl = state.level, ts = lvTopics(lvl), n = ts.length;
+  var c = cur(), scores = c ? c.scores : {};
+  var levelObj = state.levels.find(function (l) { return l.code === lvl; });
+  var h = "";
+  if (!n) {
+    document.getElementById("wheel").innerHTML = "";
+    document.getElementById("wheelEmpty").textContent = "На уровне " + (levelObj ? levelObj.letter : lvl) + " пока нет тем — добавь ниже.";
+    return;
+  }
+  document.getElementById("wheelEmpty").textContent = "";
+  for (var i = 1; i <= 5; i++) h += '<circle cx="' + CX + '" cy="' + CY + '" r="' + rad(i) + '" fill="none" stroke="var(--line)" stroke-width="1"/>';
+  var step = 360 / n, gap = 2.2;
+  ts.forEach(function (t, i) {
+    var a0 = i * step + gap / 2, a1 = (i + 1) * step - gap / 2, mid = (a0 + a1) / 2, half = mid;
+    var v = scores[t.id];
+    if (!v) {
+      h += '<path data-id="' + t.id + '" d="' + wedge(R0, R1, a0, a1) + '" fill="#DCD3CC" opacity=".35" stroke="var(--bg)" stroke-width="1"/>';
+    } else {
+      h += '<path data-id="' + t.id + '" d="' + wedge(R0, rad(v[0]), a0, half - 0.4) + '" fill="var(--blue-l)" stroke="var(--bg)" stroke-width="1"/>';
+      h += '<path data-id="' + t.id + '" d="' + wedge(R0, rad(v[1]), half + 0.4, a1) + '" fill="var(--rust)" opacity=".82" stroke="var(--bg)" stroke-width="1"/>';
+    }
+    var lp = pol(R1 + 14, mid);
+    var right = Math.cos((mid - 90) * Math.PI / 180) >= -0.05;
+    var anc = right ? "start" : "end";
+    var words = t.title.split(" "), l1 = t.title, l2 = "";
+    if (t.title.length > 15 && words.length > 1) { var half2 = Math.ceil(words.length / 2); l1 = words.slice(0, half2).join(" "); l2 = words.slice(half2).join(" "); }
+    var off = v ? "" : " off";
+    h += '<text class="wlabel' + off + '" x="' + lp[0] + '" y="' + lp[1] + '" text-anchor="' + anc + '">' + esc(l1);
+    if (l2) h += '<tspan x="' + lp[0] + '" dy="12">' + esc(l2) + "</tspan>";
+    h += "</text>";
+    h += '<text class="wscore' + off + '" x="' + (right ? lp[0] - 6 : lp[0] + 6) + '" y="' + (lp[1] - 13) + '" text-anchor="' + anc + '">' + (v ? v[0] + v[1] : "—") + "</text>";
+  });
+  var scored = ts.filter(function (t) { return scores[t.id]; });
+  var avg = scored.length ? (scored.reduce(function (a, t) { return a + scores[t.id][0] + scores[t.id][1]; }, 0) / scored.length).toFixed(1) : "—";
+  h += '<circle cx="' + CX + '" cy="' + CY + '" r="' + (R0 - 4) + '" fill="var(--bg)"/>';
+  h += '<text class="center-letter" x="' + CX + '" y="' + (CY + 8) + '">' + esc(levelObj ? levelObj.letter : lvl) + "</text>";
+  h += '<text class="center-sub" x="' + CX + '" y="' + (CY + 26) + '">' + avg + " / 10</text>";
+  var w = document.getElementById("wheel");
+  w.innerHTML = h;
+  Array.prototype.forEach.call(w.querySelectorAll("[data-id]"), function (el) {
+    el.style.cursor = "pointer";
+    el.addEventListener("click", function () { showTopic(+el.getAttribute("data-id")); });
+  });
+}
+
+function showTopic(id) {
+  var t = state.topics.find(function (x) { return x.id === id; });
+  var c = cur(), v = c ? c.scores[id] : null;
+  var p = prevOf(c), pv = p ? p.scores[id] : null;
+  var d = document.getElementById("detail");
+  if (!v) { d.innerHTML = "<b>" + esc(t.title) + "</b> — не оценивалось."; return; }
+  var g = "";
+  if (v[0] - v[1] >= 2) g = " · знает, но не контролирует";
+  if (v[1] - v[0] >= 2) g = " · делает интуитивно, теория отстаёт";
+  var dyn = pv ? " · было " + (pv[0] + pv[1]) + ", стало " + (v[0] + v[1]) : "";
+  d.innerHTML = "<b>" + esc(t.title) + "</b> — знание " + v[0] + "/5, практика " + v[1] + "/5, итого <b>" + (v[0] + v[1]) + "/10</b>" + g + dyn;
+}
+
+/* ---------- срезы ---------- */
+var scoreDebounce = {};
+function setScore(assessmentId, topicId, k, val) {
+  var c = state.assessments.find(function (a) { return a.id === assessmentId; });
+  if (!c.scores[topicId]) c.scores[topicId] = [0, 0];
+  c.scores[topicId][k] = +val;
+  state.changed[topicId] = true;
+  drawWheel();
+  drawCuts();
+  var key = assessmentId + "-" + topicId;
+  clearTimeout(scoreDebounce[key]);
+  scoreDebounce[key] = setTimeout(function () {
+    api("/api/admin-assessments", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ chatId: chatId, action: "save-score", assessmentId: assessmentId, topicId: topicId, theory: c.scores[topicId][0], practice: c.scores[topicId][1] })
+    }).then(function (r) { if (r.ok) toast("Сохранено"); else toast("Ошибка сохранения"); });
+  }, 400);
+}
+
+function cutBody(c) {
+  var editable = !!c.editable;
+  var h = '<div class="card inset" style="margin:8px 0 14px">';
+  h += '<div class="field"><label>Цель периода</label><input type="text" value="' + esc(c.periodGoal) + '" ' + (editable ? 'onchange="saveMeta(' + c.id + ',\'periodGoal\',this.value)"' : "disabled") + "></div>";
+  h += '<div class="trow" style="border-bottom:1px solid var(--line)"><span class="miniscale" style="text-align:left">Тема</span><span class="miniscale">знание</span><span class="miniscale">практика</span><span class="miniscale">Σ</span></div>';
+  state.levels.forEach(function (L) {
+    var ts = lvTopics(L.code); if (!ts.length) return;
+    h += '<div class="miniscale" style="text-align:left;margin:12px 0 2px;color:var(--rust);font-weight:700">' + esc(L.letter) + "</div>";
+    ts.forEach(function (t) {
+      var v = c.scores[t.id], ch = state.changed[t.id] && editable ? " changed" : "";
+      h += '<div class="trow' + ch + '"><span>' + esc(t.title) + "</span>";
+      h += cell(c, t, 0, editable) + cell(c, t, 1, editable);
+      h += '<span class="sum' + (v ? "" : " off") + '">' + (v ? v[0] + v[1] : "—") + "</span></div>";
+    });
+  });
+  h += '<div class="field" style="margin-top:12px"><label>Рекомендации</label><textarea ' + (editable ? 'onchange="saveMeta(' + c.id + ',\'recommendations\',this.value)"' : "disabled") + ">" + esc(c.recommendations) + "</textarea></div>";
+  h += "</div>";
+  return h;
+}
+function cell(c, t, k, ed) {
+  var v = c.scores[t.id];
+  if (!ed) return '<span class="miniscale">' + (v ? v[k] : "—") + "</span>";
+  var val = v ? v[k] : 0;
+  return '<input type="range" min="0" max="5" value="' + val + '" oninput="setScore(' + c.id + "," + t.id + "," + k + ',this.value)" onclick="event.stopPropagation()">';
+}
+function saveMeta(assessmentId, field, value) {
+  var c = state.assessments.find(function (a) { return a.id === assessmentId; });
+  var payload = { chatId: chatId, action: "save-meta", assessmentId: assessmentId, studentId: null };
+  payload[field === "periodGoal" ? "periodGoal" : field] = value;
+  if (field === "periodGoal") c.periodGoal = value; else c[field] = value;
+  api("/api/admin-assessments", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) })
+    .then(function (r) { toast(r.ok ? "Сохранено" : "Ошибка сохранения"); });
+}
+function setCutDate(id, val) {
+  var c = state.assessments.find(function (a) { return a.id === id; });
+  c.date = val;
+  api("/api/admin-assessments", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ chatId: chatId, action: "save-meta", assessmentId: id, date: val }) })
+    .then(function (r) { toast(r.ok ? "Дата сохранена" : "Ошибка"); drawCuts(); });
+}
+function fmt(d) { if (!d) return ""; var s = String(d).slice(0, 10); var p = s.split("-"); return p.length === 3 ? p[2] + "." + p[1] + "." + p[0] : s; }
+function lvAvg(c) {
+  return state.levels.map(function (L) {
+    var ts = lvTopics(L.code).filter(function (t) { return c.scores[t.id]; });
+    if (!ts.length) return L.letter + " —";
+    return L.letter + " " + (ts.reduce(function (a, t) { return a + c.scores[t.id][0] + c.scores[t.id][1]; }, 0) / ts.length).toFixed(1);
+  }).join(" · ");
+}
+function drawCuts() {
+  var h = "";
+  state.assessments.forEach(function (c) {
+    var open = state.openCut === c.id;
+    var dateHtml = c.editable
+      ? '<input type="date" value="' + String(c.date).slice(0, 10) + '" onclick="event.stopPropagation()" onchange="setCutDate(' + c.id + ',this.value)" style="font-weight:600;display:inline-block;width:auto;">'
+      : '<b>' + fmt(c.date) + "</b>";
+    h += '<div class="cut" onclick="toggleCut(' + c.id + ')"><div>' + dateHtml + (c.editable ? '<span class="badge-lv">текущий</span>' : "") +
+      '<div class="avg">' + lvAvg(c) + "</div></div><div class=\"avg\">" + (open ? "▲" : "▼") + "</div></div>";
+    if (open) h += cutBody(c);
+  });
+  document.getElementById("cuts").innerHTML = h;
+}
+function toggleCut(id) { state.openCut = state.openCut === id ? null : id; drawCuts(); }
+function newCut() {
+  api("/api/admin-assessments", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ chatId: chatId, action: "create", studentChatId: studentChatId, firstName: state.studentName }) })
+    .then(function (r) {
+      if (!r.ok) { toast("Ошибка создания среза"); return; }
+      state.assessments.forEach(function (a) { a.editable = false; });
+      state.assessments.unshift(r.assessment);
+      state.changed = {};
+      state.openCut = r.assessment.id;
+      drawWheel(); drawCuts();
+      toast("Новый срез создан");
+    });
+}
+
+/* ---------- темы ---------- */
+function drawEditor() {
+  var lvl = state.level, L = state.levels.find(function (x) { return x.code === lvl; });
+  document.getElementById("letterInput").value = L ? L.letter : "";
+  document.getElementById("topicEditor").innerHTML = lvTopics(lvl).map(function (t) {
+    return '<div class="trow" style="grid-template-columns:1fr 40px"><input type="text" value="' + esc(t.title) + '" onchange="renameTopic(' + t.id + ',this.value)"><button class="btn" style="padding:6px 0" onclick="archiveTopic(' + t.id + ')" title="В архив">×</button></div>';
+  }).join("") || '<div class="hint">Тем пока нет.</div>';
+}
+function renameTopic(id, val) {
+  var t = state.topics.find(function (x) { return x.id === id; });
+  t.title = val;
+  api("/api/admin-topics", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ chatId: chatId, action: "rename-topic", topicId: id, title: val }) })
+    .then(function (r) { toast(r.ok ? "Сохранено" : "Ошибка"); drawWheel(); drawCuts(); });
+}
+function renameLevel(val) {
+  var L = state.levels.find(function (x) { return x.code === state.level; });
+  L.letter = (val || "?").slice(0, 2);
+  api("/api/admin-topics", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ chatId: chatId, action: "rename-level", code: state.level, letter: L.letter }) })
+    .then(function (r) { toast(r.ok ? "Сохранено" : "Ошибка"); drawWheel(); drawTabs(); });
+}
+function addTopic() {
+  api("/api/admin-topics", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ chatId: chatId, action: "create-topic", level: state.level, title: "Новая тема" }) })
+    .then(function (r) {
+      if (!r.ok) { toast("Ошибка"); return; }
+      state.topics.push(r.topic);
+      drawWheel(); drawEditor(); drawCuts();
+    });
+}
+function archiveTopic(id) {
+  if (!confirm("Убрать тему из новых срезов? В прошлых срезах оценки сохранятся.")) return;
+  api("/api/admin-topics", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ chatId: chatId, action: "archive-topic", topicId: id }) })
+    .then(function (r) {
+      if (!r.ok) { toast("Ошибка"); return; }
+      state.topics = state.topics.filter(function (t) { return t.id !== id; });
+      drawWheel(); drawEditor(); drawCuts();
+    });
+}
+
+/* ---------- архив старого формата ---------- */
+function drawLegacy() {
+  var h = "";
+  state.legacy.forEach(function (c, i) {
+    var open = state.openLegacy === i;
+    h += '<div class="cut" onclick="toggleLegacy(' + i + ')"><div><span>' + fmt(c.date) + '</span><div class="avg">ДЗ ' + (c.homework_grade != null ? c.homework_grade : "—") + "/10 · " + esc(c.topics_covered || "") + "</div></div><div class=\"avg\">" + (open ? "▲" : "▼") + "</div></div>";
+    if (open) {
+      h += '<div class="card inset" style="margin:8px 0 14px">';
+      var m = c.metrics || {};
+      h += '<div class="grid2">' + Object.keys(m).map(function (k) {
+        return '<div class="row between" style="padding:4px 0"><span style="font-size:13px">' + esc(k) + '</span><span class="sum">' + m[k] + "</span></div>";
+      }).join("") + "</div>";
+      if (c.recommendations) h += '<div class="hint" style="margin-top:10px">Рекомендации: ' + esc(c.recommendations) + "</div>";
+      h += "</div>";
+    }
+  });
+  document.getElementById("legacyCuts").innerHTML = h || '<div class="hint">Архива нет.</div>';
+}
+function toggleLegacy(i) { state.openLegacy = state.openLegacy === i ? -1 : i; drawLegacy(); }
+
+/* ---------- каркас ---------- */
+function drawTabs() {
+  document.getElementById("lvltabs").innerHTML = state.levels.map(function (L) {
+    return '<button class="lvltab ' + (L.code === state.level ? "on" : "") + '" onclick="setLevel(\'' + L.code + '\')">' + esc(L.letter) + "</button>";
+  }).join("");
+}
+function setLevel(code) { state.level = code; drawTabs(); drawWheel(); drawEditor(); document.getElementById("detail").textContent = "Нажми на сектор — покажу оценки и динамику по теме."; }
+
+function render() {
+  document.getElementById("app").innerHTML =
+    '<div class="card row between">' +
+      '<div><h1>' + esc(state.studentName || studentChatId) + '</h1><div class="sub">Колесо баланса · редактирование</div></div>' +
+      '<button class="btn" onclick="loadStudentPicker()">Сменить ученика</button>' +
+    "</div>" +
+    '<div class="card">' +
+      '<div class="row between" style="margin-bottom:14px"><h2 style="margin:0">Колесо баланса</h2><div class="lvltabs" id="lvltabs"></div></div>' +
+      '<svg id="wheel" viewBox="0 0 520 440" role="img"></svg>' +
+      '<div id="wheelEmpty" class="hint" style="text-align:center"></div>' +
+      '<div class="legend"><span><i class="sw" style="background:var(--blue-l)"></i>знание</span><span><i class="sw" style="background:var(--rust)"></i>практика</span><span><i class="sw" style="background:#DCD3CC"></i>не оценивалось</span></div>' +
+      '<div class="detail" id="detail">Нажми на сектор — покажу оценки и динамику по теме.</div>' +
+    "</div>" +
+    '<div class="card">' +
+      '<div class="row between" style="margin-bottom:6px"><h2 style="margin:0">Темы уровня</h2><button class="btn" onclick="addTopic()">+ тема</button></div>' +
+      '<div class="hint" style="margin-top:0;margin-bottom:10px">Редактируются только названия тем и буква уровня.</div>' +
+      '<div class="field" style="max-width:160px"><label>Буква в центре</label><input type="text" id="letterInput" onchange="renameLevel(this.value)"></div>' +
+      '<div id="topicEditor"></div>' +
+    "</div>" +
+    '<div class="card">' +
+      '<div class="row between" style="margin-bottom:6px"><h2 style="margin:0">Срезы</h2><button class="btn round primary" onclick="newCut()" title="Новый срез">+</button></div>' +
+      '<div class="hint" style="margin-top:0">Новый срез наследует оценки прошлого. Срезы не удаляются.</div>' +
+      '<div id="cuts"></div>' +
+    "</div>" +
+    '<div class="card">' +
+      '<h2>Архив — старый формат</h2>' +
+      '<div class="hint" style="margin-top:0">Срезы из Notion, перенесённые один раз. Только для чтения.</div>' +
+      '<div id="legacyCuts"></div>' +
+    "</div>";
+  drawTabs(); drawWheel(); drawCuts(); drawEditor(); drawLegacy();
+}
+
+boot();
+</script>

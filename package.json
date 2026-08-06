@@ -1,0 +1,7 @@
+{
+  "name": "your-vocal",
+  "private": true,
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.0"
+  }
+}

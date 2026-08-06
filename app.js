@@ -258,6 +258,16 @@ function openTeacherChat() {
   else window.open(url, "_blank");
 }
 
+/* Открывает admin.html (отдельная страница вне SPA, своя вёрстка под десктоп)
+   во внешнем браузере — tg.openLink(), не openTelegramLink() (та только для
+   t.me-ссылок). Доступно только из «Режим админа» -> «Панель управления»,
+   поэтому state.chatId здесь уже проверенный админский chat_id. */
+function openAdminPanel() {
+  var url = location.origin + "/admin.html?chatId=" + encodeURIComponent(state.chatId);
+  if (tg && tg.openLink) tg.openLink(url);
+  else window.open(url, "_blank");
+}
+
 /* ---------- SVG ---------- */
 
 var SVG = {
@@ -1687,6 +1697,14 @@ function renderAdminHub() {
     {
       label: "Дни рождения", act: "admin-hub-birthdays", sub: "Ближайшие 30 дней",
       icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 14v-5.5a2 2 0 012-2h6a2 2 0 012 2V14M3 14h10M3 14a1 1 0 100 2h10a1 1 0 100-2M8 6.5V3M6 3.2c0 .8.5 1 1 .5s.5-1.2 1-1.2 1 .4 1 1.2-.5 1-1 .5" stroke="var(--gray)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    },
+    {
+      // Отдельная страница вне SPA (admin.html) — колесо баланса/срезы/темы с
+      // реальными ползунками поверх своей базы (Postgres), не Notion. Открываем
+      // во внешнем браузере через tg.openLink(), а не как ещё один экран
+      // Mini App — там нужен полноразмерный десктопный ввод, а не мобильная карточка.
+      label: "Панель управления", act: "admin-open-panel", sub: "Темы, уровни, ползунки оценок",
+      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="12" height="12" rx="2.5" stroke="var(--gray)" stroke-width="1.4"/><path d="M2 6.5h12M6.2 6.5V14" stroke="var(--gray)" stroke-width="1.4"/></svg>'
     }
   ];
   var itemsHtml = items.map(function (item) {
@@ -3377,6 +3395,7 @@ var ACTS = {
   "roadmap-next": function () { roadmapGoRelative(1); },
   "admin-hub-students": function () { go("admin-students"); },
   "admin-hub-birthdays": function () { go("admin-birthdays"); },
+  "admin-open-panel": function () { openAdminPanel(); },
   "undo-unstar": undoUnstar,
   "cal-prev": function () {
     var m = state.calMonth - 1, y = state.calYear;
