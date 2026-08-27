@@ -95,6 +95,44 @@ export default async function handler(req) {
     )`;
     log.push("field_history ok");
 
+    await sql`CREATE TABLE IF NOT EXISTS student_intake (
+      student_id INTEGER PRIMARY KEY REFERENCES students(id),
+      age INTEGER,
+      goal TEXT,
+      genre_refs TEXT,
+      prior_experience TEXT,
+      complaints TEXT[],
+      symptom_duration TEXT,
+      ent_history TEXT,
+      vocal_load_other TEXT,
+      smoking TEXT,
+      hydration TEXT,
+      sleep TEXT,
+      range_low TEXT,
+      range_high TEXT,
+      tessitura_comfort TEXT,
+      register_break TEXT,
+      cvt_modes_start TEXT[],
+      metallic_balance TEXT,
+      laryngeal_position TEXT,
+      tension_areas TEXT[],
+      breath_type TEXT,
+      reference_audio_url TEXT,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      updated_at TIMESTAMPTZ DEFAULT now()
+    )`;
+    log.push("student_intake ok");
+
+    await sql`ALTER TABLE assessments ADD COLUMN IF NOT EXISTS cvt_modes_practiced TEXT[]`;
+    await sql`ALTER TABLE assessments ADD COLUMN IF NOT EXISTS effort_level SMALLINT CHECK (effort_level BETWEEN 1 AND 6)`;
+    await sql`ALTER TABLE assessments ADD COLUMN IF NOT EXISTS range_worked TEXT`;
+    await sql`ALTER TABLE assessments ADD COLUMN IF NOT EXISTS what_worked TEXT`;
+    await sql`ALTER TABLE assessments ADD COLUMN IF NOT EXISTS tension_notes TEXT`;
+    await sql`ALTER TABLE assessments ADD COLUMN IF NOT EXISTS homework TEXT`;
+    await sql`ALTER TABLE assessments ADD COLUMN IF NOT EXISTS media_url TEXT`;
+    await sql`ALTER TABLE assessments ADD COLUMN IF NOT EXISTS progress_flag TEXT`;
+    log.push("assessments progress fields ok");
+
     var check = await sql`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name`;
     return json({ ok: true, log: log, tables: check.map(function (r) { return r.table_name; }) });
   } catch (e) {

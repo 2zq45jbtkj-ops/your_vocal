@@ -37,7 +37,9 @@ export default async function handler(req) {
     if (!studentId) return json({ configured: true, found: false, assessments: [], legacy: [] });
 
     var assessRows = await sql`
-      SELECT id, date, period_goal, recommendations, comment
+      SELECT id, date, period_goal, recommendations, comment,
+        cvt_modes_practiced, effort_level, range_worked, what_worked,
+        tension_notes, homework, media_url, progress_flag
       FROM assessments WHERE student_id = ${studentId} AND archived = false
       ORDER BY id DESC`;
     var maxId = assessRows.length ? Math.max.apply(null, assessRows.map(function (a) { return a.id; })) : null;
@@ -58,7 +60,17 @@ export default async function handler(req) {
         id: a.id, date: a.date, periodGoal: a.period_goal,
         recommendations: a.recommendations, comment: a.comment,
         editable: a.id === maxId,
-        scores: scoresByAssessment[a.id] || {}
+        scores: scoresByAssessment[a.id] || {},
+        // «Быстрые поля прогресса» — заполняются на каждом занятии, отдельно
+        // от колеса баланса (которое меняется реже).
+        cvtModesPracticed: a.cvt_modes_practiced || [],
+        effortLevel: a.effort_level,
+        rangeWorked: a.range_worked || "",
+        whatWorked: a.what_worked || "",
+        tensionNotes: a.tension_notes || "",
+        homework: a.homework || "",
+        mediaUrl: a.media_url || "",
+        progressFlag: a.progress_flag || null
       };
     });
 
@@ -97,7 +109,15 @@ export default async function handler(req) {
           VALUES (${newId}, ${s.topic_id}, ${s.theory}, ${s.practice})`;
       }
     }
-    return json({ ok: true, assessment: { id: newId, date: created[0].date, periodGoal: "", recommendations: "", comment: "", editable: true, scores: {} } });
+    return json({
+      ok: true,
+      assessment: {
+        id: newId, date: created[0].date, periodGoal: "", recommendations: "", comment: "",
+        editable: true, scores: {},
+        cvtModesPracticed: [], effortLevel: null, rangeWorked: "", whatWorked: "",
+        tensionNotes: "", homework: "", mediaUrl: "", progressFlag: null
+      }
+    });
   }
 
   if (action === "save-score") {
@@ -111,7 +131,11 @@ export default async function handler(req) {
   }
 
   if (action === "save-meta") {
-    var current = await sql`SELECT date, period_goal, recommendations, comment FROM assessments WHERE id = ${body.assessmentId}`;
+    var current = await sql`
+      SELECT date, period_goal, recommendations, comment,
+        cvt_modes_practiced, effort_level, range_worked, what_worked,
+        tension_notes, homework, media_url, progress_flag
+      FROM assessments WHERE id = ${body.assessmentId}`;
     if (!current.length) return json({ ok: false, error: "Not found" }, 404);
     var before = current[0];
     await sql`
@@ -119,7 +143,15 @@ export default async function handler(req) {
         date = ${body.date != null ? body.date : before.date},
         period_goal = ${body.periodGoal != null ? body.periodGoal : before.period_goal},
         recommendations = ${body.recommendations != null ? body.recommendations : before.recommendations},
-        comment = ${body.comment != null ? body.comment : before.comment}
+        comment = ${body.comment != null ? body.comment : before.comment},
+        cvt_modes_practiced = ${body.cvtModesPracticed != null ? body.cvtModesPracticed : before.cvt_modes_practiced},
+        effort_level = ${body.effortLevel != null ? body.effortLevel : before.effort_level},
+        range_worked = ${body.rangeWorked != null ? body.rangeWorked : before.range_worked},
+        what_worked = ${body.whatWorked != null ? body.whatWorked : before.what_worked},
+        tension_notes = ${body.tensionNotes != null ? body.tensionNotes : before.tension_notes},
+        homework = ${body.homework != null ? body.homework : before.homework},
+        media_url = ${body.mediaUrl != null ? body.mediaUrl : before.media_url},
+        progress_flag = ${body.progressFlag != null ? body.progressFlag : before.progress_flag}
       WHERE id = ${body.assessmentId}`;
     if (body.date != null && body.date !== before.date) {
       await logHistory(sql, body.studentId, "assessment", body.assessmentId, "date", before.date, body.date);
