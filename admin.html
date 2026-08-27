@@ -62,6 +62,13 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;heigh
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .student-pick{padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer;display:flex;justify-content:space-between}
 .student-pick:hover{color:var(--blue)}
+select{-webkit-appearance:none;appearance:none;border:0;font:inherit;color:inherit;background:var(--bg);padding:9px 30px 9px 12px;border-radius:10px;width:100%;box-shadow:inset 2px 2px 5px var(--sh-d),inset -2px -2px 5px var(--sh-l);background-image:linear-gradient(45deg,transparent 50%,var(--blue) 50%),linear-gradient(135deg,var(--blue) 50%,transparent 50%);background-position:calc(100% - 16px) 18px,calc(100% - 11px) 18px;background-size:5px 5px,5px 5px;background-repeat:no-repeat}
+.ms{display:flex;flex-wrap:wrap;gap:7px}
+.ms button{border:0;background:var(--bg);border-radius:999px;padding:7px 12px;font-size:12.5px;color:var(--muted);box-shadow:3px 3px 7px var(--sh-d),-3px -3px 7px var(--sh-l)}
+.ms button.on{color:var(--rust);font-weight:600;box-shadow:inset 3px 3px 6px var(--sh-d),inset -3px -3px 6px var(--sh-l)}
+.seg{display:flex;gap:4px}
+.seg button{flex:1;border:0;background:var(--bg);border-radius:8px;padding:8px 0;font-size:13px;color:var(--muted);box-shadow:3px 3px 6px var(--sh-d),-3px -3px 6px var(--sh-l)}
+.seg button.on{color:var(--rust);font-weight:700;box-shadow:inset 2px 2px 4px var(--sh-d),inset -2px -2px 4px var(--sh-l)}
 #msg{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--bg);box-shadow:var(--sh-d) 4px 4px 9px, var(--sh-l) -4px -4px 9px;border-radius:12px;padding:8px 16px;font-size:12.5px;color:var(--rust);opacity:0;transition:opacity .2s;pointer-events:none}
 #msg.show{opacity:1}
 </style>
@@ -82,7 +89,30 @@ function toast(text) {
 }
 function esc(s) { return String(s == null ? "" : s).replace(/[<>&]/g, function (c) { return { "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]; }); }
 
-var state = { levels: [], topics: [], assessments: [], legacy: [], level: "A", openCut: null, changed: {}, students: null, studentName: "" };
+var state = { levels: [], topics: [], assessments: [], legacy: [], intake: {}, level: "A", openCut: null, changed: {}, students: null, studentName: "" };
+
+var VOCAB = {
+  goal: ["Сцена", "Реабилитация", "Расширение диапазона", "Подготовка к проекту"],
+  complaints: ["Хрипота", "Усталость голоса", "Потеря диапазона", "Срывы"],
+  cvtModes: ["Neutral", "Curbing", "Overdrive", "Edge"],
+  tensionAreas: ["Челюсть", "Язык", "Шея", "Плечи"],
+  breathType: ["Клавикулярное", "Грудное", "Опора"]
+};
+var PROGRESS_FLAGS = [
+  { value: "better", label: "Лучше", color: "var(--blue)" },
+  { value: "same", label: "Без изменений", color: "var(--muted)" },
+  { value: "worse", label: "Хуже", color: "var(--rust)" }
+];
+/* Тот же генератор списка нот, что в kabinet-tz.md (72 позиции) — для полей
+   диапазона/тесситуры анкеты, чтобы данные были структурированы одинаково
+   по всему проекту, а не свободным текстом. */
+var NOTES = (function () {
+  var n = ["до", "до#", "ре", "ре#", "ми", "фа", "фа#", "соль", "соль#", "ля", "ля#", "си"];
+  var o = ["к.о.", "б.о.", "м.о.", "1.о.", "2.о.", "3.о."];
+  var r = [];
+  o.forEach(function (oc) { n.forEach(function (nt) { r.push(nt + (nt.indexOf("#") >= 0 ? "" : " ") + oc); }); });
+  return r;
+})();
 
 function api(path, opts) {
   return fetch(path, opts).then(function (r) { return r.json(); });
@@ -121,9 +151,10 @@ function loadStudent() {
   document.getElementById("app").innerHTML = '<div class="card">Загрузка данных ученика…</div>';
   Promise.all([
     api("/api/admin-topics"),
-    api("/api/admin-assessments?chatId=" + encodeURIComponent(chatId) + "&studentChatId=" + encodeURIComponent(studentChatId))
+    api("/api/admin-assessments?chatId=" + encodeURIComponent(chatId) + "&studentChatId=" + encodeURIComponent(studentChatId)),
+    api("/api/admin-intake?chatId=" + encodeURIComponent(chatId) + "&studentChatId=" + encodeURIComponent(studentChatId))
   ]).then(function (res) {
-    var topicsRes = res[0], assessRes = res[1];
+    var topicsRes = res[0], assessRes = res[1], intakeRes = res[2];
     if (!topicsRes.configured || !assessRes.configured) {
       document.getElementById("app").innerHTML = '<div class="card">База данных ещё не подключена (POSTGRES_URL). Создай Postgres в Vercel -> Storage и обнови страницу.</div>';
       return;
@@ -132,6 +163,7 @@ function loadStudent() {
     state.topics = topicsRes.topics;
     state.assessments = assessRes.assessments;
     state.legacy = assessRes.legacy;
+    state.intake = (intakeRes && intakeRes.intake) || {};
     state.level = state.levels[0].code;
     render();
   });
@@ -250,6 +282,7 @@ function cutBody(c) {
   });
   h += '<div class="field" style="margin-top:12px"><label>Рекомендации</label><textarea ' + (editable ? 'onchange="saveMeta(' + c.id + ',\'recommendations\',this.value)"' : "disabled") + ">" + esc(c.recommendations) + "</textarea></div>";
   h += "</div>";
+  h += progressFieldsHtml(c, editable);
   return h;
 }
 function cell(c, t, k, ed) {
@@ -258,13 +291,83 @@ function cell(c, t, k, ed) {
   var val = v ? v[k] : 0;
   return '<input type="range" min="0" max="5" value="' + val + '" oninput="setScore(' + c.id + "," + t.id + "," + k + ',this.value)" onclick="event.stopPropagation()">';
 }
-function saveMeta(assessmentId, field, value) {
-  var c = state.assessments.find(function (a) { return a.id === assessmentId; });
-  var payload = { chatId: chatId, action: "save-meta", assessmentId: assessmentId, studentId: null };
-  payload[field === "periodGoal" ? "periodGoal" : field] = value;
-  if (field === "periodGoal") c.periodGoal = value; else c[field] = value;
+function saveMetaFields(assessmentId, fields) {
+  var payload = { chatId: chatId, action: "save-meta", assessmentId: assessmentId };
+  for (var k in fields) { if (fields.hasOwnProperty(k)) payload[k] = fields[k]; }
   api("/api/admin-assessments", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) })
     .then(function (r) { toast(r.ok ? "Сохранено" : "Ошибка сохранения"); });
+}
+function saveMeta(assessmentId, field, value) {
+  var c = state.assessments.find(function (a) { return a.id === assessmentId; });
+  c[field] = value;
+  var fields = {};
+  fields[field] = value;
+  saveMetaFields(assessmentId, fields);
+}
+/* «Быстрые поля прогресса» занятия — мультиселект CVT-мод, effort 1-6,
+   флаг «лучше/без изменений/хуже». Каждый клик сохраняется сразу (не по
+   кнопке), чтобы отметить прогресс за секунды прямо на занятии. */
+function toggleChip(btn, assessmentId, field) {
+  btn.classList.toggle("on");
+  var vals = Array.prototype.map.call(btn.parentElement.querySelectorAll("button.on"), function (b) { return b.getAttribute("data-val"); });
+  var c = state.assessments.find(function (a) { return a.id === assessmentId; });
+  c[field] = vals;
+  var fields = {};
+  fields[field] = vals;
+  saveMetaFields(assessmentId, fields);
+}
+function setEffort(assessmentId, n) {
+  var c = state.assessments.find(function (a) { return a.id === assessmentId; });
+  c.effortLevel = n;
+  saveMetaFields(assessmentId, { effortLevel: n });
+  drawCuts();
+}
+function setProgressFlag(assessmentId, flag) {
+  var c = state.assessments.find(function (a) { return a.id === assessmentId; });
+  c.progressFlag = flag;
+  saveMetaFields(assessmentId, { progressFlag: flag });
+  drawCuts();
+}
+function progressFieldsHtml(c, editable) {
+  if (!editable) {
+    var flagObj = PROGRESS_FLAGS.find(function (f) { return f.value === c.progressFlag; });
+    var rows = [];
+    if (c.cvtModesPracticed && c.cvtModesPracticed.length) rows.push("CVT: " + esc(c.cvtModesPracticed.join(", ")));
+    if (c.effortLevel != null) rows.push("Effort: " + c.effortLevel + "/6");
+    if (c.rangeWorked) rows.push("Диапазон в работе: " + esc(c.rangeWorked));
+    if (c.whatWorked) rows.push("Получилось/не получилось: " + esc(c.whatWorked));
+    if (c.tensionNotes) rows.push("Зажимы/новые проблемы: " + esc(c.tensionNotes));
+    if (c.homework) rows.push("ДЗ: " + esc(c.homework));
+    if (c.mediaUrl) rows.push("Медиа: " + esc(c.mediaUrl));
+    if (flagObj) rows.push('<span style="color:' + flagObj.color + ';font-weight:600;">Прогресс: ' + esc(flagObj.label) + "</span>");
+    if (!rows.length) return "";
+    return '<div class="card inset" style="margin-top:10px">' + rows.map(function (r) { return '<div class="hint" style="margin-top:0;margin-bottom:6px;">' + r + "</div>"; }).join("") + "</div>";
+  }
+  var cvtVals = c.cvtModesPracticed || [];
+  var h = '<div class="card inset" style="margin-top:10px">' +
+    '<h2 style="margin:0 0 10px">Занятие</h2>' +
+    '<div class="field"><label>CVT-моды отрабатывали</label><div class="ms">' +
+    VOCAB.cvtModes.map(function (o) {
+      return '<button type="button" class="' + (cvtVals.indexOf(o) !== -1 ? "on" : "") + '" data-val="' + esc(o) + '" onclick="toggleChip(this,' + c.id + ',\'cvtModesPracticed\')">' + esc(o) + "</button>";
+    }).join("") + "</div></div>" +
+    '<div class="field"><label>Effort level</label><div class="seg">' +
+    [1, 2, 3, 4, 5, 6].map(function (n) {
+      return '<button type="button" class="' + (c.effortLevel === n ? "on" : "") + '" onclick="setEffort(' + c.id + "," + n + ')">' + n + "</button>";
+    }).join("") + "</div></div>" +
+    '<div class="grid2">' +
+    '<div class="field"><label>Диапазон в работе</label><input type="text" value="' + esc(c.rangeWorked) + '" onchange="saveMeta(' + c.id + ",'rangeWorked',this.value)\"></div>" +
+    '<div class="field"><label>Ссылка на аудио/видео с занятия</label><input type="text" value="' + esc(c.mediaUrl) + '" onchange="saveMeta(' + c.id + ",'mediaUrl',this.value)\"></div>" +
+    "</div>" +
+    '<div class="field"><label>Что получилось / не получилось</label><textarea onchange="saveMeta(' + c.id + ",'whatWorked',this.value)\">" + esc(c.whatWorked) + "</textarea></div>" +
+    '<div class="field"><label>Зажимы / новые проблемы</label><textarea onchange="saveMeta(' + c.id + ",'tensionNotes',this.value)\">" + esc(c.tensionNotes) + "</textarea></div>" +
+    '<div class="field"><label>Домашнее задание</label><textarea onchange="saveMeta(' + c.id + ",'homework',this.value)\">" + esc(c.homework) + "</textarea></div>" +
+    '<div class="field"><label>Прогресс</label><div class="ms">' +
+    PROGRESS_FLAGS.map(function (f) {
+      var on = c.progressFlag === f.value;
+      return '<button type="button" class="' + (on ? "on" : "") + '"' + (on ? ' style="color:' + f.color + ';"' : "") + ' onclick="setProgressFlag(' + c.id + ",'" + f.value + "')\">" + esc(f.label) + "</button>";
+    }).join("") + "</div></div>" +
+    "</div>";
+  return h;
 }
 function setCutDate(id, val) {
   var c = state.assessments.find(function (a) { return a.id === id; });
@@ -305,6 +408,98 @@ function newCut() {
       drawWheel(); drawCuts();
       toast("Новый срез создан");
     });
+}
+
+/* ---------- первичная анкета (одна запись на ученика, редактируется редко) ---------- */
+function selectHtml(id, opts, val, allowEmpty) {
+  var list = allowEmpty ? ["—"].concat(opts) : opts;
+  var cur = val || (allowEmpty ? "—" : opts[0]);
+  return '<select id="' + id + '">' + list.map(function (o) {
+    return "<option" + (o === cur ? " selected" : "") + ">" + esc(o) + "</option>";
+  }).join("") + "</select>";
+}
+function msHtml(id, list, selected) {
+  selected = selected || [];
+  return '<div class="ms" id="' + id + '">' + list.map(function (o) {
+    return '<button type="button" class="' + (selected.indexOf(o) !== -1 ? "on" : "") + '" data-val="' + esc(o) + '" onclick="this.classList.toggle(\'on\')">' + esc(o) + "</button>";
+  }).join("") + "</div>";
+}
+function renderIntakeCard() {
+  var iv = state.intake || {};
+  var h = '<div class="card">' +
+    '<div class="row between" style="margin-bottom:6px"><h2 style="margin:0">Первичная анкета</h2></div>' +
+    '<div class="hint" style="margin-top:0;margin-bottom:14px">Заполняется один раз на первой встрече, правится редко.</div>' +
+    '<div class="grid2">' +
+      '<div class="field"><label>Возраст</label><input type="text" id="in_age" value="' + esc(iv.age != null ? iv.age : "") + '"></div>' +
+      '<div class="field"><label>Цель обучения</label>' + selectHtml("in_goal", VOCAB.goal, iv.goal) + "</div>" +
+    "</div>" +
+    '<div class="field"><label>Жанр / референсы</label><input type="text" id="in_genreRefs" value="' + esc(iv.genreRefs) + '"></div>' +
+    '<div class="field"><label>Опыт пения до преподавателя (сколько лет, с кем, что застряло)</label><textarea id="in_priorExperience">' + esc(iv.priorExperience) + "</textarea></div>" +
+    '<div class="field"><label>Жалобы</label>' + msHtml("in_complaints", VOCAB.complaints, iv.complaints) + "</div>" +
+    '<div class="grid2">' +
+      '<div class="field"><label>Длительность симптомов</label><input type="text" id="in_symptomDuration" value="' + esc(iv.symptomDuration) + '"></div>' +
+      '<div class="field"><label>Голосовая нагрузка вне пения (профессия)</label><input type="text" id="in_vocalLoadOther" value="' + esc(iv.vocalLoadOther) + '"></div>' +
+    "</div>" +
+    '<div class="field"><label>ЛОР / фониатр — диагноз (узелки, парез, рефлюкс и т.п.)</label><textarea id="in_entHistory">' + esc(iv.entHistory) + "</textarea></div>" +
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;">' +
+      '<div class="field"><label>Курение</label><input type="text" id="in_smoking" value="' + esc(iv.smoking) + '"></div>' +
+      '<div class="field"><label>Гидратация</label><input type="text" id="in_hydration" value="' + esc(iv.hydration) + '"></div>' +
+      '<div class="field"><label>Сон</label><input type="text" id="in_sleep" value="' + esc(iv.sleep) + '"></div>' +
+    "</div>" +
+    '<div class="grid2">' +
+      '<div class="field"><label>Диапазон на входе — нижняя нота</label>' + selectHtml("in_rangeLow", NOTES, iv.rangeLow, true) + "</div>" +
+      '<div class="field"><label>Диапазон на входе — верхняя нота</label>' + selectHtml("in_rangeHigh", NOTES, iv.rangeHigh, true) + "</div>" +
+    "</div>" +
+    '<div class="grid2">' +
+      '<div class="field"><label>Тесситура комфорта</label>' + selectHtml("in_tessituraComfort", NOTES, iv.tessituraComfort, true) + "</div>" +
+      '<div class="field"><label>Где ломается регистр</label>' + selectHtml("in_registerBreak", NOTES, iv.registerBreak, true) + "</div>" +
+    "</div>" +
+    '<div class="field"><label>Доступные CVT-моды на старте</label>' + msHtml("in_cvtModesStart", VOCAB.cvtModes, iv.cvtModesStart) + "</div>" +
+    '<div class="grid2">' +
+      '<div class="field"><label>Metallic / non-metallic баланс</label><input type="text" id="in_metallicBalance" value="' + esc(iv.metallicBalance) + '"></div>' +
+      '<div class="field"><label>Ларингальная позиция в покое</label><input type="text" id="in_laryngealPosition" value="' + esc(iv.laryngealPosition) + '"></div>' +
+    "</div>" +
+    '<div class="field"><label>Зажимы</label>' + msHtml("in_tensionAreas", VOCAB.tensionAreas, iv.tensionAreas) + "</div>" +
+    '<div class="field" style="max-width:280px"><label>Тип дыхания</label>' + selectHtml("in_breathType", VOCAB.breathType, iv.breathType) + "</div>" +
+    '<div class="field"><label>Ссылка на референс-аудио на входе</label><input type="text" id="in_referenceAudioUrl" value="' + esc(iv.referenceAudioUrl) + '"></div>' +
+    '<button class="btn primary" onclick="saveIntake()">Сохранить анкету</button>' +
+  "</div>";
+  return h;
+}
+function fieldVal(id) { var el = document.getElementById(id); return el ? el.value : ""; }
+function msValues(id) { return Array.prototype.map.call(document.querySelectorAll("#" + id + " button.on"), function (b) { return b.getAttribute("data-val"); }); }
+function noteVal(id) { var v = fieldVal(id); return v === "—" ? "" : v; }
+function saveIntake() {
+  var intake = {
+    age: fieldVal("in_age") ? parseInt(fieldVal("in_age"), 10) : null,
+    goal: fieldVal("in_goal"),
+    genreRefs: fieldVal("in_genreRefs"),
+    priorExperience: fieldVal("in_priorExperience"),
+    complaints: msValues("in_complaints"),
+    symptomDuration: fieldVal("in_symptomDuration"),
+    entHistory: fieldVal("in_entHistory"),
+    vocalLoadOther: fieldVal("in_vocalLoadOther"),
+    smoking: fieldVal("in_smoking"),
+    hydration: fieldVal("in_hydration"),
+    sleep: fieldVal("in_sleep"),
+    rangeLow: noteVal("in_rangeLow"),
+    rangeHigh: noteVal("in_rangeHigh"),
+    tessituraComfort: noteVal("in_tessituraComfort"),
+    registerBreak: noteVal("in_registerBreak"),
+    cvtModesStart: msValues("in_cvtModesStart"),
+    metallicBalance: fieldVal("in_metallicBalance"),
+    laryngealPosition: fieldVal("in_laryngealPosition"),
+    tensionAreas: msValues("in_tensionAreas"),
+    breathType: fieldVal("in_breathType"),
+    referenceAudioUrl: fieldVal("in_referenceAudioUrl")
+  };
+  api("/api/admin-intake", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ chatId: chatId, studentChatId: studentChatId, firstName: state.studentName, intake: intake })
+  }).then(function (r) {
+    state.intake = intake;
+    toast(r.ok ? "Анкета сохранена" : "Ошибка сохранения");
+  });
 }
 
 /* ---------- темы ---------- */
@@ -379,6 +574,7 @@ function render() {
       '<div><h1>' + esc(state.studentName || studentChatId) + '</h1><div class="sub">Колесо баланса · редактирование</div></div>' +
       '<button class="btn" onclick="loadStudentPicker()">Сменить ученика</button>' +
     "</div>" +
+    renderIntakeCard() +
     '<div class="card">' +
       '<div class="row between" style="margin-bottom:14px"><h2 style="margin:0">Колесо баланса</h2><div class="lvltabs" id="lvltabs"></div></div>' +
       '<svg id="wheel" viewBox="0 0 520 440" role="img"></svg>' +
