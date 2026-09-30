@@ -12,6 +12,8 @@ if (location.search.indexOf("reset=1") !== -1) {
 var tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
 var app = document.getElementById("app");
 
+var BAZA_API = "https://baza-dannih.vercel.app";
+
 var TOTAL_LESSONS = 30;
 var LESSON = null; // data/lesson-01.json
 
@@ -25,7 +27,9 @@ var TEACHER_BOT_USERNAME = "your_vocal_teacher_bot";
 /* ---------- состояние ---------- */
 
 var state = {
-  screen: "tg",
+  screen: "token-entry",
+  accessToken: null,       // UUID из baza-dannih — ученик вводит один раз
+  studentPublicData: null, // ответ от /api/student-public (обнуляется при открытии)
   tgId: "", chatId: null, firstName: "", lastName: "", birthDate: "",
   notionLoadedFor: null, notionConfigured: null, notionFound: null,
   notionProfile: null, notionAssessments: null,
@@ -44,7 +48,6 @@ var state = {
   // то же самое, но для плеера в упражнении с песней — свой набор настроек.
   songTempoMap: {}, songPitchMap: {}, songLoopMap: {}, songAutoplayNext: false,
   favorites: {}, // "lessonId-w-n" / "lessonId-s-ti" -> { lessonTitle, label }
-  roadmapPage: null, // какой урок сейчас показан карточкой на «Уроках» (пагинация ‹ 1 2 3 4 5 ›)
   darkMode: false, notifOn: true, // раздел «Ещё»; darkMode хранится отдельным ключом (см. loadDarkMode)
   // transient (не сохраняется):
   playerIdx: null, playerElapsed: 0, durations: {}, openSettings: {},
@@ -64,6 +67,7 @@ function saveState() {
   if (state.adminMode) return;
   try {
     localStorage.setItem("vocal-app", JSON.stringify({
+      accessToken: state.accessToken,
       tgId: state.tgId, chatId: state.chatId, firstName: state.firstName, lastName: state.lastName,
       birthDate: state.birthDate,
       quizIndex: state.quizIndex, quizAnswers: state.quizAnswers,
@@ -109,7 +113,8 @@ function loadState() {
     if (!raw) return;
     var s = JSON.parse(raw);
     for (var k in s) { if (Object.prototype.hasOwnProperty.call(s, k)) state[k] = s[k]; }
-    if (state.tgId && state.firstName && state.lastName) state.screen = "courses";
+    if (state.accessToken) state.screen = "courses";
+    else if (state.tgId && state.firstName && state.lastName) state.screen = "courses";
   } catch (e) {}
 }
 
@@ -258,16 +263,6 @@ function openTeacherChat() {
   else window.open(url, "_blank");
 }
 
-/* Открывает admin.html (отдельная страница вне SPA, своя вёрстка под десктоп)
-   во внешнем браузере — tg.openLink(), не openTelegramLink() (та только для
-   t.me-ссылок). Доступно только из «Режим админа» -> «Панель управления»,
-   поэтому state.chatId здесь уже проверенный админский chat_id. */
-function openAdminPanel() {
-  var url = location.origin + "/admin.html?chatId=" + encodeURIComponent(state.chatId);
-  if (tg && tg.openLink) tg.openLink(url);
-  else window.open(url, "_blank");
-}
-
 /* ---------- SVG ---------- */
 
 var SVG = {
@@ -343,26 +338,63 @@ function handleBack() {
 
 /* ---------- экраны ---------- */
 
-function renderTg() {
+function renderTokenEntry() {
+  var val = state._tokenInput || "";
+  var err = state._tokenError || "";
   app.innerHTML =
     '<div class="auth-screen">' +
       '<div class="auth-logo">' + SVG.telegram + "</div>" +
-      '<div class="auth-title">Вход в курс</div>' +
-      '<div class="auth-sub">Введи свой Telegram ID — так преподаватель свяжет аккаунт с твоим профилем ученика.</div>' +
-      '<label class="field-label">TELEGRAM ID</label>' +
-      '<input id="tg-input" class="field-input" type="text" placeholder="@username" value="' + esc(state.tgId) + '">' +
+      '<div class="auth-title">Кабинет ученика</div>' +
+      '<div class="auth-sub">Введи код доступа, который тебе отправил преподаватель.</div>' +
+      '<label class="field-label">КОД ДОСТУПА</label>' +
+      '<input id="token-input" class="field-input" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"' +
+        ' value="' + esc(val) + '" autocorrect="off" autocapitalize="none" spellcheck="false">' +
+      (err ? '<div style="color:oklch(56% 0.18 25);font-size:13px;margin-top:8px;">' + esc(err) + "</div>" : "") +
       '<div class="spacer"></div>' +
-      '<button id="tg-next" class="cta"' + (state.tgId.trim() ? "" : " disabled") + ">Продолжить</button>" +
+      '<button id="token-next" class="cta"' + (val.trim() ? "" : " disabled") + ">Войти</button>" +
     "</div>";
 
-  var input = document.getElementById("tg-input");
-  var btn = document.getElementById("tg-next");
+  var input = document.getElementById("token-input");
+  var btn = document.getElementById("token-next");
   input.addEventListener("input", function () {
-    state.tgId = input.value;
-    btn.disabled = !state.tgId.trim();
+    state._tokenInput = input.value.trim();
+    btn.disabled = !state._tokenInput;
   });
-  btn.addEventListener("click", function () { saveState(); go("name"); });
+  btn.addEventListener("click", function () {
+    var token = (state._tokenInput || "").trim();
+    if (!token) return;
+    btn.disabled = true;
+    btn.textContent = "Проверяем…";
+    fetch(BAZA_API + "/api/student-public?token=" + encodeURIComponent(token))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data && data.student) {
+          state.accessToken = token;
+          state.studentPublicData = data;
+          state._tokenInput = "";
+          state._tokenError = "";
+          // Подставляем имя в старые поля для совместимости с курсом
+          state.firstName = data.student.name.split(" ")[0] || data.student.name;
+          state.lastName = data.student.name.split(" ").slice(1).join(" ") || "";
+          saveState();
+          go("profile");
+        } else {
+          state._tokenError = "Код не найден. Попроси преподавателя прислать правильный код.";
+          btn.disabled = false;
+          btn.textContent = "Войти";
+          render();
+        }
+      })
+      .catch(function () {
+        state._tokenError = "Нет соединения. Проверь интернет и попробуй ещё раз.";
+        btn.disabled = false;
+        btn.textContent = "Войти";
+        render();
+      });
+  });
 }
+
+function renderTg() { renderTokenEntry(); }
 
 function renderName() {
   app.innerHTML =
@@ -609,127 +641,6 @@ function roadmapScrollHtml(filter) {
   return out;
 }
 
-/* ---------- новая «Дорожная карта урока»: одна карточка + пагинация номерами
-   (по дизайну от Николая — заменяет прежний горизонтальный свайп карточек
-   и сетку из 30 плиток; сетка/старые функции карточек оставлены в файле
-   нетронутыми, просто больше не вызываются из renderCourses). ---------- */
-
-/* Список номеров уроков, доступных для пролистывания сейчас: без фильтра —
-   все 30 (запертые тоже показываем номером, но карточка для них — «Откроется
-   позже»); с фильтром — только разблокированные с нужным статусом (как и
-   раньше в фильтрах «В работе»/«Завершено»). */
-function roadmapEligibleLessons(filter) {
-  var out = [];
-  for (var n = 1; n <= TOTAL_LESSONS; n++) {
-    if (!filter) { out.push(n); continue; }
-    if (!lessonUnlocked(n)) continue;
-    var status = lessonStatus(n);
-    if (filter === "inProgress" && status === "in-progress") out.push(n);
-    else if (filter === "completed" && status === "completed") out.push(n);
-  }
-  return out;
-}
-
-/* Карточка всегда одной и той же разметки (шапка с % + статус + бар + 4
-   шага) — и для запертого, и для открытого урока, и независимо от того,
-   сколько шагов пройдено. Раньше у запертого урока была короткая версия без
-   шапки/бара — из-за этого высота карточки прыгала между уроками, и
-   пагинация под ней съезжала то выше, то ниже (иногда под нижний Dock). */
-function roadmapSingleCardHtml(n, filter) {
-  var isOpenLesson = LESSON && n === (LESSON.id || 1);
-  var unlocked = lessonUnlocked(n);
-
-  var pct = 0;
-  var subLabel = "Откроется позже";
-  // "locked" | "done" | "current" | "idle" — точка: пройден — терракотовая
-  // с галочкой; первый непройденный шаг открытого урока — синяя («сейчас
-  // сюда»); дальше по списку — пустая; весь урок заперт — тоже пустая.
-  var stepStates = ["Лекция", "Тест", "Распевки", "Песня"].map(function (label) {
-    return { label: label, state: "locked" };
-  });
-
-  if (unlocked) {
-    var s = state;
-    var p = isOpenLesson
-      ? { lecture: s.lectureViewed, quiz: s.quizDone, warmups: s.warmupsDone, song: s.songDone }
-      : (state.notionProgressByLesson && state.notionProgressByLesson[n]) || {};
-    var raw = [
-      { label: "Лекция", done: !!p.lecture },
-      { label: "Тест", done: !!p.quiz },
-      { label: "Распевки", done: !!p.warmups },
-      { label: "Песня", done: !!p.song }
-    ];
-    var markedCurrent = false;
-    stepStates = raw.map(function (st) {
-      var stepState = "idle";
-      if (st.done) stepState = "done";
-      else if (!markedCurrent) { stepState = "current"; markedCurrent = true; }
-      return { label: st.label, state: stepState };
-    });
-    var doneCount = raw.filter(function (st) { return st.done; }).length;
-    pct = doneCount * 25;
-    subLabel = doneCount === 4 ? "Завершён" : (doneCount > 0 ? "В процессе" : "Открыт");
-  }
-
-  var stepsHtml = stepStates.map(function (st) {
-    var cls = "roadmap-single-dot";
-    var inner = "";
-    if (st.state === "done") { cls += " done"; inner = SVG.stepCheck; }
-    else if (st.state === "current") { cls += " current"; }
-    return '<div class="roadmap-single-step">' +
-      '<div class="' + cls + '">' + inner + "</div>" +
-      '<span class="roadmap-single-step-label' + (st.state === "locked" ? " locked" : "") + '">' + st.label + "</span>" +
-    "</div>";
-  }).join("");
-
-  var title = !unlocked ? "Урок " + n : (isOpenLesson ? "Урок " + n + " · " + esc(LESSON.title) : "Урок " + n);
-  var act = !unlocked ? "" : (isOpenLesson
-    ? (filter === "completed" ? "open-lesson-review" : filter === "inProgress" ? "open-lesson-continue" : "open-lesson")
-    : "open-lesson-num");
-  // Направление появления карточки — задаётся перед render() в
-  // roadmapGoRelative()/"roadmap-goto" (свайп или клик по цифре пагинации),
-  // проигрывается один раз и сразу сбрасывается в renderCourses().
-  var animCls = state.roadmapAnimDir === 1 ? " slide-next" : (state.roadmapAnimDir === -1 ? " slide-prev" : "");
-
-  return (
-    '<div class="roadmap-single-card' + (unlocked ? "" : " locked") + animCls + '"' +
-      (act ? ' data-act="' + act + '"' : "") +
-      (act === "open-lesson-num" ? ' data-lesson-num="' + n + '"' : "") +
-    '>' +
-      '<div class="roadmap-single-head">' +
-        '<div class="roadmap-single-title' + (unlocked ? "" : " locked") + '">' + title + "</div>" +
-        '<div class="roadmap-single-pct' + (unlocked ? "" : " locked") + '">' + pct + "%</div>" +
-      "</div>" +
-      '<div class="roadmap-single-sub">' + subLabel + "</div>" +
-      '<div class="roadmap-single-bar"><div style="width:' + pct + '%;"></div></div>' +
-      stepsHtml +
-    "</div>"
-  );
-}
-
-function roadmapPagerHtml(current, eligible) {
-  var idx = eligible.indexOf(current);
-  var windowSize = 5;
-  var start = idx - Math.floor(windowSize / 2);
-  if (start < 0) start = 0;
-  if (start + windowSize > eligible.length) start = Math.max(0, eligible.length - windowSize);
-  var windowList = eligible.slice(start, start + windowSize);
-
-  var numsHtml = windowList.map(function (n) {
-    return '<div class="roadmap-pager-num' + (n === current ? " active" : "") + '" data-act="roadmap-goto" data-page="' + n + '">' + n + "</div>";
-  }).join("");
-
-  var prevDisabled = idx <= 0;
-  var nextDisabled = idx === -1 || idx >= eligible.length - 1;
-  return (
-    '<div class="roadmap-pager">' +
-      '<button class="roadmap-pager-btn" data-act="roadmap-prev"' + (prevDisabled ? " disabled" : "") + '>' + SVG.back + "</button>" +
-      '<div class="roadmap-pager-track">' + numsHtml + "</div>" +
-      '<button class="roadmap-pager-btn" data-act="roadmap-next"' + (nextDisabled ? " disabled" : "") + '>' + SVG.chevronRight + "</button>" +
-    "</div>"
-  );
-}
-
 function lessonsGridHtml() {
   var tiles = "";
   for (var n = 1; n <= TOTAL_LESSONS; n++) {
@@ -763,24 +674,14 @@ function renderCourses() {
   var filter = state.coursesFilter; // "inProgress" | "completed" | null — переключатель фильтра дорожной карты
   var favCount = Object.keys(state.favorites || {}).length;
 
-  // Новая «Дорожная карта урока»: одна карточка текущего урока + пагинация
-  // номерами снизу (‹ 1 2 3 4 5 ›) — по дизайну от Николая, вместо прежнего
-  // горизонтального свайпа карточек и сетки из 30 плиток.
-  var eligible = roadmapEligibleLessons(filter);
-  var roadmapBody;
-  if (!eligible.length) {
-    roadmapBody = '<div class="courses-empty">' +
-      (filter === "inProgress"
-        ? "Пока нет незавершённых уроков — начни любой открытый урок"
-        : "Здесь появятся уроки, которые ты закончишь полностью") +
+  var roadmapInner = roadmapScrollHtml(filter);
+  var roadmapBody = roadmapInner
+    ? '<div class="roadmap-scroll">' + roadmapInner + "</div>"
+    : '<div class="courses-empty">' +
+        (filter === "inProgress"
+          ? "Пока нет незавершённых уроков — начни любой открытый урок"
+          : "Здесь появятся уроки, которые ты закончишь полностью") +
       "</div>";
-  } else {
-    if (state.roadmapPage == null || eligible.indexOf(state.roadmapPage) === -1) {
-      state.roadmapPage = filter ? eligible[0] : (LESSON && LESSON.id || 1);
-    }
-    roadmapBody = '<div class="roadmap-stage">' + roadmapSingleCardHtml(state.roadmapPage, filter) + "</div>" + roadmapPagerHtml(state.roadmapPage, eligible);
-  }
-  state.roadmapAnimDir = null; // направление уже прочитано выше — проигрывается один раз за переход
 
   app.innerHTML =
     '<div class="courses-head">' +
@@ -800,151 +701,9 @@ function renderCourses() {
     '<div class="roadmap-wrap">' +
       '<div class="roadmap-label">Дорожная карта урока · листай →</div>' +
       roadmapBody +
-    "</div>";
+    "</div>" +
+    lessonsGridHtml();
   wireActs();
-  wireRoadmapSwipe();
-}
-
-/* Переход к соседнему уроку в пагинации (dir: -1 — назад, +1 — вперёд), тот
-   же список "eligible", что и у кнопок ‹ › и точек-номеров — используется и
-   кнопками, и свайпом пальцем по карточке. */
-function roadmapGoRelative(dir) {
-  var eligible = roadmapEligibleLessons(state.coursesFilter);
-  var idx = eligible.indexOf(state.roadmapPage);
-  var next = idx + dir;
-  if (idx === -1 || next < 0 || next >= eligible.length) return;
-  state.roadmapPage = eligible[next];
-  state.roadmapAnimDir = dir > 0 ? 1 : -1;
-  render();
-}
-
-/* Номер соседнего урока в пагинации (dir: -1/+1) или null, если его нет —
-   используется свайпом, чтобы знать, какую карточку «подсунуть» рядом. */
-function roadmapNeighborPage(dir) {
-  var eligible = roadmapEligibleLessons(state.coursesFilter);
-  var idx = eligible.indexOf(state.roadmapPage);
-  if (idx === -1) return null;
-  var ni = idx + dir;
-  if (ni < 0 || ni >= eligible.length) return null;
-  return eligible[ni];
-}
-
-/* Завершение свайпа: переход уже отрисован вручную (карточка уехала, соседняя
-   встала на её место) — здесь просто фиксируем новый урок в состоянии, без
-   повторной slide-анимации (roadmapAnimDir нарочно не трогаем/сбрасываем). */
-function roadmapCommitPage(n) {
-  state.roadmapPage = n;
-  state.roadmapAnimDir = null;
-  render();
-}
-
-/* Свайп пальцем по карточке «Дорожной карты» — как в нативной ленте: пока
-   палец на экране, СРАЗУ рядом с текущей карточкой стоит следующая/предыдущая
-   (в зависимости от направления) и обе едут вместе с пальцем 1:1 — не «увёл
-   палец в сторону и через мгновение выскочила новая карточка», а видно, как
-   одна выезжает, а другая уже въезжает следом. При отпускании — либо
-   докатываем обе до конца и меняем урок в состоянии (карточка уже стоит
-   ровно там, где нужно, повторно не анимируем), либо (если сдвинули
-   недостаточно) обе пружинят обратно. Карточка пересоздаётся при каждом
-   render(), поэтому слушатели вешаются заново — старые уходят вместе со
-   старым DOM-узлом, отдельно снимать не нужно. */
-function wireRoadmapSwipe() {
-  var stage = app.querySelector(".roadmap-stage");
-  var card = app.querySelector(".roadmap-single-card");
-  if (!stage || !card) return;
-  // Зазор между карточками во время свайпа — тот же боковой отступ, что и у
-  // самой карточки от края экрана (.roadmap-stage { margin: ... 18px ... }),
-  // чтобы соседняя карточка не «прилипала» к текущей вплотную.
-  var GAP = 18;
-  var startX = 0, startY = 0, tracking = false, swiping = false;
-  var cardW = 0, peekEl = null, peekDir = 0;
-
-  function clearPeek() {
-    if (peekEl && peekEl.parentNode) peekEl.parentNode.removeChild(peekEl);
-    peekEl = null;
-    peekDir = 0;
-  }
-
-  // Создаёт (или переставляет, если палец поменял направление на ходу)
-  // карточку-соседа, «стоящую в очереди» сразу за экраном с нужной стороны.
-  function ensurePeek(dir) {
-    if (peekEl && peekDir === dir) return;
-    clearPeek();
-    peekDir = dir;
-    var n = roadmapNeighborPage(dir);
-    if (!n) return; // края списка — соседа нет, просто тянем текущую с сопротивлением
-    var wrap = document.createElement("div");
-    wrap.innerHTML = roadmapSingleCardHtml(n, state.coursesFilter);
-    peekEl = wrap.firstChild;
-    peekEl.style.position = "absolute";
-    peekEl.style.top = "0";
-    peekEl.style.left = "0";
-    peekEl.style.right = "0";
-    peekEl.style.pointerEvents = "none"; // это превью, не должно перехватывать тап
-    peekEl.style.transform = "translateX(" + dir * (cardW + GAP) + "px)";
-    stage.appendChild(peekEl);
-  }
-
-  card.addEventListener("touchstart", function (e) {
-    if (e.touches.length !== 1) return;
-    startX = e.touches[0].clientX;
-    startY = e.touches[0].clientY;
-    tracking = true;
-    swiping = false;
-    cardW = card.offsetWidth;
-    card.style.transition = "none";
-    clearPeek();
-  }, { passive: true });
-
-  card.addEventListener("touchmove", function (e) {
-    if (!tracking) return;
-    var dx = e.touches[0].clientX - startX;
-    var dy = e.touches[0].clientY - startY;
-    // Явно горизонтальный жест — перехватываем у вертикального скролла страницы.
-    if (!swiping && Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) swiping = true;
-    if (!swiping) return;
-    e.preventDefault();
-    var dir = dx < 0 ? 1 : (dx > 0 ? -1 : (peekDir || 1)); // влево — след. урок, вправо — предыдущий
-    ensurePeek(dir);
-    card.style.transform = "translateX(" + dx + "px)";
-    if (peekEl) peekEl.style.transform = "translateX(" + (dir * (cardW + GAP) + dx) + "px)";
-  }, { passive: false });
-
-  card.addEventListener("touchend", function (e) {
-    if (!tracking) return;
-    tracking = false;
-    if (!swiping) { clearPeek(); return; }
-    e.preventDefault(); // не даём этому же жесту сработать как тап-открытие урока
-    var dx = e.changedTouches[0].clientX - startX;
-    var dir = dx < 0 ? 1 : -1;
-    var neighbor = roadmapNeighborPage(dir);
-    var canGo = Math.abs(dx) > 60 && neighbor;
-    card.style.transition = "transform .18s ease";
-    if (peekEl) peekEl.style.transition = "transform .18s ease";
-    if (canGo) {
-      // Докатываем: текущая уходит с экрана до конца, соседняя встаёт ровно
-      // на её место — обе уже были на виду, просто доезжают.
-      card.style.transform = "translateX(" + dir * -1 * (cardW + 40) + "px)";
-      if (peekEl) peekEl.style.transform = "translateX(0px)";
-      setTimeout(function () { roadmapCommitPage(neighbor); }, 160);
-    } else {
-      // Недостаточно далеко — обе пружинят обратно на исходные места.
-      card.style.transform = "translateX(0)";
-      if (peekEl) peekEl.style.transform = "translateX(" + dir * (cardW + GAP) + "px)";
-      var pe = peekEl;
-      peekEl = null;
-      setTimeout(function () { if (pe && pe.parentNode) pe.parentNode.removeChild(pe); }, 190);
-    }
-  }, { passive: false });
-
-  card.addEventListener("touchcancel", function () {
-    if (!tracking) return;
-    tracking = false;
-    swiping = false;
-    card.style.transition = "transform .18s ease";
-    card.style.transform = "translateX(0)";
-    clearPeek();
-  }, { passive: true });
 }
 
 /* ---------- избранные распевки: тот же плеер урока + снятие звезды с undo (1:1 по макету) ---------- */
@@ -1072,6 +831,32 @@ var DEMO_ASSESSMENTS = [
 
 function chipsHtml(arr) {
   return arr.map(function (x) { return '<span class="chip-tag">' + esc(x) + "</span>"; }).join("");
+}
+
+/* Загрузка данных ученика из baza-dannih по токену. Вызывается при каждом
+   открытии Кабинета — studentPublicData сбрасывается на null при старте. */
+function loadStudentPublicData() {
+  if (!state.accessToken || state.studentPublicData) return;
+  state.studentPublicData = "loading"; // prevents double fetch
+  fetch(BAZA_API + "/api/student-public?token=" + encodeURIComponent(state.accessToken))
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data && data.student) {
+        state.studentPublicData = data;
+      } else {
+        // Токен больше недействителен (перегенерировали)
+        state.studentPublicData = null;
+        state.accessToken = null;
+        saveState();
+        go("token-entry");
+        return;
+      }
+      if (state.screen === "profile") render();
+    })
+    .catch(function () {
+      state.studentPublicData = null;
+      if (state.screen === "profile") render();
+    });
 }
 
 /* Карточка ученика ведётся в Notion (базы «Ученики» + «Срезы»), тянем её
@@ -1272,108 +1057,106 @@ function openLessonByNumber(n) {
   go("lesson-soon");
 }
 
-function renderProfile() {
-  var s = state;
-  loadStudentProfile();
-  var useNotion = state.notionConfigured && state.notionFound && state.notionProfile;
-  var p = useNotion ? state.notionProfile : DEMO_PROFILE;
-  var assessmentsSource = useNotion ? state.notionAssessments : DEMO_ASSESSMENTS;
+/* Цвета уровней ДЗ */
+var HW_LEVEL_COLORS = {
+  "A": { bg: "oklch(90% 0.04 235)", color: "oklch(38% 0.08 235)" },
+  "B": { bg: "oklch(88% 0.05 160)", color: "oklch(35% 0.1 160)" },
+  "C": { bg: "oklch(90% 0.07 85)",  color: "oklch(40% 0.12 85)" },
+  "D": { bg: "oklch(88% 0.06 38)",  color: "oklch(40% 0.12 38)" }
+};
 
-  var appHomeworkDone = [];
-  if (s.quizDone) appHomeworkDone.push("Тест: " + LESSON.title);
-  if (s.warmupsDone) appHomeworkDone.push("Распевки: " + LESSON.title);
-  if (s.songDone) appHomeworkDone.push("Песня: " + LESSON.title);
+function hwLevelBadge(level) {
+  var c = HW_LEVEL_COLORS[level] || { bg: "var(--bg)", color: "var(--ink)" };
+  return '<span style="display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:800;background:' +
+    c.bg + ';color:' + c.color + ';">' + esc(level || "?") + "</span>";
+}
 
-  var assessmentsHtml = (assessmentsSource || []).map(function (a, ai) {
-    var metrics = a.metrics.map(function (m) {
-      var score = m[1];
-      var low = score < 5;
-      return {
-        label: m[0], score: score, pct: score * 10,
-        // ниже 5 — красным, как в дизайн-файле (barColor/scoreColor)
-        scoreColor: low ? "oklch(56% 0.18 25)" : "var(--ink)",
-        barColor: low ? "oklch(56% 0.18 25)" : "var(--blue)"
-      };
-    });
-    var lowPoints = metrics.slice().sort(function (x, y) { return x.score - y.score; }).slice(0, 3);
-    var expanded = !!(s.expandedAssessments && s.expandedAssessments[ai]);
+function formatDue(due) {
+  if (!due) return "";
+  try {
+    var d = new Date(due + "T00:00:00");
+    var months = ["янв","фев","мар","апр","май","июн","июл","авг","сен","окт","ноя","дек"];
+    return d.getDate() + " " + months[d.getMonth()];
+  } catch (e) { return due; }
+}
 
-    var metricsGrid = expanded
-      ? '<div class="assessment-metrics-grid">' +
-          metrics.map(function (m) {
-            return '<div><div class="assessment-metric-row"><span>' + esc(m.label) + '</span><span class="assessment-metric-score" style="color:' + m.scoreColor + ';">' + m.score + "</span></div>" +
-              '<div class="assessment-metric-bar"><div style="width:' + m.pct + '%;background:' + m.barColor + ';"></div></div></div>';
-          }).join("") +
-        "</div>"
-      : "";
-
-    var lowPointsHtml = lowPoints.map(function (lp) {
-      return '<span class="lowpoint-chip">' + esc(lp.label) + " · " + lp.score + "</span>";
-    }).join("");
-
-    return (
-      '<div class="assessment-card">' +
-        '<div class="assessment-date">Срез — ' + a.date + "</div>" +
-        '<div class="assessment-wheel-wrap" data-toggle-assessment="' + ai + '">' + renderWheel(metrics) + "</div>" +
-        '<div class="assessment-toggle" data-toggle-assessment="' + ai + '">' + (expanded ? "Свернуть список" : "Показать списком") + "</div>" +
-        metricsGrid +
-        '<div class="section-label" style="margin-top:0;">Точки роста</div>' +
-        '<div class="chips-wrap" style="margin-bottom:12px;">' + lowPointsHtml + "</div>" +
-        '<div class="assessment-line"><b>ДЗ:</b> ' + esc(a.homework) + "</div>" +
-        (a.score != null ? '<div class="assessment-line"><b>Оценка за ДЗ:</b> ' + a.score + "</div>" : "") +
-        (a.recommendations ? '<div class="assessment-line"><b>Рекомендации:</b> ' + esc(a.recommendations) + "</div>" : "") +
-        (a.goal ? '<div class="assessment-line"><b>Цель периода:</b> ' + esc(a.goal) + "</div>" : "") +
-      "</div>"
-    );
+function renderHomeworkSection(homework) {
+  if (!homework || !homework.length) {
+    return '<div class="assessments-title">Домашнее задание</div>' +
+      '<div class="instruction-note">Пока нет активных заданий — преподаватель добавит их после занятия.</div>';
+  }
+  var today = new Date(); today.setHours(0,0,0,0);
+  var items = homework.map(function (hw) {
+    var due = hw.due ? new Date(hw.due + "T00:00:00") : null;
+    var overdue = due && due < today;
+    return '<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 0;border-bottom:1px solid var(--line);">' +
+      hwLevelBadge(hw.level) +
+      '<div style="flex:1;min-width:0;">' +
+        '<div style="font:600 14px Manrope,sans-serif;color:var(--ink);line-height:1.35;">' + esc(hw.title || "") + "</div>" +
+        (due ? '<div style="font-size:12px;margin-top:3px;color:' + (overdue ? "oklch(56% 0.18 25)" : "var(--gray)") + ';">до ' + formatDue(hw.due) + (overdue ? " · просрочено" : "") + "</div>" : "") +
+      "</div>" +
+    "</div>";
   }).join("");
+  return '<div class="assessments-title">Домашнее задание</div>' +
+    '<div class="cabinet-inset" style="padding:0 16px;">' + items + "</div>";
+}
+
+function renderProfile() {
+  // Если нет токена — перенаправляем на вход
+  if (!state.accessToken) { go("token-entry"); return; }
+
+  loadStudentPublicData();
+
+  var data = (state.studentPublicData && state.studentPublicData !== "loading") ? state.studentPublicData : null;
+  var student = data ? data.student : null;
+  var intake = data ? data.intake : null;
+  var homework = data ? (data.homework || []) : [];
+
+  // Шапка
+  var name = student ? student.name : "Загружаю…";
+  var initials = name.split(" ").filter(Boolean).slice(0,2).map(function(w){return w[0];}).join("").toUpperCase();
+  var status = student ? student.status : "";
+  var statusLabel = { active: "Активный", trial: "Пробный", pause: "Пауза" }[status] || status;
+
+  // Блок голосового профиля
+  var voiceHtml = "";
+  if (intake) {
+    var rangeStr = (intake.rangeLow || intake.tessLow) ? ((intake.rangeLow || "?") + " — " + (intake.rangeHigh || "?")) : "";
+    var voiceTypeStr = intake.voiceType || "";
+    var goalsArr = Array.isArray(intake.goals) ? intake.goals : [];
+    var artArr = Array.isArray(intake.articulatory) ? intake.articulatory : [];
+
+    voiceHtml =
+      '<div class="assessments-title">Голосовой профиль</div>' +
+      '<div class="cabinet-inset">' +
+        (voiceTypeStr || rangeStr ? '<div class="cabinet-grid-2col">' +
+          (voiceTypeStr ? '<div><div class="profile-card-label">Тип голоса</div><div class="profile-card-value">' + esc(voiceTypeStr) + "</div></div>" : "") +
+          (rangeStr ? '<div><div class="profile-card-label">Диапазон</div><div class="profile-card-value">' + esc(rangeStr) + "</div></div>" : "") +
+        "</div>" : "") +
+        (goalsArr.length ? '<div class="section-label">Цели</div><div class="chips-wrap" style="margin-bottom:12px;">' + chipsHtml(goalsArr) + "</div>" : "") +
+        (intake.larStatus ? '<div class="section-label">Статус гортани</div><div class="goal-box goal-secondary" style="margin-bottom:12px;">' + esc(intake.larStatus) + "</div>" : "") +
+        (intake.breathingType ? '<div class="section-label">Тип дыхания</div><div class="chips-wrap" style="margin-bottom:12px;"><span class="chip-tag">' + esc(intake.breathingType) + "</span></div>" : "") +
+        (Array.isArray(intake.tensionAreas) && intake.tensionAreas.length ? '<div class="section-label">Зоны зажима</div><div class="chips-wrap" style="margin-bottom:12px;">' + chipsHtml(intake.tensionAreas) + "</div>" : "") +
+        (artArr.length ? '<div class="section-label">Артикуляционные особенности</div><div class="chips-wrap" style="margin-bottom:12px;">' + artArr.map(function(e){ return '<span class="chip-tag">' + esc(e.letter || "") + (e.typeIdx !== undefined ? "" : "") + "</span>"; }).join("") + "</div>" : "") +
+        (intake.repertoire ? '<div class="section-label">Репертуар</div><div class="goal-box goal-primary" style="margin-bottom:0;">' + esc(intake.repertoire) + "</div>" : "") +
+      "</div>";
+  }
 
   app.innerHTML =
     '<div style="padding:58px 20px 130px;">' +
       '<div class="profile-head">' +
-        '<div class="profile-avatar">' + esc(p.short) + "</div>" +
+        '<div class="profile-avatar">' + esc(initials || "?") + "</div>" +
         '<div>' +
-          '<div class="profile-name">' + esc(p.name) + "</div>" +
-          '<div class="profile-status">' + (p.age != null ? p.age + " лет · " : "") + (p.birthDate ? esc(p.birthDate) + " · " : "") + '<span style="color:var(--terra);font-weight:600;">' + esc(p.status) + "</span></div>" +
+          '<div class="profile-name">' + esc(name) + "</div>" +
+          (statusLabel ? '<div class="profile-status"><span style="color:var(--terra);font-weight:600;">' + esc(statusLabel) + "</span></div>" : "") +
         "</div>" +
       "</div>" +
-      '<div class="cabinet-inset">' +
-        '<div class="cabinet-grid-2col">' +
-          '<div><div class="profile-card-label">Тип занятий</div><div class="profile-card-value">' + esc(p.lessonType) + "</div></div>" +
-          '<div><div class="profile-card-label">Диапазон · тембр</div><div class="profile-card-value">' + esc(p.range) + '</div><div class="profile-card-sub">' + esc(p.voiceType) + "</div></div>" +
-        "</div>" +
-        '<div class="section-label" style="margin-top:0;">Первичная цель</div>' +
-        '<div class="goal-box goal-primary" style="margin-bottom:16px;">' + esc(p.primaryGoal) + "</div>" +
-        '<div class="section-label">Вторичная цель</div>' +
-        '<div class="goal-box goal-secondary" style="margin-bottom:16px;">' + esc(p.focus) + "</div>" +
-        '<div class="section-label">Задачи</div>' +
-        '<div class="chips-wrap" style="margin-bottom:16px;">' + chipsHtml(p.goals) + "</div>" +
-        '<div class="section-label">Особенности</div>' +
-        '<div class="chips-wrap" style="margin-bottom:16px;">' + chipsHtml(p.notes) + "</div>" +
-        '<div class="section-label">Пройдённые ДЗ в приложении</div>' +
-        '<div class="chips-wrap">' +
-          (appHomeworkDone.length ? chipsHtml(appHomeworkDone) : '<span class="chips-empty">Пока ничего не пройдено</span>') +
-        "</div>" +
-      "</div>" +
-      '<div class="assessments-title">Срезы · колесо баланса</div>' +
-      assessmentsHtml +
-      (useNotion ? "" :
-        '<div class="instruction-note" style="margin-top:6px;">' +
-          (state.notionConfigured === false
-            ? "Показан демо-профиль. Чтобы подключить реальные данные из Notion, доверши разовую настройку (NOTION_TOKEN в Vercel) — я всё остальное уже сделал."
-            : (state.notionFound === false
-              ? "Показан демо-профиль. Карточка ученика ещё не создалась в Notion — попробуй зайти в приложение ещё раз."
-              : "Загружаю профиль…")) +
-        "</div>") +
+      renderHomeworkSection(homework) +
+      voiceHtml +
+      (state.studentPublicData === "loading" ? '<div class="instruction-note" style="margin-top:16px;">Загружаю данные…</div>' : "") +
+      (!data && state.studentPublicData !== "loading" ? '<div class="instruction-note" style="margin-top:16px;">Нет соединения. Открой кабинет ещё раз.</div>' : "") +
     "</div>";
 
-  Array.prototype.forEach.call(app.querySelectorAll("[data-toggle-assessment]"), function (el) {
-    el.addEventListener("click", function () {
-      var ai = el.getAttribute("data-toggle-assessment");
-      state.expandedAssessments = state.expandedAssessments || {};
-      state.expandedAssessments[ai] = !state.expandedAssessments[ai];
-      render();
-    });
-  });
   wireActs();
 }
 
@@ -1697,14 +1480,6 @@ function renderAdminHub() {
     {
       label: "Дни рождения", act: "admin-hub-birthdays", sub: "Ближайшие 30 дней",
       icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 14v-5.5a2 2 0 012-2h6a2 2 0 012 2V14M3 14h10M3 14a1 1 0 100 2h10a1 1 0 100-2M8 6.5V3M6 3.2c0 .8.5 1 1 .5s.5-1.2 1-1.2 1 .4 1 1.2-.5 1-1 .5" stroke="var(--gray)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>'
-    },
-    {
-      // Отдельная страница вне SPA (admin.html) — колесо баланса/срезы/темы с
-      // реальными ползунками поверх своей базы (Postgres), не Notion. Открываем
-      // во внешнем браузере через tg.openLink(), а не как ещё один экран
-      // Mini App — там нужен полноразмерный десктопный ввод, а не мобильная карточка.
-      label: "Панель управления", act: "admin-open-panel", sub: "Темы, уровни, ползунки оценок",
-      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="12" height="12" rx="2.5" stroke="var(--gray)" stroke-width="1.4"/><path d="M2 6.5h12M6.2 6.5V14" stroke="var(--gray)" stroke-width="1.4"/></svg>'
     }
   ];
   var itemsHtml = items.map(function (item) {
@@ -1828,7 +1603,7 @@ var MAIN_TAB_SCREENS = ["courses", "profile", "questions", "more"];
    и на них, даже если открыт конкретный шаг урока, а не список уроков. */
 var LESSON_SUB_SCREENS = ["lesson-home", "lecture", "quiz", "quiz-result", "warmups", "song", "feedback", "favorites", "lesson-soon"];
 /* Дока нет ТОЛЬКО на экранах входа — на всех остальных она закреплена всегда. */
-var NO_DOCK_SCREENS = ["tg", "name", "blocked"];
+var NO_DOCK_SCREENS = ["tg", "name", "token-entry", "blocked"];
 
 function activeDockTab() {
   if (MAIN_TAB_SCREENS.indexOf(state.screen) !== -1) return state.screen;
@@ -3347,26 +3122,10 @@ function renderSong() {
 
 /* ---------- обвязка ---------- */
 
-/* Случайный, гарантированно новый chat_id для «Сбросить и войти как другой
-   ученик» — с префиксом "test_", чтобы такие тестовые карточки в Notion
-   было легко узнать и почистить пачкой (по имени в поле «Telegram chat_id»),
-   не путая их с настоящими учениками. */
-function genTestChatId() {
-  return "test_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-}
-
 function resetProgress() {
-  if (!confirm(
-    "Сбросить прогресс на этом устройстве и войти как новый тестовый ученик?\n\n" +
-    "Приложение откроется заново с экрана «Как тебя зовут?» — с новым тестовым " +
-    "ID, не с твоим настоящим Telegram-аккаунтом. Так можно проверить онбординг " +
-    "заново, как его увидит настоящий новый ученик."
-  )) return;
+  if (!confirm("Сбросить весь прогресс и данные ученика на этом устройстве?")) return;
   try { localStorage.removeItem("vocal-app"); } catch (e) {}
-  // ?testChatId=... в адресе — эту заготовку читает код инициализации ниже
-  // и подставляет её ВМЕСТО настоящего tg.initDataUnsafe.user.id (иначе внутри
-  // реального Telegram chat_id всё равно снова стал бы твоим собственным).
-  location.href = location.pathname + "?testChatId=" + encodeURIComponent(genTestChatId());
+  location.href = location.pathname;
 }
 
 var ACTS = {
@@ -3391,11 +3150,8 @@ var ACTS = {
   "filter-inprogress": function () { state.coursesFilter = state.coursesFilter === "inProgress" ? null : "inProgress"; render(); },
   "filter-completed": function () { state.coursesFilter = state.coursesFilter === "completed" ? null : "completed"; render(); },
   "go-favorites": function () { go("favorites"); },
-  "roadmap-prev": function () { roadmapGoRelative(-1); },
-  "roadmap-next": function () { roadmapGoRelative(1); },
   "admin-hub-students": function () { go("admin-students"); },
   "admin-hub-birthdays": function () { go("admin-birthdays"); },
-  "admin-open-panel": function () { openAdminPanel(); },
   "undo-unstar": undoUnstar,
   "cal-prev": function () {
     var m = state.calMonth - 1, y = state.calYear;
@@ -3424,13 +3180,6 @@ function wireActs() {
       // карточки/плитки разблокированных уроков без контента — номер в data-lesson-num
       if (act === "open-lesson-num") {
         openLessonByNumber(parseInt(el.getAttribute("data-lesson-num"), 10));
-        return;
-      }
-      if (act === "roadmap-goto") {
-        var targetPage = parseInt(el.getAttribute("data-page"), 10);
-        state.roadmapAnimDir = targetPage > state.roadmapPage ? 1 : (targetPage < state.roadmapPage ? -1 : null);
-        state.roadmapPage = targetPage;
-        render();
         return;
       }
       if (act === "admin-pick-student") {
@@ -3462,11 +3211,12 @@ function render() {
   lastRenderedScreen = state.screen;
   lastRenderedQuizIndex = state.quizIndex;
   if (tg) {
-    if (MAIN_TAB_SCREENS.indexOf(state.screen) !== -1 || state.screen === "tg") tg.BackButton.hide();
+    if (MAIN_TAB_SCREENS.indexOf(state.screen) !== -1 || state.screen === "tg" || state.screen === "token-entry") tg.BackButton.hide();
     else tg.BackButton.show();
   }
   switch (state.screen) {
-    case "tg": renderTg(); break;
+    case "token-entry": renderTokenEntry(); break;
+    case "tg": renderTokenEntry(); break;
     case "name": renderName(); break;
     case "courses": renderCourses(); break;
     case "favorites": renderFavorites(); break;
@@ -3530,18 +3280,10 @@ fetch("data/lesson-01.json")
     state.quizAnswers = new Array(data.quiz.questions.length).fill(null);
     loadState();
     loadDarkMode();
-    // «Сбросить и войти как другой ученик» (см. resetProgress/genTestChatId):
-    // ?testChatId=... в адресе — специально сгенерированный, заведомо не
-    // существующий в Notion chat_id. Он ПЕРЕКРЫВАЕТ настоящий
-    // tg.initDataUnsafe.user.id, иначе внутри реального Telegram приложение
-    // всё равно узнало бы своего настоящего владельца и пропустило онбординг.
-    var testChatId = new URLSearchParams(location.search).get("testChatId");
-    if (testChatId) {
-      state.chatId = testChatId;
-      state.tgId = testChatId;
-      state.screen = "name"; // сразу к форме — вводить тестовый ID вручную незачем
-    } else if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
-      // подставляем Telegram-username, если открыто внутри Telegram
+    // Данные из baza-dannih не кэшируются между сессиями — загружаем заново
+    state.studentPublicData = null;
+    // подставляем Telegram-username, если открыто внутри Telegram
+    if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
       var u = tg.initDataUnsafe.user;
       state.chatId = u.id || state.chatId;
       if (!state.tgId) state.tgId = u.username ? "@" + u.username : String(u.id || "");
