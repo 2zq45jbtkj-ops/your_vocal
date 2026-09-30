@@ -81,7 +81,8 @@ function saveState() {
       autoplayNext: state.autoplayNext,
       songTempoMap: state.songTempoMap, songPitchMap: state.songPitchMap,
       songLoopMap: state.songLoopMap, songAutoplayNext: state.songAutoplayNext,
-      favorites: state.favorites, notifOn: state.notifOn
+      favorites: state.favorites, notifOn: state.notifOn,
+      isAdmin: state.isAdmin
     }));
   } catch (e) {}
 }
@@ -113,7 +114,8 @@ function loadState() {
     if (!raw) return;
     var s = JSON.parse(raw);
     for (var k in s) { if (Object.prototype.hasOwnProperty.call(s, k)) state[k] = s[k]; }
-    if (state.accessToken) state.screen = "courses";
+    if (state.isAdmin) state.screen = "admin-hub";
+    else if (state.accessToken) state.screen = "courses";
     else if (state.tgId && state.firstName && state.lastName) state.screen = "courses";
   } catch (e) {}
 }
@@ -340,57 +342,126 @@ function handleBack() {
 
 function renderTokenEntry() {
   var val = state._tokenInput || "";
+  var val2 = state._adminKey2 || "";
   var err = state._tokenError || "";
+  // 13 Latin letters (no digits/dashes) → admin key pattern
+  var isAdminKey = /^[A-Za-z]{13}$/.test(val);
+  var btnEnabled = isAdminKey ? !!val2.trim() : !!val.trim();
+
   app.innerHTML =
     '<div class="auth-screen">' +
       '<div class="auth-logo">' + SVG.telegram + "</div>" +
-      '<div class="auth-title">Кабинет ученика</div>' +
-      '<div class="auth-sub">Введи код доступа, который тебе отправил преподаватель.</div>' +
-      '<label class="field-label">КОД ДОСТУПА</label>' +
-      '<input id="token-input" class="field-input" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"' +
+      '<div class="auth-title">' + (isAdminKey ? "Вход администратора" : "Кабинет ученика") + "</div>" +
+      '<div class="auth-sub">' + (isAdminKey
+        ? "Введи второй ключ для подтверждения доступа."
+        : "Введи код доступа, который тебе отправил преподаватель.") + "</div>" +
+      '<label class="field-label">' + (isAdminKey ? "КЛЮЧ 1" : "КОД ДОСТУПА") + "</label>" +
+      '<input id="token-input" class="field-input" type="text"' +
+        ' placeholder="' + (isAdminKey ? "·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·" : "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx") + '"' +
         ' value="' + esc(val) + '" autocorrect="off" autocapitalize="none" spellcheck="false">' +
+      (isAdminKey
+        ? '<label class="field-label" style="margin-top:14px;">КЛЮЧ 2</label>' +
+          '<input id="admin-key2" class="field-input" type="text"' +
+          ' placeholder="·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·"' +
+          ' value="' + esc(val2) + '" autocorrect="off" autocapitalize="none" spellcheck="false">'
+        : "") +
       (err ? '<div style="color:oklch(56% 0.18 25);font-size:13px;margin-top:8px;">' + esc(err) + "</div>" : "") +
       '<div class="spacer"></div>' +
-      '<button id="token-next" class="cta"' + (val.trim() ? "" : " disabled") + ">Войти</button>" +
+      '<button id="token-next" class="cta"' + (btnEnabled ? "" : " disabled") + ">Войти</button>" +
     "</div>";
 
   var input = document.getElementById("token-input");
   var btn = document.getElementById("token-next");
+
   input.addEventListener("input", function () {
+    var prev = state._tokenInput || "";
+    var wasAdmin = /^[A-Za-z]{13}$/.test(prev);
     state._tokenInput = input.value.trim();
-    btn.disabled = !state._tokenInput;
+    var nowAdmin = /^[A-Za-z]{13}$/.test(state._tokenInput);
+    if (wasAdmin !== nowAdmin) {
+      state._adminKey2 = "";
+      state._tokenError = "";
+      render();
+    } else {
+      btn.disabled = nowAdmin ? !(state._adminKey2 || "").trim() : !state._tokenInput;
+    }
   });
+
+  if (isAdminKey) {
+    var input2 = document.getElementById("admin-key2");
+    input2.addEventListener("input", function () {
+      state._adminKey2 = input2.value.trim();
+      btn.disabled = !state._adminKey2;
+    });
+  }
+
   btn.addEventListener("click", function () {
-    var token = (state._tokenInput || "").trim();
-    if (!token) return;
-    btn.disabled = true;
-    btn.textContent = "Проверяем…";
-    fetch(BAZA_API + "/api/student-public?token=" + encodeURIComponent(token))
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        if (data && data.student) {
-          state.accessToken = token;
-          state.studentPublicData = data;
-          state._tokenInput = "";
-          state._tokenError = "";
-          // Подставляем имя в старые поля для совместимости с курсом
-          state.firstName = data.student.name.split(" ")[0] || data.student.name;
-          state.lastName = data.student.name.split(" ").slice(1).join(" ") || "";
-          saveState();
-          go("profile");
-        } else {
-          state._tokenError = "Код не найден. Попроси преподавателя прислать правильный код.";
+    var key1 = (state._tokenInput || "").trim();
+    if (!key1) return;
+
+    if (/^[A-Za-z]{13}$/.test(key1)) {
+      // Двухключевой вход администратора
+      var key2 = (state._adminKey2 || "").trim();
+      if (!key2) return;
+      btn.disabled = true;
+      btn.textContent = "Проверяем…";
+      fetch(BAZA_API + "/api/admin-auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key1: key1, key2: key2 })
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data && data.ok) {
+            state.isAdmin = true;
+            state._tokenInput = "";
+            state._adminKey2 = "";
+            state._tokenError = "";
+            saveState();
+            go("admin-hub");
+          } else {
+            state._tokenError = "Неверные ключи. Попробуй ещё раз.";
+            btn.disabled = false;
+            btn.textContent = "Войти";
+            render();
+          }
+        })
+        .catch(function () {
+          state._tokenError = "Нет соединения. Проверь интернет и попробуй ещё раз.";
           btn.disabled = false;
           btn.textContent = "Войти";
           render();
-        }
-      })
-      .catch(function () {
-        state._tokenError = "Нет соединения. Проверь интернет и попробуй ещё раз.";
-        btn.disabled = false;
-        btn.textContent = "Войти";
-        render();
-      });
+        });
+    } else {
+      // Обычный вход ученика по UUID-токену
+      btn.disabled = true;
+      btn.textContent = "Проверяем…";
+      fetch(BAZA_API + "/api/student-public?token=" + encodeURIComponent(key1))
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data && data.student) {
+            state.accessToken = key1;
+            state.studentPublicData = data;
+            state._tokenInput = "";
+            state._tokenError = "";
+            state.firstName = data.student.name.split(" ")[0] || data.student.name;
+            state.lastName = data.student.name.split(" ").slice(1).join(" ") || "";
+            saveState();
+            go("profile");
+          } else {
+            state._tokenError = "Код не найден. Попроси преподавателя прислать правильный код.";
+            btn.disabled = false;
+            btn.textContent = "Войти";
+            render();
+          }
+        })
+        .catch(function () {
+          state._tokenError = "Нет соединения. Проверь интернет и попробуй ещё раз.";
+          btn.disabled = false;
+          btn.textContent = "Войти";
+          render();
+        });
+    }
   });
 }
 
@@ -894,87 +965,66 @@ function loadStudentProfile() {
    совпадает с ADMIN_CHAT_ID на сервере, видит скрытый от учеников пункт в
    «Ещё» и может выбрать любого ученика, чтобы пройти урок/тест/распевки
    «его глазами» и найти техническую проблему за него. */
-function loadIsAdmin() {
-  var chatId = state.chatId;
-  if (!chatId || state.isAdminLoadedFor === chatId) return;
-  state.isAdminLoadedFor = chatId;
-  fetch("/api/notion-is-admin?chatId=" + encodeURIComponent(chatId))
-    .then(function (r) { return r.json(); })
-    .then(function (data) {
-      state.isAdmin = !!(data && data.isAdmin);
-      if (state.screen === "more") render();
-    })
-    .catch(function () {});
-}
+// isAdmin теперь устанавливается при входе через двойной ключ — API-вызов не нужен.
+function loadIsAdmin() {}
 
 function loadAdminStudentsList() {
-  if (state.adminStudentsList || !state.chatId) return;
-  fetch("/api/notion-students-list?chatId=" + encodeURIComponent(state.chatId))
+  if (state.adminStudentsList) return;
+  fetch(BAZA_API + "/api/students")
     .then(function (r) { return r.json(); })
     .then(function (data) {
-      state.adminStudentsList = (data && data.students) || [];
+      var students = (data && data.students) || [];
+      state.adminStudentsList = students.map(function (s) {
+        return { id: s.id, name: s.name, status: s.status, telegramToken: s.telegramToken };
+      });
       if (state.screen === "admin-students") render();
     })
-    .catch(function () {});
+    .catch(function () { state.adminStudentsList = []; if (state.screen === "admin-students") render(); });
 }
 
-/* Ближайшие дни рождения учеников (≤30 дней) — «Режим админа». Дата берётся
-   из поля «Дата рождения» в Notion (ученик вписывает сам на онбординге, или
-   Николай вручную) — см. api/notion-birthdays.js. */
 function loadAdminBirthdays() {
-  if (state.adminBirthdaysList || !state.chatId) return;
-  fetch("/api/notion-birthdays?chatId=" + encodeURIComponent(state.chatId))
-    .then(function (r) { return r.json(); })
-    .then(function (data) {
-      state.adminBirthdaysList = (data && data.birthdays) || [];
-      if (state.screen === "admin-birthdays") render();
-    })
-    .catch(function () {});
+  // Дни рождения — данные в baza-dannih пока не хранятся, заглушка.
+  if (state.adminBirthdaysList) return;
+  state.adminBirthdaysList = [];
+  if (state.screen === "admin-birthdays") render();
 }
 
-/* Снимаем «слепок» собственного состояния Николая, переключаемся на
-   ученика: его chatId/имя, локальный прогресс урока 1 — с чистого листа
-   (или из его же прогресса в Notion, если он там уже есть), чтобы Николай
-   реально прошёл шаги как этот ученик. saveState() на время режима ничего
-   не пишет в localStorage — см. защиту в saveState(). */
+/* Снимаем слепок состояния Николая, загружаем профиль выбранного ученика
+   через baza-dannih по токену и показываем его профиль («глазами ученика»).
+   saveState() во время adminMode в localStorage не пишет — см. защиту там. */
 function enterAdminMode(student) {
+  if (!student.telegramToken) {
+    alert("У ученика «" + student.name + "» нет токена доступа — сначала зайди на сайт и убедись что токен сгенерирован.");
+    return;
+  }
   state.adminSnapshot = {
-    chatId: state.chatId, tgId: state.tgId, firstName: state.firstName, lastName: state.lastName,
-    quizIndex: state.quizIndex, quizAnswers: state.quizAnswers, quizScore: state.quizScore,
-    quizDone: state.quizDone, warmupsDone: state.warmupsDone, songDone: state.songDone,
-    lectureViewed: state.lectureViewed, celebrated: state.celebrated,
-    warmupFiles: state.warmupFiles, songFiles: state.songFiles, songPlacements: state.songPlacements,
-    favorites: state.favorites,
-    notionLoadedFor: state.notionLoadedFor, notionProfile: state.notionProfile,
-    notionAssessments: state.notionAssessments, notionUnlockedLessons: state.notionUnlockedLessons,
-    notionProgressByLesson: state.notionProgressByLesson
+    accessToken: state.accessToken, studentPublicData: state.studentPublicData,
+    firstName: state.firstName, lastName: state.lastName, isAdmin: state.isAdmin
   };
+  state.adminMode = true;
+  state.adminStudentName = student.name;
 
-  var lessonId = (LESSON && LESSON.id) || 1;
-  var p = null; // прогресс ученика по уроку 1 из Notion, если уже есть
-  fetch("/api/notion-student?chatId=" + encodeURIComponent(student.chatId))
+  fetch(BAZA_API + "/api/student-public?token=" + encodeURIComponent(student.telegramToken))
     .then(function (r) { return r.json(); })
     .then(function (data) {
-      if (data && data.found) p = (data.progressByLesson && data.progressByLesson[lessonId]) || null;
+      if (data && data.student) {
+        state.accessToken = student.telegramToken;
+        state.studentPublicData = data;
+        state.firstName = data.student.name.split(" ")[0] || data.student.name;
+        state.lastName = data.student.name.split(" ").slice(1).join(" ") || "";
+        go("profile");
+      } else {
+        state.adminMode = false;
+        state.adminStudentName = "";
+        state.adminSnapshot = null;
+        alert("Не удалось загрузить профиль ученика: " + ((data && data.error) || "нет данных"));
+      }
     })
-    .catch(function () {})
-    .then(function () {
-      state.adminMode = true;
-      state.adminStudentName = student.name;
-      state.chatId = student.chatId;
-      state.tgId = student.name;
-      state.firstName = student.name; state.lastName = "";
-      state.quizIndex = 0; state.quizAnswers = []; state.quizScore = 0;
-      state.lectureViewed = !!(p && p.lecture);
-      state.quizDone = !!(p && p.quiz);
-      state.warmupsDone = !!(p && p.warmups);
-      state.songDone = !!(p && p.song);
-      state.celebrated = false;
-      state.warmupFiles = []; state.songFiles = []; state.songPlacements = {};
-      state.favorites = {};
-      state.notionLoadedFor = null; state.notionProfile = null; state.notionAssessments = null;
-      state.notionUnlockedLessons = []; state.notionProgressByLesson = {};
-      go("courses");
+    .catch(function () {
+      state.adminMode = false;
+      state.adminStudentName = "";
+      state.adminSnapshot = null;
+      alert("Ошибка загрузки профиля — нет соединения.");
     });
 }
 
@@ -984,34 +1034,21 @@ function exitAdminMode() {
   state.adminStudentName = "";
   state.adminSnapshot = null;
   if (s) { for (var k in s) { state[k] = s[k]; } }
-  go("more");
+  go("admin-students");
 }
 
-/* «Удалить данные ученика» — два ПОСЛЕДОВАТЕЛЬНЫХ предупреждения (не два
-   клика по одной кнопке), второе — уже финальное, с явным «назад пути нет».
-   Само действие — деактивация + сброс прогресса, см. api/notion-deactivate-student.js
-   (настоящего удаления страниц Notion API не даёт). */
-function deleteStudentWithConfirm(chatId, name) {
-  var step1 = confirm(
-    "Закрыть доступ ученику «" + name + "» и стереть весь его прогресс по урокам?\n\n" +
-    "Профиль в Notion останется (статус сменится на «Завершил»), но весь прогресс будет обнулён."
-  );
+function deleteStudentWithConfirm(studentId, name) {
+  var step1 = confirm("Удалить ученика «" + name + "» из базы?\n\nВсе данные (анкета, дневник занятий, токен) будут удалены безвозвратно.");
   if (!step1) return;
-  var step2 = confirm(
-    "Это последнее предупреждение. Прогресс ученика «" + name + "» будет стёрт без возможности отменить.\n\nТочно продолжить?"
-  );
+  var step2 = confirm("Последнее предупреждение. Данные ученика «" + name + "» удалятся без возможности отменить.\n\nТочно продолжить?");
   if (!step2) return;
 
-  fetch("/api/notion-deactivate-student", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ chatId: state.chatId, targetChatId: chatId })
-  })
+  fetch(BAZA_API + "/api/students?id=" + encodeURIComponent(studentId), { method: "DELETE" })
     .then(function (r) { return r.json(); })
     .then(function (data) {
       if (data && data.ok) {
-        alert("Готово: «" + name + "» деактивирован, прогресс сброшен (" + (data.resetCount || 0) + " строк).");
-        state.adminStudentsList = null; // перезагрузить список со свежим статусом
+        alert("Готово: «" + name + "» удалён из базы.");
+        state.adminStudentsList = null;
         render();
       } else {
         alert("Не получилось: " + ((data && data.error) || "неизвестная ошибка"));
@@ -1515,14 +1552,14 @@ function renderAdminStudents() {
     body = '<div class="courses-empty">Пока нет ни одного ученика с привязанным Telegram — список пуст.</div>';
   } else {
     body = list.map(function (st) {
-      var sub = [st.age ? st.age + " лет" : "", st.status || ""].filter(Boolean).join(" · ");
+      var sub = [st.status || "", st.telegramToken ? "✓ токен" : "нет токена"].filter(Boolean).join(" · ");
       return (
-        '<div class="lesson-card" data-act="admin-pick-student" data-admin-chat="' + esc(st.chatId) + '" data-admin-name="' + esc(st.name) + '">' +
+        '<div class="lesson-card" data-act="admin-pick-student" data-admin-id="' + esc(st.id) + '" data-admin-token="' + esc(st.telegramToken || "") + '" data-admin-name="' + esc(st.name) + '">' +
           '<div class="lesson-dot" style="background:oklch(56% 0.09 235);">' + esc((st.name || "?")[0]) + "</div>" +
           '<div class="lesson-body"><div class="lesson-name">' + esc(st.name) + "</div>" +
             (sub ? '<div class="lesson-sub">' + esc(sub) + "</div>" : "") +
           "</div>" +
-          '<button class="icon-btn" data-act="admin-delete-student" data-admin-chat="' + esc(st.chatId) + '" data-admin-name="' + esc(st.name) + '" title="Удалить данные ученика">' + SVG.trash + "</button>" +
+          '<button class="icon-btn" data-act="admin-delete-student" data-admin-id="' + esc(st.id) + '" data-admin-name="' + esc(st.name) + '" title="Удалить ученика">' + SVG.trash + "</button>" +
         "</div>"
       );
     }).join("");
@@ -3183,11 +3220,11 @@ function wireActs() {
         return;
       }
       if (act === "admin-pick-student") {
-        enterAdminMode({ chatId: el.getAttribute("data-admin-chat"), name: el.getAttribute("data-admin-name") });
+        enterAdminMode({ id: el.getAttribute("data-admin-id"), telegramToken: el.getAttribute("data-admin-token"), name: el.getAttribute("data-admin-name") });
         return;
       }
       if (act === "admin-delete-student") {
-        deleteStudentWithConfirm(el.getAttribute("data-admin-chat"), el.getAttribute("data-admin-name"));
+        deleteStudentWithConfirm(el.getAttribute("data-admin-id"), el.getAttribute("data-admin-name"));
         return;
       }
       var fn = ACTS[act];
