@@ -14,6 +14,21 @@ var app = document.getElementById("app");
 
 var BAZA_API = "https://baza-dannih.vercel.app";
 
+// Сообщаем baza-dannih свой Telegram chat_id, чтобы бот мог написать ученику
+// первым (например, прислать домашнее задание) — без этого бот может только
+// отвечать, если ученик написал первым. Шлём один раз за сессию приложения;
+// неудача тихо откатывается, попробуем снова при следующем вызове.
+var _chatIdSynced = false;
+function syncTelegramChatId() {
+  if (_chatIdSynced || !state.accessToken || !state.chatId) return;
+  _chatIdSynced = true;
+  fetch(BAZA_API + "/api/student-public?token=" + encodeURIComponent(state.accessToken), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chatId: state.chatId })
+  }).catch(function () { _chatIdSynced = false; });
+}
+
 var TOTAL_LESSONS = 30;
 var LESSON = null; // data/lesson-01.json
 
@@ -447,6 +462,7 @@ function renderTokenEntry() {
             state.firstName = data.student.name.split(" ")[0] || data.student.name;
             state.lastName = data.student.name.split(" ").slice(1).join(" ") || "";
             saveState();
+            syncTelegramChatId();
             go("profile");
           } else {
             state._tokenError = "Код не найден. Попроси преподавателя прислать правильный код.";
@@ -914,6 +930,7 @@ function loadStudentPublicData() {
     .then(function (data) {
       if (data && data.student) {
         state.studentPublicData = data;
+        syncTelegramChatId();
       } else {
         // Токен больше недействителен (перегенерировали)
         state.studentPublicData = null;
