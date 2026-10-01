@@ -1676,7 +1676,9 @@ function renderDock() {
   var items = [
     { screen: "profile", act: "go-profile", icon: SVG.dockPerson, label: "Кабинет" },
     { screen: "courses", act: "go-courses", icon: SVG.dockLessons, label: "Уроки", badge: badge },
-    { screen: "questions", act: "go-questions", icon: SVG.dockQuestion, label: "Запись" },
+    // "Запись" (календарь записи на занятие) скрыта по просьбе Николая — функционал
+    // (renderQuestions, ACTS["go-questions"], case "questions") оставлен нетронутым,
+    // чтобы в любой момент вернуть пункт обратно одной строкой.
     { screen: "more", act: "go-more", icon: SVG.dockMore, label: "Ещё" }
   ];
   var html = '<div class="dock">';
