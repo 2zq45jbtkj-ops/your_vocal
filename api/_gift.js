@@ -30,6 +30,7 @@ export async function giftSql() {
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     done_at TIMESTAMPTZ
   )`;
+  await sql`ALTER TABLE gift_tasks ADD COLUMN IF NOT EXISTS note TEXT`;
   return sql;
 }
 

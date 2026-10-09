@@ -35,6 +35,8 @@ export default async function handler(req) {
   var icon = clip(b.icon, 8);
   var title = clip(b.title, 120);
   var extras = Array.isArray(b.extras) ? b.extras.slice(0, 8).map(function (x) { return clip(x, 40); }) : [];
+  // her wishes / details for this coupon (optional); newlines kept, other control chars dropped
+  var note = String(b.note == null ? "" : b.note).replace(/[\u0000-\u0009\u000b-\u001f]/g, " ").trim().slice(0, 500);
   var replyMarkup = null;
   var taskId = validTaskId(b.taskId) ? b.taskId : null;
   var sql = null;
@@ -51,12 +53,13 @@ export default async function handler(req) {
     }
     lines.push(row);
     if (extras.length) lines.push("✨ Допы: " + extras.join(", "));
+    if (note) lines.push("💬 Пожелание: " + note);
 
     if (taskId) {
       sql = await giftSql();
       if (sql) {
-        await sql`INSERT INTO gift_tasks (id, title, icon, extras)
-                  VALUES (${taskId}, ${title}, ${icon}, ${extras.join(", ")})
+        await sql`INSERT INTO gift_tasks (id, title, icon, extras, note)
+                  VALUES (${taskId}, ${title}, ${icon}, ${extras.join(", ")}, ${note || null})
                   ON CONFLICT (id) DO NOTHING`;
         var base = new URL(req.url).origin;
         var link = base + "/api/gift-done?id=" + encodeURIComponent(taskId) + "&s=" + (await signTask(taskId));

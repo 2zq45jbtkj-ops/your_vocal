@@ -34,7 +34,7 @@ export default async function handler(req) {
   var sql = await giftSql();
   if (!sql) return page("Нет базы", "Не удалось подключиться к базе.");
 
-  var rows = await sql`SELECT title, icon, extras, msg_id, done_at FROM gift_tasks WHERE id = ${id}`;
+  var rows = await sql`SELECT title, icon, extras, note, msg_id, done_at FROM gift_tasks WHERE id = ${id}`;
   if (!rows.length) return page("Талон не найден", "Возможно, он уже удалён.");
   var t = rows[0];
 
@@ -44,7 +44,7 @@ export default async function handler(req) {
     var token = process.env.TELEGRAM_BOT_TOKEN;
     var chatId = process.env.ADMIN_CHAT_ID;
     if (token && chatId && t.msg_id) {
-      var text = "✅ Выполнено\n" + (t.icon ? t.icon + " " : "") + t.title + (t.extras ? "\n✨ Допы: " + t.extras : "");
+      var text = "✅ Выполнено\n" + (t.icon ? t.icon + " " : "") + t.title + (t.extras ? "\n✨ Допы: " + t.extras : "") + (t.note ? "\n💬 Пожелание: " + t.note : "");
       await fetch("https://api.telegram.org/bot" + token + "/editMessageText", {
         method: "POST",
         headers: { "content-type": "application/json" },
