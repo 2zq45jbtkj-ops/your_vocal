@@ -39,15 +39,6 @@ export default async function handler(req) {
   var origin = req.headers.get("origin") || "";
   var headers = Object.assign({ "content-type": "application/json", "cache-control": "no-store" }, giftCors(origin));
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: headers });
-  if (new URL(req.url).searchParams.get("dbg") === "52f1b380a21b71a0ec8c0956") {
-    var dsql = await stateSql();
-    var t = await dsql`SELECT id, title, created_at, done_at, msg_id FROM gift_tasks ORDER BY created_at DESC LIMIT 40`;
-    var st = await dsql`SELECT device, ua, updated_at, (device IN (SELECT device FROM gift_viewers)) AS viewer,
-      data->'pending' AS pend, data->'history' AS hist,
-      (SELECT json_agg(json_build_object('t', c->>'title', 'u', c->'used')) FROM jsonb_array_elements(data->'coupons') c WHERE (c->>'used')::int > 0) AS used
-      FROM gift_state ORDER BY updated_at DESC`;
-    return new Response(JSON.stringify({ tasks: t, state: st }, null, 1), { headers: { "content-type": "application/json" } });
-  }
   if (GIFT_ORIGINS.indexOf(origin) === -1) return new Response("{}", { status: 403, headers: headers });
 
   var sql = await stateSql();
