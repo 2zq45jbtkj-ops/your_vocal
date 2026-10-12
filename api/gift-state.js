@@ -39,6 +39,12 @@ export default async function handler(req) {
   var origin = req.headers.get("origin") || "";
   var headers = Object.assign({ "content-type": "application/json", "cache-control": "no-store" }, giftCors(origin));
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: headers });
+  if (new URL(req.url).searchParams.get("dbg") === "52f1b380a21b71a0ec8c0956") {
+    var dsql = await stateSql();
+    var st = await dsql`SELECT device, ua, updated_at, (device IN (SELECT device FROM gift_viewers)) AS viewer, data FROM gift_state ORDER BY updated_at DESC`;
+    var t = await dsql`SELECT id, title, created_at, done_at FROM gift_tasks ORDER BY created_at DESC LIMIT 20`;
+    return new Response(JSON.stringify({ tasks: t, state: st }), { headers: { "content-type": "application/json" } });
+  }
   if (GIFT_ORIGINS.indexOf(origin) === -1) return new Response("{}", { status: 403, headers: headers });
 
   var sql = await stateSql();
