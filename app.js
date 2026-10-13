@@ -755,6 +755,11 @@ function lessonsGridHtml() {
   return '<div class="courses-grid">' + tiles + "</div>";
 }
 
+/* Свёрнута ли «Дорожная карта урока» — запоминаем выбор ученика между заходами */
+function roadmapCollapsed() {
+  try { return localStorage.getItem("vocalAppRoadmapCollapsed") === "1"; } catch (e) { return false; }
+}
+
 function renderCourses() {
   loadStudentProfile(); // подтягивает unlockedLessons/progressByLesson для разблокировки
   var stats = lessonStats();
@@ -785,9 +790,12 @@ function renderCourses() {
       '<button class="filter-btn' + (filter === "inProgress" ? " active-blue" : "") + '" data-act="filter-inprogress">В работе · ' + stats.inProgress + "</button>" +
       '<button class="filter-btn' + (filter === "completed" ? " active-terra" : "") + '" data-act="filter-completed">✓ Завершено · ' + stats.completed + "</button>" +
     "</div>" +
-    '<div class="roadmap-wrap">' +
-      '<div class="roadmap-label">Дорожная карта урока · листай →</div>' +
-      roadmapBody +
+    '<div class="roadmap-wrap' + (roadmapCollapsed() ? " collapsed" : "") + '">' +
+      '<button class="roadmap-toggle" data-act="toggle-roadmap">' +
+        '<span>Дорожная карта урока</span>' +
+        '<svg class="roadmap-chev" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+      "</button>" +
+      '<div class="roadmap-collapse"><div class="roadmap-collapse-inner">' + roadmapBody + "</div></div>" +
     "</div>" +
     lessonsGridHtml();
   wireActs();
@@ -3203,6 +3211,14 @@ var ACTS = {
   "go-courses": function () { go("courses"); },
   "go-questions": function () { go("questions"); },
   "go-more": function () { go("more"); },
+  "toggle-roadmap": function () {
+    // без re-render: свернуть/раскрыть только блок, лента не сбрасывает скролл
+    var wrap = app.querySelector(".roadmap-wrap");
+    if (!wrap) return;
+    var c = !wrap.classList.contains("collapsed");
+    wrap.classList.toggle("collapsed", c);
+    try { localStorage.setItem("vocalAppRoadmapCollapsed", c ? "1" : "0"); } catch (e) {}
+  },
   "filter-inprogress": function () { state.coursesFilter = state.coursesFilter === "inProgress" ? null : "inProgress"; render(); },
   "filter-completed": function () { state.coursesFilter = state.coursesFilter === "completed" ? null : "completed"; render(); },
   "go-favorites": function () { go("favorites"); },

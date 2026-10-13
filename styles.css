@@ -67,6 +67,7 @@ html.dark, body.dark {
 
 html, body {
   background: var(--bg);
+  color: var(--ink); /* базовый цвет текста из темы — без него всё без явного color было чёрным в тёмной теме */
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-tap-highlight-color: transparent;
 }
@@ -146,17 +147,34 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 }
 .filter-btn.active-blue { background: var(--blue); color: var(--white-text); box-shadow: var(--raised-sm); }
 .filter-btn.active-terra { background: var(--terra); color: var(--white-text); box-shadow: var(--raised-sm); }
-.roadmap-wrap { padding: 20px 0 4px; }
+.roadmap-wrap { padding: 20px 0 0; }
 .roadmap-label {
   font: 600 12px 'Inter', sans-serif; text-transform: uppercase; letter-spacing: .04em;
   color: var(--gray-mute); margin-bottom: 10px; padding: 0 18px;
 }
+/* «Дорожная карта урока» — маленькая кнопка-пилюля, сворачивает/раскрывает ленту */
+.roadmap-toggle {
+  display: inline-flex; align-items: center; gap: 6px; margin: 0 18px;
+  border: none; background: var(--bg); color: var(--gray); cursor: pointer;
+  font: 600 11px 'Inter', sans-serif; text-transform: uppercase; letter-spacing: .04em;
+  padding: 7px 12px; border-radius: 14px; box-shadow: var(--raised-sm);
+  position: relative; z-index: 1;
+}
+.roadmap-chev { transition: transform .25s ease; }
+.roadmap-wrap.collapsed .roadmap-chev { transform: rotate(-90deg); }
+.roadmap-wrap.collapsed .roadmap-toggle { box-shadow: var(--inset-sm); }
+/* плавное сворачивание по высоте через grid-rows 1fr → 0fr */
+.roadmap-collapse { display: grid; grid-template-rows: 1fr; transition: grid-template-rows .28s ease, opacity .2s ease; }
+.roadmap-collapse-inner { min-height: 0; overflow: hidden; }
+.roadmap-wrap.collapsed .roadmap-collapse { grid-template-rows: 0fr; opacity: 0; }
 /* edge-to-edge: без своего padding-left/right у скроллера — центрирование карточек
    даёт симметричный calc()-паддинг ниже, отдельно для каждой стороны. Без этого
    родительский padding-left обрезал первую карточку при свайпе до упора влево. */
 .roadmap-scroll {
   display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory;
-  padding: 8px calc((100% - 82%) / 2) 6px;
+  /* 24px сверху/снизу — запас под всю растушёвку тени raised-lg (смещение 8 + блюр 16),
+     иначе overflow-x:auto обрезал тень ровной линией (было 8px/6px). */
+  padding: 24px calc((100% - 82%) / 2) 24px;
   isolation: isolate; /* свой stacking context — тени карточек (::before z-index:-1) рисуются под ВСЕМИ карточками ленты */
 }
 /* Тень вынесена в ::before: иначе светлая тень (−8px −8px 16px) следующей
@@ -306,7 +324,10 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 
 /* ---------- шапка экрана ---------- */
 .top {
-  padding: 58px 20px 6px; display: flex; align-items: center; gap: 12px;
+  /* было фиксированные 58px — в обычном (не fullscreen) режиме Telegram это
+     лишний зазор, из-за которого нижняя кнопка уезжала под док. Теперь отступ =
+     safe-area Telegram (в fullscreen > 0, в обычном 0) + 14px. */
+  padding: calc(var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px) + 14px) 20px 6px; display: flex; align-items: center; gap: 12px;
 }
 .top.pb8 { padding-bottom: 8px; }
 .top-title { font-size: 16px; font-weight: 600; color: var(--ink); }
@@ -370,16 +391,22 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 .quiz-counter-row {
   display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
 }
-.quiz-ring-big-wrap { display: flex; justify-content: center; padding: 32px 0 16px; }
+/* Кольцо и отступы масштабируются от высоты экрана Telegram: на коротких
+   телефонах (SE, mini) кнопка «Далее/Завершить» остаётся над доком без скролла. */
+.quiz-ring-big-wrap {
+  display: flex; justify-content: center;
+  padding: clamp(10px, calc(var(--tg-viewport-stable-height, 100vh) * 0.035), 32px) 0 clamp(6px, calc(var(--tg-viewport-stable-height, 100vh) * 0.02), 16px);
+}
 .quiz-ring-big {
-  width: 180px; height: 180px; border-radius: 50%;
+  --ring: clamp(110px, calc(var(--tg-viewport-stable-height, 100vh) * 0.21), 180px);
+  width: var(--ring); height: var(--ring); border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
 }
 .quiz-ring-big-inner {
-  width: 150px; height: 150px; border-radius: 50%; background: var(--bg);
+  width: calc(var(--ring) * 0.833); height: calc(var(--ring) * 0.833); border-radius: 50%; background: var(--bg);
   display: flex; align-items: center; justify-content: center;
 }
-.quiz-ring-big-inner span { font: 800 30px 'Manrope', sans-serif; color: var(--ink); }
+.quiz-ring-big-inner span { font: 800 clamp(22px, calc(var(--ring) * 0.17), 30px) 'Manrope', sans-serif; color: var(--ink); }
 .quiz-counter { font-size: 11px; color: var(--gray); font-weight: 600; white-space: nowrap; }
 .quiz-progress { height: 5px; background: var(--line); border-radius: 3px; overflow: hidden; margin-bottom: 16px; box-shadow: inset 1px 1px 2px oklch(var(--sh-base) / 0.3); }
 .quiz-progress > div { height: 100%; background: var(--terra); border-radius: 3px; }
@@ -389,7 +416,7 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 .quiz-radio { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--disabled); background: transparent; flex-shrink: 0; }
 .quiz-opt.sel .quiz-radio { border-color: var(--blue); background: var(--blue); }
 .quiz-opt span { font-size: 13px; color: var(--ink); }
-.quiz-cta-wrap { padding: 16px 20px 130px; }
+.quiz-cta-wrap { padding: 12px 20px 120px; }
 .quiz-cta-wrap .cta { height: 52px; font-size: 15px; }
 .cta.terra { background: var(--terra); }
 .cta.terra:disabled { background: var(--disabled); box-shadow: none; }
@@ -790,4 +817,4 @@ html.dark .chip.sel-v, body.dark .chip.sel-v { background: var(--blue); color: v
 .more-item-icon {
   width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
-.more-item-label { flex: 1; font: 600 14px 'Inter', sans-serif; }
+.more-item-label { flex: 1; font: 600 14px 'Inter', sans-serif; color: var(--ink); }
