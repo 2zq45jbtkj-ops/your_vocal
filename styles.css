@@ -818,3 +818,79 @@ html.dark .chip.sel-v, body.dark .chip.sel-v { background: var(--blue); color: v
   width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
 .more-item-label { flex: 1; font: 600 14px 'Inter', sans-serif; color: var(--ink); }
+
+/* ---------- «Планы уроков» (только режим админа) ----------
+   Все цвета — через переменные темы (--bg/--ink/--gray/--line/--terra/--blue),
+   ничего захардкоженного, иначе экран сломается в тёмной теме. */
+.plan-group { display: flex; flex-direction: column; gap: 10px; }
+.plan-group-hint { font-size: 12px; color: var(--gray); margin: -4px 0 2px; line-height: 1.45; }
+.plan-badge {
+  width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--white-text); font: 700 14px 'Manrope', sans-serif;
+  box-shadow: 3px 3px 6px oklch(var(--sh-base) / 0.3);
+}
+.plan-ready, .plan-draft {
+  flex-shrink: 0; padding: 3px 9px; border-radius: 8px;
+  font: 700 10.5px 'Inter', sans-serif; letter-spacing: 0.02em;
+}
+.plan-ready { background: var(--soft-terra); color: var(--ink-terra); }
+.plan-draft { background: var(--bgmuted); color: var(--gray); }
+
+.plan-goal {
+  background: var(--bg); border-radius: 16px; box-shadow: var(--inset-sm);
+  padding: 13px 15px; margin-bottom: 14px;
+}
+.plan-goal b { display: block; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--gray); }
+.plan-goal p { margin: 5px 0 0; font-size: 13px; line-height: 1.5; color: var(--ink); }
+
+.plan-section { background: var(--bg); border-radius: 18px; box-shadow: var(--raised-sm); overflow: hidden; }
+.plan-section-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px; cursor: pointer; }
+.plan-section-title { font-size: 14.5px; font-weight: 700; color: var(--ink); }
+.plan-chevron { font-size: 10px; color: var(--gray); flex-shrink: 0; }
+.plan-section-body { padding: 2px 16px 16px; border-top: 1px solid var(--line); padding-top: 14px; }
+.plan-sub {
+  font: 700 11px 'Inter', sans-serif; letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--gray); margin-bottom: 10px;
+}
+.plan-sub.mt { margin-top: 18px; }
+.plan-instruction {
+  font-size: 12.5px; line-height: 1.55; color: var(--ink);
+  background: var(--bgmuted); border-radius: 12px; padding: 11px 13px; margin-bottom: 14px;
+}
+.plan-field { margin-top: 10px; }
+.plan-field b { display: block; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--gray); }
+.plan-field p { margin: 4px 0 0; font-size: 12.5px; line-height: 1.55; color: var(--ink); }
+.plan-field.mistake b { color: var(--ink-red); }
+.plan-mark {
+  display: inline-block; min-width: 18px; text-align: center; border-radius: 5px;
+  background: var(--soft-blue); color: var(--ink-terra); font: 700 12px 'Manrope', sans-serif; padding: 0 4px;
+}
+
+/* тест: верный вариант сразу подсвечен — это шпаргалка преподавателя, не тест */
+.plan-q { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.plan-q:last-child { border-bottom: none; padding-bottom: 0; }
+.plan-q-head { display: flex; gap: 8px; font-size: 13px; font-weight: 700; color: var(--ink); line-height: 1.45; margin-bottom: 8px; }
+.plan-q-num {
+  flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%; background: var(--bgmuted);
+  color: var(--gray); font: 700 10.5px 'Manrope', sans-serif;
+  display: flex; align-items: center; justify-content: center; margin-top: 1px;
+}
+.plan-opt { display: flex; gap: 7px; font-size: 12.5px; color: var(--gray); line-height: 1.5; padding: 2px 0; }
+.plan-opt.right { color: var(--ink); font-weight: 700; }
+.plan-opt-mark { flex-shrink: 0; width: 12px; color: var(--terra); font-weight: 700; }
+.plan-explain { margin-top: 7px; font-size: 12px; line-height: 1.5; color: var(--gray); font-style: italic; }
+
+.plan-wu { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.plan-wu:last-child { border-bottom: none; padding-bottom: 0; }
+.plan-wu-head { display: flex; align-items: center; gap: 9px; }
+.plan-wu-n {
+  flex-shrink: 0; width: 22px; height: 22px; border-radius: 7px; background: var(--soft-blue);
+  color: var(--ink-terra); font: 700 12px 'Manrope', sans-serif;
+  display: flex; align-items: center; justify-content: center;
+}
+.plan-wu-label { flex: 1; font: 700 14px 'Manrope', sans-serif; color: var(--ink); letter-spacing: 0.02em; }
+.plan-wu-time { flex-shrink: 0; font-size: 11.5px; color: var(--gray); }
+.plan-wu-sub { margin-top: 6px; font-size: 12.5px; line-height: 1.5; color: var(--ink); }
+.plan-wu-foot { margin-top: 10px; font-size: 11px; color: var(--locked); }
+.plan-card-steps { font-size: 11px; color: var(--locked); margin-top: 3px; }

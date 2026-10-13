@@ -52,6 +52,9 @@ var state = {
   // «Режим админа» — см. loadIsAdmin/enterAdminMode ниже
   isAdmin: false, isAdminLoadedFor: null, adminStudentsList: null, adminBirthdaysList: null,
   adminMode: false, adminStudentName: "", adminSnapshot: null,
+  // «Планы уроков» в режиме админа: индекс открытого плана и раскрытая секция.
+  // В localStorage не пишутся (не в списке полей saveState) — живут только в сессии.
+  adminPlanIdx: null, adminPlanSection: "lecture",
   quizIndex: 0, quizAnswers: [], quizScore: 0,
   quizDone: false, warmupsDone: false, songDone: false,
   lectureViewed: false, celebrated: false,
@@ -336,6 +339,8 @@ function backTarget() {
     case "admin-hub": return "more";
     case "admin-students": return "admin-hub";
     case "admin-birthdays": return "admin-hub";
+    case "admin-plans": return "admin-hub";
+    case "admin-plan": return "admin-plans";
     case "lecture": case "warmups": case "song": case "quiz-result": return "lesson-home";
     case "feedback": return "song";
     case "quiz": return null; // отдельная логика
@@ -1542,6 +1547,10 @@ function renderAdminHub() {
     {
       label: "Дни рождения", act: "admin-hub-birthdays", sub: "Ближайшие 30 дней",
       icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 14v-5.5a2 2 0 012-2h6a2 2 0 012 2V14M3 14h10M3 14a1 1 0 100 2h10a1 1 0 100-2M8 6.5V3M6 3.2c0 .8.5 1 1 .5s.5-1.2 1-1.2 1 .4 1 1.2-.5 1-1 .5" stroke="var(--gray)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    },
+    {
+      label: "Планы уроков", act: "admin-hub-plans", sub: "По темам срезов и колеса баланса",
+      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3.5 2.5h9a1 1 0 011 1v9a1 1 0 01-1 1h-9a1 1 0 01-1-1v-9a1 1 0 011-1z" stroke="var(--gray)" stroke-width="1.3" stroke-linejoin="round"/><path d="M5.5 6h5M5.5 8.5h5M5.5 11h3" stroke="var(--gray)" stroke-width="1.3" stroke-linecap="round"/></svg>'
     }
   ];
   var itemsHtml = items.map(function (item) {
@@ -1629,6 +1638,245 @@ function renderAdminBirthdays() {
       '<div><div class="top-title lg">Дни рождения</div><div class="top-sub">Ближайшие 30 дней, по дате «Дата рождения» в Notion</div></div>' +
     "</div>" +
     '<div style="padding:8px 16px 130px;display:flex;flex-direction:column;gap:10px;">' + body + "</div>";
+  wireActs();
+}
+
+/* ---------- «Планы уроков» (admin-only) ----------
+   Темы — ровно те, по которым в baza-dannih строятся срезы и колесо баланса
+   (там это const CATALOG в index.html). Планы лежат в data/lesson-plans.json
+   и загружаются лениво, только когда Николай реально открыл этот раздел —
+   фронт учеников их не тянет вовсе.
+
+   План ≠ готовый урок: у распевок и песенного упражнения тут нет аудио
+   (поля src), это описание того, что предстоит записать. «Дыхание» —
+   единственная тема со статусом «готов»: её контент скопирован из
+   data/lesson-01.json, чтобы эталон в списке не разъезжался с живым уроком. */
+
+var LESSON_PLANS = null;      // { levels, plans[] } из data/lesson-plans.json
+var lessonPlansLoading = false;
+
+var PLAN_LEVEL_COLORS = { A: "var(--terra)", B: "var(--blue)", C: "oklch(70% 0.14 85)", D: "oklch(55% 0.12 300)" };
+
+function loadLessonPlans() {
+  if (LESSON_PLANS || lessonPlansLoading) return;
+  lessonPlansLoading = true;
+  fetch("data/lesson-plans.json")
+    .then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    })
+    .then(function (data) {
+      LESSON_PLANS = data;
+      lessonPlansLoading = false;
+      if (state.screen === "admin-plans" || state.screen === "admin-plan") render();
+    })
+    .catch(function () {
+      lessonPlansLoading = false;
+      LESSON_PLANS = { levels: {}, plans: [], error: true };
+      if (state.screen === "admin-plans" || state.screen === "admin-plan") render();
+    });
+}
+
+function planLevelBadge(level) {
+  return '<div class="plan-badge" style="background:' + PLAN_LEVEL_COLORS[level] + ';">' + esc(level) + "</div>";
+}
+
+/* topic — ровно строка из CATALOG (baza-dannih), часто сокращённая до кода
+   («ИГС», «СЧН», «Динамика f/p»). fullName — расшифровка для подписи. */
+function planStepsSummary(plan) {
+  var parts = [];
+  if (plan.lecture && plan.lecture.blocks) {
+    var headers = plan.lecture.blocks.filter(function (b) { return b.type === "header"; }).length;
+    parts.push(headers + (headers === 1 ? " блок лекции" : " блока лекции"));
+  }
+  if (plan.quiz && plan.quiz.questions) parts.push(plan.quiz.questions.length + " вопросов");
+  if (plan.warmups && plan.warmups.exercises) parts.push(plan.warmups.exercises.length + " распевки");
+  return parts.join(" · ");
+}
+
+function renderAdminPlans() {
+  loadLessonPlans();
+  var body;
+  if (!LESSON_PLANS) {
+    body = '<div class="courses-empty">Загружаю планы уроков…</div>';
+  } else if (LESSON_PLANS.error) {
+    body = '<div class="courses-empty">Не удалось загрузить data/lesson-plans.json — проверь соединение.</div>';
+  } else if (!LESSON_PLANS.plans.length) {
+    body = '<div class="courses-empty">Планы пока не заведены.</div>';
+  } else {
+    var byLevel = {};
+    LESSON_PLANS.plans.forEach(function (plan, idx) {
+      (byLevel[plan.level] = byLevel[plan.level] || []).push({ plan: plan, idx: idx });
+    });
+    body = ["A", "B", "C", "D"].filter(function (lvl) { return byLevel[lvl]; }).map(function (lvl) {
+      var meta = LESSON_PLANS.levels[lvl] || {};
+      var cards = byLevel[lvl].map(function (item) {
+        return (
+          '<div class="lesson-card" data-act="admin-open-plan" data-plan-idx="' + item.idx + '">' +
+            planLevelBadge(lvl) +
+            '<div class="lesson-body">' +
+              '<div class="lesson-name">' + esc(item.plan.topic) + "</div>" +
+              (item.plan.fullName ? '<div class="lesson-sub">' + esc(item.plan.fullName) + "</div>" : "") +
+              '<div class="plan-card-steps">' + esc(planStepsSummary(item.plan)) + "</div>" +
+            "</div>" +
+            (item.plan.ready
+              ? '<div class="plan-ready" title="Урок уже собран в приложении">готов</div>'
+              : '<div class="plan-draft" title="План написан, аудио ещё не записано">план</div>') +
+            SVG.chevronRight +
+          "</div>"
+        );
+      }).join("");
+      return (
+        '<div class="plan-group">' +
+          '<div class="section-label" style="margin:0 0 8px;">' + esc(meta.label || "Уровень " + lvl) +
+            " · " + byLevel[lvl].length + "</div>" +
+          (meta.hint ? '<div class="plan-group-hint">' + esc(meta.hint) + "</div>" : "") +
+          cards +
+        "</div>"
+      );
+    }).join("");
+  }
+  app.innerHTML =
+    '<div class="top pb8">' + backBtn("back") +
+      '<div><div class="top-title lg">Планы уроков</div>' +
+        '<div class="top-sub">По темам срезов и колеса баланса · видно только преподавателю</div></div>' +
+    "</div>" +
+    '<div style="padding:8px 16px 130px;display:flex;flex-direction:column;gap:18px;">' + body + "</div>";
+  wireActs();
+}
+
+function planLectureHtml(lecture) {
+  if (!lecture || !lecture.blocks) return "";
+  var html = "";
+  var num = 0;
+  var first = true;
+  lecture.blocks.forEach(function (blk) {
+    if (blk.type === "header") {
+      num = 0; // нумерация пунктов своя внутри каждого блока лекции
+      html += '<div class="plan-sub' + (first ? "" : " mt") + '">' + esc(blk.text) + "</div>";
+      first = false;
+    } else if (blk.type === "point") {
+      num++;
+      html += '<div class="point"><span class="point-num">' + num + "</span><div><b>" + esc(blk.b) + "</b><p>" + esc(blk.p) + "</p></div></div>";
+    } else if (blk.type === "note") {
+      html += '<div class="lecture-note">' + esc(blk.text) + "</div>";
+    } else if (blk.type === "para") {
+      html += '<p class="lecture-para">' + esc(blk.text) + "</p>";
+    }
+  });
+  return html;
+}
+
+function planQuizHtml(quiz) {
+  if (!quiz || !quiz.questions) return "";
+  return quiz.questions.map(function (q, i) {
+    var opts = q.opts.map(function (text, oi) {
+      var right = oi === q.correct;
+      return '<div class="plan-opt' + (right ? " right" : "") + '">' +
+        '<span class="plan-opt-mark">' + (right ? "✓" : "") + "</span>" +
+        "<span>" + esc(text) + "</span></div>";
+    }).join("");
+    return (
+      '<div class="plan-q">' +
+        '<div class="plan-q-head"><span class="plan-q-num">' + (i + 1) + "</span>" + esc(q.q) + "</div>" +
+        opts +
+        (q.explain ? '<div class="plan-explain">' + esc(q.explain) + "</div>" : "") +
+      "</div>"
+    );
+  }).join("");
+}
+
+function planWarmupsHtml(warmups, ready) {
+  if (!warmups || !warmups.exercises) return "";
+  var head = warmups.instruction ? '<div class="plan-instruction">' + warmups.instruction + "</div>" : "";
+  return head + warmups.exercises.map(function (ex) {
+    var label = [ex.label1, ex.label2].filter(Boolean).join("  ");
+    return (
+      '<div class="plan-wu">' +
+        '<div class="plan-wu-head">' +
+          '<span class="plan-wu-n">' + ex.n + "</span>" +
+          '<span class="plan-wu-label">' + esc(label) + "</span>" +
+          '<span class="plan-wu-time">' + esc(ex.time || "") + "</span>" +
+        "</div>" +
+        (ex.sub ? '<div class="plan-wu-sub">' + esc(ex.sub) + "</div>" : "") +
+        (ex.how ? '<div class="plan-field"><b>Как выполнять</b><p>' + esc(ex.how) + "</p></div>" : "") +
+        (ex.mistake ? '<div class="plan-field mistake"><b>Типичная ошибка</b><p>' + esc(ex.mistake) + "</p></div>" : "") +
+        '<div class="plan-wu-foot">' + (ready ? "Аудио записано" : "Аудио: не записано") +
+          (ex.bpm ? " · ориентир " + ex.bpm + " bpm" : "") + "</div>" +
+      "</div>"
+    );
+  }).join("");
+}
+
+function planSongHtml(song) {
+  if (!song) return "";
+  var html = "";
+  if (song.hint) html += '<div class="plan-instruction">' + esc(song.hint) + "</div>";
+  if (song.task) html += '<div class="plan-field"><b>Задание ученику</b><p>' + esc(song.task) + "</p></div>";
+  if (song.marks && song.marks.length) {
+    html += '<div class="plan-field"><b>Обозначения</b>' + song.marks.map(function (m) {
+      return '<p><span class="plan-mark">' + esc(m.code) + "</span> — " + esc(m.desc) + "</p>";
+    }).join("") + "</div>";
+  }
+  if (song.lines && song.lines.length) {
+    html += '<div class="plan-field"><b>Строки для разбора</b>' + song.lines.map(function (ln) {
+      return "<p>" + esc(ln) + "</p>";
+    }).join("") + "</div>";
+  }
+  if (song.trackIdeas && song.trackIdeas.length) {
+    html += '<div class="plan-field"><b>Материал</b>' + song.trackIdeas.map(function (t) {
+      return "<p>" + esc(t) + "</p>";
+    }).join("") + "</div>";
+  }
+  return html;
+}
+
+function renderAdminPlanDetail() {
+  loadLessonPlans();
+  if (!LESSON_PLANS || !LESSON_PLANS.plans[state.adminPlanIdx]) {
+    app.innerHTML =
+      '<div class="top pb8">' + backBtn("back") + '<div class="top-title lg">План урока</div></div>' +
+      '<div class="courses-empty">Загружаю план…</div>';
+    wireActs();
+    return;
+  }
+  var plan = LESSON_PLANS.plans[state.adminPlanIdx];
+  var open = state.adminPlanSection; // null — все секции свёрнуты
+  var sections = [
+    { key: "lecture", title: "Лекция", sub: (plan.stepSubtitles && plan.stepSubtitles.lecture) || "", html: planLectureHtml(plan.lecture) },
+    { key: "quiz", title: "Тест", sub: (plan.stepSubtitles && plan.stepSubtitles.quiz) || "", html: planQuizHtml(plan.quiz) },
+    { key: "warmups", title: "Распевки", sub: (plan.stepSubtitles && plan.stepSubtitles.warmups) || "", html: planWarmupsHtml(plan.warmups, plan.ready) },
+    { key: "song", title: "Упражнение с песней", sub: (plan.stepSubtitles && plan.stepSubtitles.song) || "", html: planSongHtml(plan.song) }
+  ];
+  var body = sections.map(function (sec) {
+    var isOpen = sec.key === open;
+    return (
+      '<div class="plan-section' + (isOpen ? " open" : "") + '">' +
+        '<div class="plan-section-head" data-act="admin-plan-section" data-plan-section="' + sec.key + '">' +
+          '<div style="flex:1;min-width:0;">' +
+            '<div class="plan-section-title">' + esc(sec.title) + "</div>" +
+            (sec.sub ? '<div class="lesson-sub">' + esc(sec.sub) + "</div>" : "") +
+          "</div>" +
+          '<span class="plan-chevron">' + (isOpen ? "▲" : "▼") + "</span>" +
+        "</div>" +
+        (isOpen ? '<div class="plan-section-body">' + sec.html + "</div>" : "") +
+      "</div>"
+    );
+  }).join("");
+
+  app.innerHTML =
+    '<div class="top pb8">' + backBtn("back") +
+      '<div style="flex:1;min-width:0;">' +
+        '<div class="top-title lg">' + esc(plan.topic) + "</div>" +
+        '<div class="top-sub">' + esc(plan.fullName || (LESSON_PLANS.levels[plan.level] || {}).label || "Уровень " + plan.level) +
+          (plan.ready ? " · урок собран" : " · план, аудио не записано") + "</div>" +
+      "</div>" +
+      planLevelBadge(plan.level) +
+    "</div>" +
+    '<div style="padding:8px 16px 130px;">' +
+      (plan.goal ? '<div class="plan-goal"><b>Цель урока</b><p>' + esc(plan.goal) + "</p></div>" : "") +
+      '<div style="display:flex;flex-direction:column;gap:10px;">' + body + "</div>" +
+    "</div>";
   wireActs();
 }
 
@@ -3224,6 +3472,7 @@ var ACTS = {
   "go-favorites": function () { go("favorites"); },
   "admin-hub-students": function () { go("admin-students"); },
   "admin-hub-birthdays": function () { go("admin-birthdays"); },
+  "admin-hub-plans": function () { go("admin-plans"); },
   "undo-unstar": undoUnstar,
   "cal-prev": function () {
     var m = state.calMonth - 1, y = state.calYear;
@@ -3262,6 +3511,19 @@ function wireActs() {
         deleteStudentWithConfirm(el.getAttribute("data-admin-id"), el.getAttribute("data-admin-name"));
         return;
       }
+      if (act === "admin-open-plan") {
+        state.adminPlanIdx = parseInt(el.getAttribute("data-plan-idx"), 10);
+        state.adminPlanSection = "lecture";
+        go("admin-plan");
+        return;
+      }
+      if (act === "admin-plan-section") {
+        // повторный тап по открытой секции её сворачивает
+        var sec = el.getAttribute("data-plan-section");
+        state.adminPlanSection = state.adminPlanSection === sec ? null : sec;
+        render();
+        return;
+      }
       var fn = ACTS[act];
       if (fn) fn();
     });
@@ -3298,6 +3560,8 @@ function render() {
     case "admin-hub": renderAdminHub(); break;
     case "admin-students": renderAdminStudents(); break;
     case "admin-birthdays": renderAdminBirthdays(); break;
+    case "admin-plans": renderAdminPlans(); break;
+    case "admin-plan": renderAdminPlanDetail(); break;
     case "lesson-home": renderLessonHome(); break;
     case "lesson-soon": renderLessonSoon(); break;
     case "blocked": renderBlocked(); break;
