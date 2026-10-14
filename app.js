@@ -71,6 +71,10 @@ var state = {
   playerIdx: null, playerElapsed: 0, durations: {}, openSettings: {},
   songPlayerKey: null, songPlayerElapsed: 0, songDurations: {}, songOpenSettings: {},
   songRevealed: {}, songSelectedMark: {},
+  _profileErr: null, // "net" | "server" — почему не загрузился Кабинет, см. loadStudentPublicData
+  _openingOwnCabinet: false, // идёт поиск своей карточки, см. openOwnCabinet
+  _adminStudentsErr: false,  // список учеников не загрузился (а не «пуст»)
+  _ownCabinetMsg: null,      // "not-found" | "no-token" | "net" — почему не открылась своя карточка
   feedbackMood: null, feedbackText: "", coursesFilter: null,
   pendingUnstar: null, pendingUnstarData: null, pendingUnstarSecs: 0
 };
@@ -456,8 +460,9 @@ function renderTokenEntry() {
       // Обычный вход ученика по UUID-токену
       btn.disabled = true;
       btn.textContent = "Проверяем…";
+      var loginStatus = 0;
       fetch(BAZA_API + "/api/student-public?token=" + encodeURIComponent(key1))
-        .then(function (r) { return r.json(); })
+        .then(function (r) { loginStatus = r.status; return r.json(); })
         .then(function (data) {
           if (data && data.student) {
             state.accessToken = key1;
@@ -470,7 +475,11 @@ function renderTokenEntry() {
             syncTelegramChatId();
             go("profile");
           } else {
-            state._tokenError = "Код не найден. Попроси преподавателя прислать правильный код.";
+            // Не врём про «код не найден», если на самом деле упал сервер:
+            // 404 — кода действительно нет, всё остальное — сбой на нашей стороне.
+            state._tokenError = (loginStatus === 404 || loginStatus === 400)
+              ? "Код не найден. Попроси преподавателя прислать правильный код."
+              : "Сервер не отвечает. Код, скорее всего, верный — попробуй ещё раз через минуту.";
             btn.disabled = false;
             btn.textContent = "Войти";
             render();
@@ -938,24 +947,42 @@ function chipsHtml(arr) {
 function loadStudentPublicData() {
   if (!state.accessToken || state.studentPublicData) return;
   state.studentPublicData = "loading"; // prevents double fetch
+  state._profileErr = null;
+  var httpStatus = 0;
   fetch(BAZA_API + "/api/student-public?token=" + encodeURIComponent(state.accessToken))
-    .then(function (r) { return r.json(); })
+    .then(function (r) { httpStatus = r.status; return r.json(); })
     .then(function (data) {
       if (data && data.student) {
         state.studentPublicData = data;
         syncTelegramChatId();
-      } else {
-        // Токен больше недействителен (перегенерировали)
+      } else if (httpStatus === 404 || httpStatus === 400) {
+        // Единственный случай, когда токен действительно недействителен: ученика
+        // удалили или токен перегенерировали. Только здесь стираем код доступа.
         state.studentPublicData = null;
+        if (state.adminMode) {
+          // Николай смотрит чужой кабинет — его собственную сессию не трогаем,
+          // иначе он улетит на экран ввода двойного ключа.
+          alert("Токен ученика «" + state.adminStudentName + "» больше недействителен — похоже, его перегенерировали на сайте.");
+          exitAdminMode();
+          return;
+        }
         state.accessToken = null;
         saveState();
         go("token-entry");
+        return;
+      } else {
+        // 500/503 и прочие сбои сервера: спящая база, холодный старт, таймаут.
+        // Код доступа верный — не стираем его и никуда не выкидываем.
+        state.studentPublicData = null;
+        state._profileErr = "server";
+        if (state.screen === "profile") render();
         return;
       }
       if (state.screen === "profile") render();
     })
     .catch(function () {
       state.studentPublicData = null;
+      state._profileErr = "net";
       if (state.screen === "profile") render();
     });
 }
@@ -1004,12 +1031,20 @@ function loadAdminStudentsList() {
     .then(function (r) { return r.json(); })
     .then(function (data) {
       var students = (data && data.students) || [];
+      state._adminStudentsErr = false;
       state.adminStudentsList = students.map(function (s) {
         return { id: s.id, name: s.name, status: s.status, telegramToken: s.telegramToken };
       });
       if (state.screen === "admin-students") render();
     })
-    .catch(function () { state.adminStudentsList = []; if (state.screen === "admin-students") render(); });
+    .catch(function () {
+      // Отличаем «запрос не прошёл» от «учеников правда нет»: раньше обе
+      // ситуации выглядели как пустой список, и сетевая ошибка читалась как
+      // «база пуста».
+      state._adminStudentsErr = true;
+      state.adminStudentsList = [];
+      if (state.screen === "admin-students") render();
+    });
 }
 
 function loadAdminBirthdays() {
@@ -1056,6 +1091,47 @@ function enterAdminMode(student) {
       state.adminSnapshot = null;
       alert("Ошибка загрузки профиля — нет соединения.");
     });
+}
+
+/* «Кабинет» под админским ключом открывает собственную карточку Николая —
+   ровно в том виде, в каком её видит ученик. Своя запись ищется в списке
+   учеников по имени: /api/students отдаёт только id/name/status/telegramToken,
+   Telegram chat_id там нет, поэтому сопоставить по Telegram-профилю нельзя.
+   Если карточки нет или у неё не сгенерирован токен — показываем выбор ученика
+   с объяснением, а не молча кидаем на пустой экран. */
+var ADMIN_SELF_NAME = "николай септ";
+
+function findOwnStudentRecord() {
+  var list = state.adminStudentsList || [];
+  for (var i = 0; i < list.length; i++) {
+    var n = String(list[i].name || "").trim().toLowerCase().replace(/\s+/g, " ");
+    if (n === ADMIN_SELF_NAME) return list[i];
+    if (n.indexOf("септ") !== -1 && n.indexOf("никола") !== -1) return list[i];
+  }
+  return null;
+}
+
+function openOwnCabinet() {
+  var proceed = function () {
+    state._openingOwnCabinet = false;
+    var me = findOwnStudentRecord();
+    if (me && me.telegramToken) { state._ownCabinetMsg = null; enterAdminMode(me); return; }
+    state._ownCabinetMsg = me ? "no-token" : "not-found";
+    go("admin-students");
+  };
+  if (state.adminStudentsList) { proceed(); return; }
+  loadAdminStudentsList();
+  var tries = 0;
+  var wait = setInterval(function () {
+    tries++;
+    if (state.adminStudentsList) { clearInterval(wait); proceed(); return; }
+    if (tries > 40) { // ~6 секунд — список так и не доехал
+      clearInterval(wait);
+      state._openingOwnCabinet = false;
+      state._ownCabinetMsg = "net";
+      go("admin-students");
+    }
+  }, 150);
 }
 
 function exitAdminMode() {
@@ -1168,9 +1244,80 @@ function renderHomeworkSection(homework) {
     '<div class="cabinet-inset" style="padding:0 16px;">' + items + "</div>";
 }
 
+/* «Колесо баланса и срезы» — то же, что Николай ведёт на сайте во вкладке
+   срезов. Показываем текущее состояние шкалами 0–10 и, если есть предыдущий
+   срез, помечаем по каждой теме динамику: лучше / так же / хуже — ровно как
+   в PDF-карточке ученика. Темы приходят с сервера как [{name, level, score}];
+   score может быть null — тема заведена, но ещё не оценена. */
+var SREZ_LEVEL_LABELS = { A: "Уровень A", B: "Уровень B", C: "Уровень C", D: "Уровень D" };
+
+function renderSrezySection(srezy, wheelTopics) {
+  var list = Array.isArray(srezy) ? srezy : [];
+  var current = (Array.isArray(wheelTopics) && wheelTopics.length)
+    ? wheelTopics
+    : (list.length ? (list[list.length - 1].topics || []) : []);
+  if (!current.length) return "";
+
+  // С чем сравниваем: если показываем текущее колесо — с последним срезом,
+  // если показываем последний срез — с предпоследним.
+  var prev = (Array.isArray(wheelTopics) && wheelTopics.length)
+    ? (list.length ? list[list.length - 1] : null)
+    : (list.length >= 2 ? list[list.length - 2] : null);
+  var prevMap = {};
+  if (prev) (prev.topics || []).forEach(function (t) { prevMap[t.name] = t.score; });
+
+  var byLevel = {};
+  current.forEach(function (t) { (byLevel[t.level] = byLevel[t.level] || []).push(t); });
+
+  var blocks = Object.keys(byLevel).sort().map(function (lvl) {
+    var rows = byLevel[lvl].map(function (t) {
+      var score = (t.score === null || t.score === undefined) ? null : Number(t.score);
+      var pv = prevMap[t.name];
+      var flag = "";
+      if (score !== null && pv !== null && pv !== undefined) {
+        flag = score > pv ? '<span class="srez-flag up">лучше</span>'
+          : score < pv ? '<span class="srez-flag down">хуже</span>'
+            : '<span class="srez-flag same">так же</span>';
+      }
+      var pct = score === null ? 0 : Math.max(0, Math.min(10, score)) * 10;
+      return '<div class="srez-row">' +
+          '<div class="srez-row-head">' +
+            '<span class="srez-name">' + esc(t.name) + "</span>" +
+            '<span class="srez-score">' + (score === null ? "—" : score + "/10") + "</span>" +
+            flag +
+          "</div>" +
+          '<div class="srez-bar"><div class="srez-bar-fill" style="width:' + pct + '%;"></div></div>' +
+        "</div>";
+    }).join("");
+    return '<div class="srez-level">' + esc(SREZ_LEVEL_LABELS[lvl] || lvl) + "</div>" + rows;
+  }).join("");
+
+  var dates = list.length
+    ? '<div class="srez-dates">' + (list.length === 1 ? "Срез: " : "Срезы: ") +
+        list.map(function (z) { return esc(z.date || ""); }).join(" · ") + "</div>"
+    : "";
+
+  return '<div class="assessments-title">Колесо баланса</div>' +
+    '<div class="cabinet-inset">' + blocks + dates + "</div>";
+}
+
 function renderProfile() {
-  // Если нет токена — перенаправляем на вход
-  if (!state.accessToken) { go("token-entry"); return; }
+  // Нет кода доступа — обычного ученика отправляем на вход.
+  // Николая-админа туда отправлять нельзя: он уже вошёл по двум ключам, и экран
+  // входа просто зацикливал его на вводе паролей (ввёл ключи → попал в «Ещё» →
+  // нажал «Кабинет» → снова просят ключи). Ведём его к выбору ученика.
+  if (!state.accessToken) {
+    if (state.isAdmin) {
+      // Своя карточка грузится асинхронно — показываем заглушку и не зовём
+      // openOwnCabinet повторно, иначе render() зациклится сам на себе.
+      app.innerHTML = '<div style="padding:58px 20px;"><div class="courses-empty">Открываю твой кабинет…</div></div>';
+      if (!state._openingOwnCabinet) { state._openingOwnCabinet = true; openOwnCabinet(); }
+      wireActs();
+      return;
+    }
+    go("token-entry");
+    return;
+  }
 
   loadStudentPublicData();
 
@@ -1219,9 +1366,16 @@ function renderProfile() {
         "</div>" +
       "</div>" +
       renderHomeworkSection(homework) +
+      renderSrezySection(data ? data.srezy : [], data ? data.wheelTopics : []) +
       voiceHtml +
       (state.studentPublicData === "loading" ? '<div class="instruction-note" style="margin-top:16px;">Загружаю данные…</div>' : "") +
-      (!data && state.studentPublicData !== "loading" ? '<div class="instruction-note" style="margin-top:16px;">Нет соединения. Открой кабинет ещё раз.</div>' : "") +
+      (!data && state.studentPublicData !== "loading"
+        ? '<div class="instruction-note" style="margin-top:16px;">' +
+            (state._profileErr === "server"
+              ? "Сервер не отвечает. Код доступа сохранён — просто открой кабинет ещё раз через минуту."
+              : "Нет соединения. Открой кабинет ещё раз.") +
+          "</div>"
+        : "") +
     "</div>";
 
   wireActs();
@@ -1583,7 +1737,9 @@ function renderAdminStudents() {
   if (list === null) {
     body = '<div class="courses-empty">Загружаю список учеников…</div>';
   } else if (!list.length) {
-    body = '<div class="courses-empty">Пока нет ни одного ученика с привязанным Telegram — список пуст.</div>';
+    body = state._adminStudentsErr
+      ? '<div class="courses-empty">Не удалось загрузить список учеников — база не ответила. Это не значит, что учеников нет. Попробуй ещё раз через минуту.</div>'
+      : '<div class="courses-empty">Пока нет ни одного ученика с привязанным Telegram — список пуст.</div>';
   } else {
     body = list.map(function (st) {
       var sub = [st.status || "", st.telegramToken ? "✓ токен" : "нет токена"].filter(Boolean).join(" · ");
@@ -1598,11 +1754,23 @@ function renderAdminStudents() {
       );
     }).join("");
   }
+  // Сюда же попадаем, если «Кабинет» не смог открыть собственную карточку —
+  // объясняем причину, иначе выглядит как будто кнопка просто не работает.
+  var ownMsg = "";
+  if (state._ownCabinetMsg) {
+    var t = state._ownCabinetMsg === "no-token"
+      ? "Твоя карточка «Николай Септ» есть в базе, но у неё не сгенерирован код доступа. Открой её на сайте и создай токен — тогда «Кабинет» будет открывать её сразу."
+      : state._ownCabinetMsg === "net"
+        ? "Не удалось загрузить список учеников — проверь интернет и попробуй ещё раз."
+        : "В базе нет ученика «Николай Септ», поэтому открывать в «Кабинете» нечего. Заведи себя учеником на сайте и сгенерируй код доступа — дальше кнопка будет открывать твою карточку сразу.";
+    ownMsg = '<div class="instruction-note" style="margin-bottom:12px;">' + t + "</div>";
+    state._ownCabinetMsg = null;
+  }
   app.innerHTML =
     '<div class="top pb8">' + backBtn("back") +
       '<div><div class="top-title lg">Режим админа</div><div class="top-sub">Выбери ученика, чтобы пройти урок его глазами</div></div>' +
     "</div>" +
-    '<div style="padding:8px 16px 130px;display:flex;flex-direction:column;gap:10px;">' + body + "</div>";
+    '<div style="padding:8px 16px 130px;display:flex;flex-direction:column;gap:10px;">' + ownMsg + body + "</div>";
   wireActs();
 }
 

@@ -894,3 +894,25 @@ html.dark .chip.sel-v, body.dark .chip.sel-v { background: var(--blue); color: v
 .plan-wu-sub { margin-top: 6px; font-size: 12.5px; line-height: 1.5; color: var(--ink); }
 .plan-wu-foot { margin-top: 10px; font-size: 11px; color: var(--locked); }
 .plan-card-steps { font-size: 11px; color: var(--locked); margin-top: 3px; }
+
+/* ---------- «Колесо баланса» в кабинете ученика ----------
+   Все цвета — через переменные темы, иначе блок сломается в тёмной. */
+.srez-level {
+  font: 700 11px 'Inter', sans-serif; letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--gray); margin: 14px 0 8px;
+}
+.srez-level:first-child { margin-top: 2px; }
+.srez-row { margin-bottom: 11px; }
+.srez-row-head { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+.srez-name { flex: 1; font-size: 13px; color: var(--ink); line-height: 1.3; }
+.srez-score { flex-shrink: 0; font: 700 12.5px 'Manrope', sans-serif; color: var(--ink); }
+.srez-flag {
+  flex-shrink: 0; padding: 2px 8px; border-radius: 7px;
+  font: 700 10px 'Inter', sans-serif; letter-spacing: 0.02em;
+}
+.srez-flag.up { background: var(--soft-terra); color: var(--ink-terra); }
+.srez-flag.down { background: var(--soft-red); color: var(--ink-red); }
+.srez-flag.same { background: var(--bgmuted); color: var(--gray); }
+.srez-bar { height: 6px; border-radius: 4px; background: var(--bgmuted); overflow: hidden; }
+.srez-bar-fill { height: 100%; border-radius: 4px; background: var(--terra); }
+.srez-dates { margin-top: 14px; font-size: 11.5px; color: var(--gray); line-height: 1.5; }
