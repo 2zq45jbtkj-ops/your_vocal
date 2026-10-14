@@ -74,6 +74,7 @@ var state = {
   _profileErr: null, // "net" | "server" — почему не загрузился Кабинет, см. loadStudentPublicData
   _openingOwnCabinet: false, // идёт поиск своей карточки, см. openOwnCabinet
   _adminStudentsErr: false,  // список учеников не загрузился (а не «пуст»)
+  _srezCompare: [],          // id срезов, выбранных для сравнения на колесе
   _ownCabinetMsg: null,      // "not-found" | "no-token" | "net" — почему не открылась своя карточка
   feedbackMood: null, feedbackText: "", coursesFilter: null,
   pendingUnstar: null, pendingUnstarData: null, pendingUnstarSecs: 0
@@ -1244,12 +1245,49 @@ function renderHomeworkSection(homework) {
     '<div class="cabinet-inset" style="padding:0 16px;">' + items + "</div>";
 }
 
-/* «Колесо баланса и срезы» — то же, что Николай ведёт на сайте во вкладке
-   срезов. Показываем текущее состояние шкалами 0–10 и, если есть предыдущий
-   срез, помечаем по каждой теме динамику: лучше / так же / хуже — ровно как
-   в PDF-карточке ученика. Темы приходят с сервера как [{name, level, score}];
-   score может быть null — тема заведена, но ещё не оценена. */
-var SREZ_LEVEL_LABELS = { A: "Уровень A", B: "Уровень B", C: "Уровень C", D: "Уровень D" };
+/* «Колесо баланса» в кабинете ученика.
+   Одно общее колесо по всем темам сразу — без деления на уровни и без
+   подписей вокруг самой фигуры: названия тем идут списком ниже, а на узком
+   экране подписи по кругу всё равно налезали бы друг на друга.
+   Под списком — история срезов: любой срез можно отметить, и он ляжет на
+   колесо отдельным контуром (до трёх одновременно), чтобы видеть динамику. */
+var SREZ_COMPARE_COLORS = ["var(--blue)", "var(--ink-red)", "var(--locked)"];
+
+function srezPolygonPoints(topics, order, cx, cy, R) {
+  var n = order.length;
+  var map = {};
+  (topics || []).forEach(function (t) { map[t.name] = t.score; });
+  return order.map(function (name, i) {
+    var sc = map[name];
+    var v = (sc === null || sc === undefined) ? 0 : Math.max(0, Math.min(10, Number(sc)));
+    var ang = -Math.PI / 2 + (i * 2 * Math.PI) / n;
+    var r = (v / 10) * R;
+    return (cx + r * Math.cos(ang)).toFixed(1) + "," + (cy + r * Math.sin(ang)).toFixed(1);
+  }).join(" ");
+}
+
+function srezWheelSvg(order, series) {
+  var cx = 110, cy = 110, R = 92, n = order.length;
+  if (!n) return "";
+  var grid = "";
+  [0.25, 0.5, 0.75, 1].forEach(function (k) {
+    var pts = order.map(function (_, i) {
+      var ang = -Math.PI / 2 + (i * 2 * Math.PI) / n;
+      return (cx + R * k * Math.cos(ang)).toFixed(1) + "," + (cy + R * k * Math.sin(ang)).toFixed(1);
+    }).join(" ");
+    grid += '<polygon points="' + pts + '" fill="none" stroke="var(--line)" stroke-width="1"/>';
+  });
+  order.forEach(function (_, i) {
+    var ang = -Math.PI / 2 + (i * 2 * Math.PI) / n;
+    grid += '<line x1="' + cx + '" y1="' + cy + '" x2="' + (cx + R * Math.cos(ang)).toFixed(1) +
+      '" y2="' + (cy + R * Math.sin(ang)).toFixed(1) + '" stroke="var(--line)" stroke-width="1"/>';
+  });
+  var shapes = series.map(function (s) {
+    return '<polygon points="' + srezPolygonPoints(s.topics, order, cx, cy, R) + '" fill="' + s.color +
+      '" fill-opacity="' + s.fill + '" stroke="' + s.color + '" stroke-width="2" stroke-linejoin="round"/>';
+  }).join("");
+  return '<svg viewBox="0 0 220 220" class="srez-wheel" aria-hidden="true">' + grid + shapes + "</svg>";
+}
 
 function renderSrezySection(srezy, wheelTopics) {
   var list = Array.isArray(srezy) ? srezy : [];
@@ -1258,47 +1296,54 @@ function renderSrezySection(srezy, wheelTopics) {
     : (list.length ? (list[list.length - 1].topics || []) : []);
   if (!current.length) return "";
 
-  // С чем сравниваем: если показываем текущее колесо — с последним срезом,
-  // если показываем последний срез — с предпоследним.
-  var prev = (Array.isArray(wheelTopics) && wheelTopics.length)
-    ? (list.length ? list[list.length - 1] : null)
-    : (list.length >= 2 ? list[list.length - 2] : null);
-  var prevMap = {};
-  if (prev) (prev.topics || []).forEach(function (t) { prevMap[t.name] = t.score; });
+  var order = current.map(function (t) { return t.name; });
+  var series = [{ topics: current, color: "var(--terra)", fill: 0.18 }];
+  var picked = [];
+  state._srezCompare.forEach(function (id, i) {
+    var found = null;
+    for (var k = 0; k < list.length; k++) if (list[k].id === id) found = list[k];
+    if (found) {
+      picked.push(found);
+      series.push({ topics: found.topics, color: SREZ_COMPARE_COLORS[i % SREZ_COMPARE_COLORS.length], fill: 0.07 });
+    }
+  });
 
-  var byLevel = {};
-  current.forEach(function (t) { (byLevel[t.level] = byLevel[t.level] || []).push(t); });
-
-  var blocks = Object.keys(byLevel).sort().map(function (lvl) {
-    var rows = byLevel[lvl].map(function (t) {
-      var score = (t.score === null || t.score === undefined) ? null : Number(t.score);
-      var pv = prevMap[t.name];
-      var flag = "";
-      if (score !== null && pv !== null && pv !== undefined) {
-        flag = score > pv ? '<span class="srez-flag up">лучше</span>'
-          : score < pv ? '<span class="srez-flag down">хуже</span>'
-            : '<span class="srez-flag same">так же</span>';
-      }
-      var pct = score === null ? 0 : Math.max(0, Math.min(10, score)) * 10;
-      return '<div class="srez-row">' +
-          '<div class="srez-row-head">' +
-            '<span class="srez-name">' + esc(t.name) + "</span>" +
-            '<span class="srez-score">' + (score === null ? "—" : score + "/10") + "</span>" +
-            flag +
-          "</div>" +
-          '<div class="srez-bar"><div class="srez-bar-fill" style="width:' + pct + '%;"></div></div>' +
-        "</div>";
+  var rows = current.map(function (t) {
+    var score = (t.score === null || t.score === undefined) ? null : Number(t.score);
+    var cmp = picked.map(function (z, i) {
+      var pv = null;
+      (z.topics || []).forEach(function (x) { if (x.name === t.name) pv = x.score; });
+      return '<span class="srez-cmp" style="color:' + SREZ_COMPARE_COLORS[i % SREZ_COMPARE_COLORS.length] + ';">' +
+        (pv === null || pv === undefined ? "—" : pv) + "</span>";
     }).join("");
-    return '<div class="srez-level">' + esc(SREZ_LEVEL_LABELS[lvl] || lvl) + "</div>" + rows;
+    var pct = score === null ? 0 : Math.max(0, Math.min(10, score)) * 10;
+    return '<div class="srez-row">' +
+        '<div class="srez-row-head">' +
+          '<span class="srez-name">' + esc(t.name) + "</span>" + cmp +
+          '<span class="srez-score">' + (score === null ? "—" : score + "/10") + "</span>" +
+        "</div>" +
+        '<div class="srez-bar"><div class="srez-bar-fill" style="width:' + pct + '%;"></div></div>' +
+      "</div>";
   }).join("");
 
-  var dates = list.length
-    ? '<div class="srez-dates">' + (list.length === 1 ? "Срез: " : "Срезы: ") +
-        list.map(function (z) { return esc(z.date || ""); }).join(" · ") + "</div>"
-    : "";
+  var hist = "";
+  if (list.length) {
+    hist = '<div class="srez-hist-title">Срезы</div>' +
+      '<div class="srez-hist-hint">Нажми на дату, чтобы наложить срез на колесо — можно сравнить до трёх.</div>' +
+      list.slice().reverse().map(function (z) {
+        var at = state._srezCompare.indexOf(z.id);
+        var col = at > -1 ? SREZ_COMPARE_COLORS[at % SREZ_COMPARE_COLORS.length] : "";
+        var scored = (z.topics || []).filter(function (t) { return t.score !== null && t.score !== undefined; }).length;
+        return '<div class="srez-hist-item' + (at > -1 ? " on" : "") + '" data-act="srez-toggle" data-srez-id="' + esc(z.id) + '"' +
+            (col ? ' style="border-color:' + col + ';"' : "") + ">" +
+            '<span class="srez-hist-date">' + esc(z.date || "") + "</span>" +
+            '<span class="srez-hist-count">' + scored + " из " + (z.topics || []).length + "</span>" +
+          "</div>";
+      }).join("");
+  }
 
   return '<div class="assessments-title">Колесо баланса</div>' +
-    '<div class="cabinet-inset">' + blocks + dates + "</div>";
+    '<div class="cabinet-inset">' + srezWheelSvg(order, series) + rows + hist + "</div>";
 }
 
 function renderProfile() {
@@ -3669,6 +3714,15 @@ function wireActs() {
       // карточки/плитки разблокированных уроков без контента — номер в data-lesson-num
       if (act === "open-lesson-num") {
         openLessonByNumber(parseInt(el.getAttribute("data-lesson-num"), 10));
+        return;
+      }
+      if (act === "srez-toggle") {
+        // Сравнение срезов: отмеченные накладываются на колесо контурами.
+        var sid = el.getAttribute("data-srez-id");
+        var at = state._srezCompare.indexOf(sid);
+        if (at > -1) state._srezCompare.splice(at, 1);
+        else if (state._srezCompare.length < 3) state._srezCompare.push(sid);
+        render();
         return;
       }
       if (act === "admin-pick-student") {
