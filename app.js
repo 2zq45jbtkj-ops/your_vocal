@@ -75,6 +75,7 @@ var state = {
   _openingOwnCabinet: false, // идёт поиск своей карточки, см. openOwnCabinet
   _adminStudentsErr: false,  // список учеников не загрузился (а не «пуст»)
   _srezCompare: [],          // id срезов, выбранных для сравнения на колесе
+  _srezTopicsOpen: false,    // список тем под колесом: раскрыт/свёрнут (жмём по колесу)
   _ownCabinetMsg: null,      // "not-found" | "no-token" | "net" — почему не открылась своя карточка
   feedbackMood: null, feedbackText: "", coursesFilter: null,
   pendingUnstar: null, pendingUnstarData: null, pendingUnstarSecs: 0
@@ -1326,11 +1327,16 @@ function renderSrezySection(srezy, wheelTopics) {
       "</div>";
   }).join("");
 
+  // Срезов за год набирается много, а в кабинете нужен свежий срез, а не архив:
+  // показываем пять последних, остальные просто считаем.
+  var recent = list.slice().reverse().slice(0, 5);
   var hist = "";
   if (list.length) {
     hist = '<div class="srez-hist-title">Срезы</div>' +
-      '<div class="srez-hist-hint">Нажми на дату, чтобы наложить срез на колесо — можно сравнить до трёх.</div>' +
-      list.slice().reverse().map(function (z) {
+      '<div class="srez-hist-hint">Нажми на дату, чтобы наложить срез на колесо — можно сравнить до трёх.' +
+        (list.length > recent.length ? " Показаны последние " + recent.length + " из " + list.length + "." : "") +
+      "</div>" +
+      recent.map(function (z) {
         var at = state._srezCompare.indexOf(z.id);
         var col = at > -1 ? SREZ_COMPARE_COLORS[at % SREZ_COMPARE_COLORS.length] : "";
         var scored = (z.topics || []).filter(function (t) { return t.score !== null && t.score !== undefined; }).length;
@@ -1342,8 +1348,23 @@ function renderSrezySection(srezy, wheelTopics) {
       }).join("");
   }
 
+  // По колесу кликаем, чтобы свернуть/развернуть список тем: иначе кабинет
+  // превращается в стену из двух десятков шкал и срезы уезжают за экран.
+  var open = !!state._srezTopicsOpen;
+  var scored = current.filter(function (t) { return t.score !== null && t.score !== undefined; }).length;
+
   return '<div class="assessments-title">Колесо баланса</div>' +
-    '<div class="cabinet-inset">' + srezWheelSvg(order, series) + rows + hist + "</div>";
+    '<div class="cabinet-inset">' +
+      '<div data-act="srez-topics-toggle" class="srez-wheel-tap">' +
+        srezWheelSvg(order, series) +
+        '<div class="srez-topics-toggle">' +
+          '<span>' + (open ? "Скрыть темы" : "Показать темы") + " · " + scored + " из " + current.length + "</span>" +
+          '<span class="srez-chev' + (open ? " open" : "") + '">▾</span>' +
+        "</div>" +
+      "</div>" +
+      (open ? rows : "") +
+      hist +
+    "</div>";
 }
 
 function renderProfile() {
@@ -1377,7 +1398,17 @@ function renderProfile() {
   var status = student ? student.status : "";
   var statusLabel = { active: "Активный", trial: "Пробный", pause: "Пауза" }[status] || status;
 
-  // Блок голосового профиля
+  // Блок голосового профиля.
+  // Две разные цели, и путать их нельзя: первичная — чего хочет сам ученик,
+  // он называет её на входе и она лежит в анкете; вторичная — над чем мы
+  // работаем сейчас, она берётся из цели последнего проведённого занятия
+  // и меняется от урока к уроку.
+  var lastGoal = data ? data.lastGoal : null;
+  var lastGoalWhen = "";
+  if (lastGoal && lastGoal.date) {
+    var lgd = new Date(lastGoal.date);
+    if (!isNaN(lgd)) lastGoalWhen = ("0" + lgd.getDate()).slice(-2) + "." + ("0" + (lgd.getMonth() + 1)).slice(-2);
+  }
   var voiceHtml = "";
   if (intake) {
     var rangeStr = (intake.rangeLow || intake.tessLow) ? ((intake.rangeLow || "?") + " — " + (intake.rangeHigh || "?")) : "";
@@ -1392,9 +1423,15 @@ function renderProfile() {
           (voiceTypeStr ? '<div><div class="profile-card-label">Тип голоса</div><div class="profile-card-value">' + esc(voiceTypeStr) + "</div></div>" : "") +
           (rangeStr ? '<div><div class="profile-card-label">Диапазон</div><div class="profile-card-value">' + esc(rangeStr) + "</div></div>" : "") +
         "</div>" : "") +
-        (goalsArr.length ? '<div class="section-label">Цели</div><div class="chips-wrap" style="margin-bottom:12px;">' + chipsHtml(goalsArr) + "</div>" : "") +
-        (intake.larStatus ? '<div class="section-label">Статус гортани</div><div class="goal-box goal-secondary" style="margin-bottom:12px;">' + esc(intake.larStatus) + "</div>" : "") +
-        (intake.breathingType ? '<div class="section-label">Тип дыхания</div><div class="chips-wrap" style="margin-bottom:12px;"><span class="chip-tag">' + esc(intake.breathingType) + "</span></div>" : "") +
+        (goalsArr.length ? '<div class="section-label">Первичная цель</div><div class="chips-wrap" style="margin-bottom:12px;">' + chipsHtml(goalsArr) + "</div>" : "") +
+        (lastGoal && lastGoal.goal
+          ? '<div class="section-label">Вторичная цель</div>' +
+            '<div class="goal-box goal-primary" style="margin-bottom:5px;">' + esc(lastGoal.goal) + "</div>" +
+            '<div class="goal-src">' +
+              (lastGoal.topic ? esc(lastGoal.topic) + " · " : "") +
+              (lastGoalWhen ? "с занятия " + lastGoalWhen : "с последнего занятия") +
+            "</div>"
+          : "") +
         (Array.isArray(intake.tensionAreas) && intake.tensionAreas.length ? '<div class="section-label">Зоны зажима</div><div class="chips-wrap" style="margin-bottom:12px;">' + chipsHtml(intake.tensionAreas) + "</div>" : "") +
         (artArr.length ? '<div class="section-label">Артикуляционные особенности</div><div class="chips-wrap" style="margin-bottom:12px;">' + artArr.map(function(e){ return '<span class="chip-tag">' + esc(e.letter || "") + (e.typeIdx !== undefined ? "" : "") + "</span>"; }).join("") + "</div>" : "") +
         (intake.repertoire ? '<div class="section-label">Репертуар</div><div class="goal-box goal-primary" style="margin-bottom:0;">' + esc(intake.repertoire) + "</div>" : "") +
@@ -1410,9 +1447,9 @@ function renderProfile() {
           (statusLabel ? '<div class="profile-status"><span style="color:var(--terra);font-weight:600;">' + esc(statusLabel) + "</span></div>" : "") +
         "</div>" +
       "</div>" +
+      voiceHtml +
       renderHomeworkSection(homework) +
       renderSrezySection(data ? data.srezy : [], data ? data.wheelTopics : []) +
-      voiceHtml +
       (state.studentPublicData === "loading" ? '<div class="instruction-note" style="margin-top:16px;">Загружаю данные…</div>' : "") +
       (!data && state.studentPublicData !== "loading"
         ? '<div class="instruction-note" style="margin-top:16px;">' +
@@ -3714,6 +3751,11 @@ function wireActs() {
       // карточки/плитки разблокированных уроков без контента — номер в data-lesson-num
       if (act === "open-lesson-num") {
         openLessonByNumber(parseInt(el.getAttribute("data-lesson-num"), 10));
+        return;
+      }
+      if (act === "srez-topics-toggle") {
+        state._srezTopicsOpen = !state._srezTopicsOpen;
+        render();
         return;
       }
       if (act === "srez-toggle") {
