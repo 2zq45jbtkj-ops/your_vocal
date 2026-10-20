@@ -46,9 +46,7 @@ var state = {
   accessToken: null,       // UUID из baza-dannih — ученик вводит один раз
   studentPublicData: null, // ответ от /api/student-public (обнуляется при открытии)
   tgId: "", chatId: null, firstName: "", lastName: "", birthDate: "",
-  notionLoadedFor: null, notionConfigured: null, notionFound: null,
-  notionProfile: null, notionAssessments: null,
-  notionUnlockedLessons: [], notionProgressByLesson: {}, comingSoonLessonNum: null,
+  unlockedLessons: [], progressByLesson: {}, comingSoonLessonNum: null,
   // «Режим админа» — см. loadIsAdmin/enterAdminMode ниже
   isAdmin: false, isAdminLoadedFor: null, adminStudentsList: null, adminBirthdaysList: null,
   adminMode: false, adminStudentName: "", adminSnapshot: null,
@@ -538,20 +536,12 @@ function renderName() {
     bd.setSelectionRange(bd.value.length, bd.value.length); // курсор всегда в конце — ввод только «дописыванием» цифр
     state.birthDate = bd.value;
   });
+  // Имя и дата рождения остаются только на устройстве — для приветствия в
+  // интерфейсе. Карточку ученика в базе Николай создаёт сам на baza-dannih и
+  // выдаёт код доступа; приложение больше никого не заводит в базе само.
   btn.addEventListener("click", function () {
     saveState();
-    btn.disabled = true;
-    var prevLabel = btn.textContent;
-    btn.textContent = "Создаём профиль…";
-    // Автосоздание карточки ученика в Notion (первый вход) — не должно
-    // блокировать студента, если Notion не настроен/недоступен: в любом
-    // случае идём дальше в приложение.
-    createStudentInNotion()
-      .catch(function () {})
-      .then(function () {
-        btn.textContent = prevLabel;
-        go("courses");
-      });
+    go("courses");
   });
   wireActs();
 }
@@ -568,39 +558,6 @@ function formatBirthDateInput(raw) {
   return out;
 }
 
-/* «ДД.ММ.ГГГГ» -> «ГГГГ-ММ-ДД» (формат, который ждёт Notion date-свойство).
-   Пустая строка, если дата не введена целиком или невалидна — тогда
-   api/notion-onboard.js просто не заполнит «Дата рождения» у ученика. */
-function birthDateToIso(display) {
-  var m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(display || "");
-  if (!m) return "";
-  var day = parseInt(m[1], 10), month = parseInt(m[2], 10), year = parseInt(m[3], 10);
-  if (month < 1 || month > 12 || day < 1 || day > 31 || year < 1900 || year > 2100) return "";
-  return m[3] + "-" + m[2] + "-" + m[1];
-}
-
-/* Разовое автосоздание строки ученика (+ стартового среза) в Notion —
-   вызывается с экрана «Как тебя зовут?» сразу после ввода имени/фамилии.
-   Идемпотентно на сервере (см. api/notion-onboard.js), поэтому безопасно
-   даже если вызовется повторно. */
-function createStudentInNotion() {
-  if (!state.chatId) return Promise.resolve();
-  return fetch("/api/notion-onboard", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      chatId: state.chatId, tgId: state.tgId,
-      firstName: state.firstName, lastName: state.lastName,
-      birthDate: birthDateToIso(state.birthDate) // «ДД.ММ.ГГГГ» с экрана -> «ГГГГ-ММ-ДД» для Notion
-    })
-  }).then(function (r) { return r.json().catch(function () { return null; }); })
-    .then(function () {
-      // Сбрасываем кэш loadStudentProfile(), чтобы Кабинет/Уроки сразу
-      // подтянули только что созданную карточку, а не старый found:false.
-      state.notionLoadedFor = null;
-    });
-}
-
 /* Статус урока = число пройденных из 4 шагов (Лекция/Тест/Распевки/Песня).
    0 = не начат, 1-3 = в работе, 4 = завершён (Песня засчитывается по тому
    же флагу songDone, что и автопроверка интерактивной разметки — она
@@ -610,8 +567,8 @@ function createStudentInNotion() {
 
    Урок n по умолчанию — открытый сейчас урок (LESSON.id||1): для него шаги
    берём из локальных флагов устройства (актуальны мгновенно). Для любого
-   другого номера — из progressByLesson, который приходит из базы «Прогресс»
-   в Notion (см. loadStudentProfile/api/notion-student.js). Так работает и
+   другого номера — из progressByLesson, который приходит из baza-dannih
+   (см. loadStudentPublicData/api/student-public.js). Так работает и
    для уроков, которых пока физически нет в приложении (данные появятся,
    когда Николай добавит контент) — счётчики и разблокировка уже готовы. */
 function lessonStepsDone(n) {
@@ -625,7 +582,7 @@ function lessonStepsDone(n) {
     if (s.songDone) c++;
     return c;
   }
-  var p = state.notionProgressByLesson && state.notionProgressByLesson[n];
+  var p = state.progressByLesson && state.progressByLesson[n];
   if (!p) return 0;
   var c2 = 0;
   if (p.lecture) c2++;
@@ -677,7 +634,7 @@ function roadmapCardHtml(mode, n) {
   }
   var p = isOpenLesson
     ? { lecture: s.lectureViewed, quiz: s.quizDone, warmups: s.warmupsDone, song: s.songDone }
-    : (state.notionProgressByLesson && state.notionProgressByLesson[n]) || {};
+    : (state.progressByLesson && state.progressByLesson[n]) || {};
   var steps = [
     { label: isOpenLesson ? "Лекция «" + esc(LESSON.title) + "»" : "Лекция", done: !!p.lecture },
     { label: "Тест", done: !!p.quiz },
@@ -777,7 +734,7 @@ function roadmapCollapsed() {
 }
 
 function renderCourses() {
-  loadStudentProfile(); // подтягивает unlockedLessons/progressByLesson для разблокировки
+  loadStudentPublicData(); // подтягивает unlockedLessons/progressByLesson для разблокировки
   var stats = lessonStats();
   var filter = state.coursesFilter; // "inProgress" | "completed" | null — переключатель фильтра дорожной карты
   var favCount = Object.keys(state.favorites || {}).length;
@@ -956,6 +913,16 @@ function loadStudentPublicData() {
     .then(function (data) {
       if (data && data.student) {
         state.studentPublicData = data;
+        // Прогресс по шагам урока и персональная разблокировка («Доп. открытые
+        // уроки») раньше приходили отдельным запросом в Notion — теперь это
+        // часть той же выдачи по токену, одним запросом вместо двух.
+        state.unlockedLessons = data.unlockedLessons || [];
+        state.progressByLesson = data.progressByLesson || {};
+        // Статус «Завершил» — доступ закрыт. В режиме админа это НЕ применяется:
+        // Николай должен свободно смотреть кабинет деактивированного ученика.
+        if (!state.adminMode && data.student.status === "done") {
+          state.screen = "blocked";
+        }
         syncTelegramChatId();
       } else if (httpStatus === 404 || httpStatus === 400) {
         // Единственный случай, когда токен действительно недействителен: ученика
@@ -980,44 +947,15 @@ function loadStudentPublicData() {
         if (state.screen === "profile") render();
         return;
       }
-      if (state.screen === "profile") render();
+      // Не только «Кабинет»: от этих же данных зависят разблокировка уроков на
+      // «Курсах» и экран закрытого доступа.
+      if (["profile", "courses", "blocked"].indexOf(state.screen) !== -1) render();
     })
     .catch(function () {
       state.studentPublicData = null;
       state._profileErr = "net";
       if (state.screen === "profile") render();
     });
-}
-
-/* Карточка ученика ведётся в Notion (базы «Ученики» + «Срезы»), тянем её
-   "вживую" при каждом открытии Кабинета — тот же паттерн, что и загрузка
-   расписания для календаря (loadScheduleForMonth). Пока Николай не доделал
-   разовую настройку токена (NOTION_TOKEN в Vercel) или для конкретного
-   ученика ещё не заполнена карточка — тихо остаёмся на демо-данных, ничего
-   не ломается. */
-function loadStudentProfile() {
-  var chatId = state.chatId;
-  if (!chatId || state.notionLoadedFor === chatId) return;
-  state.notionLoadedFor = chatId;
-  fetch("/api/notion-student?chatId=" + encodeURIComponent(chatId))
-    .then(function (r) { return r.json(); })
-    .then(function (data) {
-      state.notionConfigured = !!(data && data.configured);
-      state.notionFound = !!(data && data.found);
-      if (data && data.found) {
-        state.notionProfile = data.profile;
-        state.notionAssessments = data.assessments;
-        state.notionUnlockedLessons = data.unlockedLessons || [];
-        state.notionProgressByLesson = data.progressByLesson || {};
-        // Статус «Завершил» — доступ закрыт. В режиме админа это НЕ применяется:
-        // Николай должен свободно смотреть кабинет деактивированного ученика.
-        if (!state.adminMode && data.profile.status === "Завершил") {
-          state.screen = "blocked";
-        }
-      }
-      if (["profile", "courses", "blocked"].indexOf(state.screen) !== -1) render();
-    })
-    .catch(function () {});
 }
 
 /* «Режим админа» — Николай заходит под своим Telegram chat_id и, если он
@@ -1165,15 +1103,17 @@ function deleteStudentWithConfirm(studentId, name) {
     .catch(function () { alert("Не получилось: сеть/сервер не ответили."); });
 }
 
-/* Отправка прогресса шага в Notion (база «Прогресс») — тихо, без ожидания
-   ответа: если не настроено или сеть подвела, просто ничего не запишется,
-   на локальном прохождении урока это никак не сказывается. */
-function sendProgressToNotion(lessonNum, step) {
-  if (!state.chatId) return;
-  fetch("/api/notion-progress", {
+/* Отправка прогресса шага в baza-dannih — тихо, без ожидания ответа: если
+   сеть подвела, просто ничего не запишется, на локальном прохождении урока
+   это никак не сказывается. Ключ ученика — код доступа (токен), а не Telegram
+   chat_id: в базе Николая ученик опознаётся именно по токену. Автопереход
+   статуса «Пробный» → «Активный» делает сервер (см. api/student-public.js). */
+function sendProgressToBaza(lessonNum, step) {
+  if (!state.accessToken) return;
+  fetch(BAZA_API + "/api/student-public?token=" + encodeURIComponent(state.accessToken), {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ chatId: state.chatId, lessonNum: lessonNum, step: step })
+    body: JSON.stringify({ lessonNum: lessonNum, step: step })
   }).catch(function () {});
 }
 
@@ -1184,11 +1124,11 @@ function lessonFullyDone(n) {
 }
 
 /* Разблокировка урока n: первый урок всегда открыт; следующий открывается,
-   когда предыдущий пройден целиком; плюс персональный override из Notion
-   («Доп. открытые уроки» у ученика) открывает урок вне очереди. */
+   когда предыдущий пройден целиком; плюс персональный override из baza-dannih
+   (students.extra_unlocked_lessons) открывает урок вне очереди. */
 function lessonUnlocked(n) {
   if (n === 1) return true;
-  if (state.notionUnlockedLessons && state.notionUnlockedLessons.indexOf(n) !== -1) return true;
+  if (state.unlockedLessons && state.unlockedLessons.indexOf(n) !== -1) return true;
   return lessonFullyDone(n - 1);
 }
 
@@ -1856,9 +1796,9 @@ function renderAdminStudents() {
   wireActs();
 }
 
-/* «Дни рождения» — те, у кого до дня рождения ≤30 дней (см. api/notion-birthdays.js).
-   Дата рождения либо ученик вписал сам на онбординге, либо Николай — вручную
-   в Notion в поле «Дата рождения». */
+/* «Дни рождения» — те, у кого до дня рождения ≤30 дней. Экран пока всегда
+   пустой: дата рождения в baza-dannih не хранится (см. loadAdminBirthdays —
+   заглушка), а прежний источник в Notion отключён. */
 function renderAdminBirthdays() {
   loadAdminBirthdays();
   var list = state.adminBirthdaysList;
@@ -1885,7 +1825,7 @@ function renderAdminBirthdays() {
   }
   app.innerHTML =
     '<div class="top pb8">' + backBtn("back") +
-      '<div><div class="top-title lg">Дни рождения</div><div class="top-sub">Ближайшие 30 дней, по дате «Дата рождения» в Notion</div></div>' +
+      '<div><div class="top-title lg">Дни рождения</div><div class="top-sub">Ближайшие 30 дней</div></div>' +
     "</div>" +
     '<div style="padding:8px 16px 130px;display:flex;flex-direction:column;gap:10px;">' + body + "</div>";
   wireActs();
@@ -2140,13 +2080,13 @@ function renderComingSoon(title, icon) {
   wireActs();
 }
 
-/* Урок разблокирован (по очереди или персонально из Notion), но контент
+/* Урок разблокирован (по очереди или персонально из baza-dannih), но контент
    для него ещё не добавлен в приложение — просто ждём. */
 function renderLessonSoon() {
   renderComingSoon("Урок " + (state.comingSoonLessonNum || ""), SVG.dockLessons("var(--gray)"));
 }
 
-/* Статус ученика в Notion переключён на «Завершил» (см. api/notion-deactivate-student.js) —
+/* Статус ученика в baza-dannih переключён на «Завершил» (status = 'done') —
    доступ к приложению закрыт. Дока нет, назад идти некуда. */
 function renderBlocked() {
   app.innerHTML =
@@ -2248,7 +2188,7 @@ function stepHeader(title, stepNum, pct) {
 }
 
 function renderLecture() {
-  if (!state.lectureViewed) { state.lectureViewed = true; saveState(); sendProgressToNotion((LESSON.id || 1), "lecture"); }
+  if (!state.lectureViewed) { state.lectureViewed = true; saveState(); sendProgressToBaza((LESSON.id || 1), "lecture"); }
   var html = stepHeader("Лекция «" + esc(LESSON.title) + "»", 1, 25);
   html += '<div class="lecture-body">';
   var num = 0;
@@ -2336,7 +2276,7 @@ function renderQuiz() {
     state.quizDone = true;
     state.quizScore = score;
     saveState();
-    sendProgressToNotion((LESSON.id || 1), "quiz");
+    sendProgressToBaza((LESSON.id || 1), "quiz");
     submitQuizResult(score, questions.length, wrongDetails);
     go("quiz-result");
   });
@@ -3702,8 +3642,8 @@ var ACTS = {
   "go-warmups": function () { go("warmups"); },
   "go-warmups-free": function () { go("warmups"); },
   "go-song": function () { go("song"); },
-  "finish-warmups": function () { state.warmupsDone = true; saveState(); sendProgressToNotion((LESSON.id || 1), "warmups"); go("song"); },
-  "finish-lesson": function () { state.songDone = true; saveState(); sendProgressToNotion((LESSON.id || 1), "song"); submitSongMarks(); go("feedback"); },
+  "finish-warmups": function () { state.warmupsDone = true; saveState(); sendProgressToBaza((LESSON.id || 1), "warmups"); go("song"); },
+  "finish-lesson": function () { state.songDone = true; saveState(); sendProgressToBaza((LESSON.id || 1), "song"); submitSongMarks(); go("feedback"); },
   "reset-progress": resetProgress,
   "go-profile": function () { go("profile"); },
   "go-courses": function () { go("courses"); },
