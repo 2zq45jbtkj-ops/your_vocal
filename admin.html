@@ -120,7 +120,7 @@ function api(path, opts) {
 
 function boot() {
   if (!chatId) { document.getElementById("app").innerHTML = '<div class="card">Нет chatId в ссылке. Открой эту страницу из «Ещё» в приложении.</div>'; return; }
-  api("/api/notion-is-admin?chatId=" + encodeURIComponent(chatId)).then(function (d) {
+  api("/api/is-admin?chatId=" + encodeURIComponent(chatId)).then(function (d) {
     if (!d || !d.isAdmin) { document.getElementById("app").innerHTML = '<div class="card">Доступ только для администратора.</div>'; return; }
     if (studentChatId) loadStudent(); else loadStudentPicker();
   });
@@ -128,12 +128,12 @@ function boot() {
 
 function loadStudentPicker() {
   document.getElementById("app").innerHTML = '<div class="card"><h1>Выбери ученика</h1><div id="pick">Загрузка списка…</div></div>';
-  api("/api/notion-students-list?chatId=" + encodeURIComponent(chatId)).then(function (d) {
+  api("/api/students-list?chatId=" + encodeURIComponent(chatId)).then(function (d) {
     var list = (d && d.students) || [];
     var html = list.map(function (s) {
       return '<div class="student-pick" data-chat="' + esc(s.chatId) + '" data-name="' + esc(s.name) + '"><span>' + esc(s.name) + "</span><span class=\"sub\">" + esc(s.status || "") + "</span></div>";
     }).join("");
-    document.getElementById("pick").innerHTML = html || '<div class="hint">Список пуст или Notion не настроен.</div>';
+    document.getElementById("pick").innerHTML = html || '<div class="hint">Список пуст — в базе пока нет ни одного ученика.</div>';
     Array.prototype.forEach.call(document.querySelectorAll(".student-pick"), function (el) {
       el.addEventListener("click", function () {
         studentChatId = el.getAttribute("data-chat");

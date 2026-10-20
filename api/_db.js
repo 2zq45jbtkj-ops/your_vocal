@@ -22,7 +22,7 @@ export function json(obj, status) {
   });
 }
 
-/* Тот же паттерн, что в notion-is-admin.js — сверяем chat_id с ADMIN_CHAT_ID
+/* Тот же паттерн, что в is-admin.js — сверяем chat_id с ADMIN_CHAT_ID
    на сервере, не доверяем клиенту.
    MIGRATE_SECRET — временный запасной путь (тот же приём, что SYNC_SECRET в
    sync-schedule.js): строка, которую Claude сам придумывает и вписывает в
@@ -36,9 +36,8 @@ export function isAdminChatId(chatId) {
   return !!(adminId && chatId && String(chatId) === String(adminId));
 }
 
-/* Находит студента по chat_id, создаёт строку, если её ещё нет (идемпотентно,
-   как notion-onboard.js) — используется и учеником, и админом при первом
-   обращении к новой базе. */
+/* Находит студента по chat_id, создаёт строку, если её ещё нет (идемпотентно)
+   — используется и учеником, и админом при первом обращении к новой базе. */
 export async function ensureStudent(sql, chatId, firstName, lastName) {
   var rows = await sql`SELECT id FROM students WHERE chat_id = ${chatId}`;
   if (rows.length) return rows[0].id;
