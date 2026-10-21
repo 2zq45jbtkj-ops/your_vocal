@@ -269,7 +269,10 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 
 /* ---------- нижняя навигация (док) ---------- */
 .dock {
-  position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
+  /* В fullscreen окно дотягивается до физического низа экрана, и голые 20px
+     загнали бы док под home-indicator. В обычном режиме инсет = 0, то есть
+     отступ остаётся прежним — та же схема, что у .top сверху. */
+  position: fixed; left: 50%; bottom: calc(var(--tg-safe-area-inset-bottom, 0px) + 20px); transform: translateX(-50%);
   width: calc(100% - 36px); max-width: 394px; display: flex; gap: 8px;
   background: var(--dock-bg); border-radius: 26px;
   box-shadow: var(--raised-lg);
@@ -801,7 +804,7 @@ html.dark .chip.sel-v, body.dark .chip.sel-v { background: var(--blue); color: v
 .fav-item-sub { font-size: 11px; color: var(--gray); margin-top: 1px; }
 .fav-unstar-btn { border: none; background: none; cursor: pointer; flex-shrink: 0; padding: 4px; }
 .unstar-toast {
-  position: fixed; left: 18px; right: 18px; bottom: 20px; z-index: 900;
+  position: fixed; left: 18px; right: 18px; bottom: calc(var(--tg-safe-area-inset-bottom, 0px) + 20px); z-index: 900;
   max-width: 394px; margin: 0 auto; background: var(--bg); border: 1px solid var(--line);
   border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; align-items: center; gap: 8px;
   box-shadow: 0 8px 20px rgba(0,0,0,0.25);

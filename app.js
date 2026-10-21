@@ -3803,6 +3803,18 @@ function renderAdminBanner() {
 if (tg) {
   tg.ready();
   tg.expand();
+  // Полный экран (Bot API 8.0) — убирает шапку «Закрыть · имя бота».
+  // expand() растягивает окно по высоте, но шапку не трогает — нужен именно
+  // requestFullscreen. На клиентах старее 8.0 метода нет, поэтому проверяем
+  // версию: без проверки там вылетит исключение и инициализация оборвётся.
+  // Отступ сверху в .top уже считается от --tg-safe-area-inset-top, поэтому
+  // контент не уедет под часы и вырез — см. styles.css.
+  try {
+    if (tg.isVersionAtLeast && tg.isVersionAtLeast("8.0") &&
+        typeof tg.requestFullscreen === "function") {
+      tg.requestFullscreen();
+    }
+  } catch (e) {}
   try {
     tg.setHeaderColor("#F1EEE8");
     tg.setBackgroundColor("#F1EEE8");
