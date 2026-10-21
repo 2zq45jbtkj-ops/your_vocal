@@ -275,10 +275,12 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 
 /* ---------- нижняя навигация (док) ---------- */
 .dock {
-  /* В fullscreen окно дотягивается до физического низа экрана, и голые 20px
-     загнали бы док под home-indicator. В обычном режиме инсет = 0, то есть
-     отступ остаётся прежним — та же схема, что у .top сверху. */
-  position: fixed; left: 50%; bottom: calc(var(--tg-safe-area-inset-bottom, 0px) + 20px); transform: translateX(-50%);
+  /* В fullscreen окно дотягивается до физического низа экрана. Инсет уже
+     резервирует home-indicator, поэтому поверх него хватает 4px — док
+     садится почти вплотную к безопасной зоне, а не висит высоко.
+     max(12px) — страховка для клиентов старее 8.0: там инсет = 0, и без
+     неё док прилип бы к самому краю окна. */
+  position: fixed; left: 50%; bottom: max(12px, calc(var(--tg-safe-area-inset-bottom, 0px) + 4px)); transform: translateX(-50%);
   width: calc(100% - 36px); max-width: 394px; display: flex; gap: 8px;
   background: var(--dock-bg); border-radius: 26px;
   box-shadow: var(--raised-lg);
@@ -417,8 +419,6 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 }
 .quiz-ring-big-inner span { font: 800 clamp(22px, calc(var(--ring) * 0.17), 30px) 'Manrope', sans-serif; color: var(--ink); }
 .quiz-counter { font-size: 11px; color: var(--gray); font-weight: 600; white-space: nowrap; }
-.quiz-progress { height: 5px; background: var(--line); border-radius: 3px; overflow: hidden; margin-bottom: 16px; box-shadow: inset 1px 1px 2px oklch(var(--sh-base) / 0.3); }
-.quiz-progress > div { height: 100%; background: var(--terra); border-radius: 3px; }
 .quiz-card { background: var(--bg); border: none; border-radius: 20px; padding: 18px; box-shadow: var(--raised-lg); }
 .quiz-q { font-size: 14.5px; font-weight: 700; color: var(--ink); margin-bottom: 14px; line-height: 1.4; font-family: 'Manrope', sans-serif; }
 .quiz-opt { display: flex; align-items: center; gap: 10px; padding: 10px 4px; cursor: pointer; }
@@ -810,7 +810,7 @@ html.dark .chip.sel-v, body.dark .chip.sel-v { background: var(--blue); color: v
 .fav-item-sub { font-size: 11px; color: var(--gray); margin-top: 1px; }
 .fav-unstar-btn { border: none; background: none; cursor: pointer; flex-shrink: 0; padding: 4px; }
 .unstar-toast {
-  position: fixed; left: 18px; right: 18px; bottom: calc(var(--tg-safe-area-inset-bottom, 0px) + 20px); z-index: 900;
+  position: fixed; left: 18px; right: 18px; bottom: max(12px, calc(var(--tg-safe-area-inset-bottom, 0px) + 4px)); z-index: 900;
   max-width: 394px; margin: 0 auto; background: var(--bg); border: 1px solid var(--line);
   border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; align-items: center; gap: 8px;
   box-shadow: 0 8px 20px rgba(0,0,0,0.25);

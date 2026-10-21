@@ -2236,7 +2236,6 @@ function renderQuiz() {
       '<div class="quiz-counter-row">' +
         '<span class="quiz-counter">Вопрос ' + (s.quizIndex + 1) + " из " + questions.length + "</span>" +
       "</div>" +
-      '<div class="quiz-progress"><div style="width:' + quizPct + '%;"></div></div>' +
       '<div class="quiz-card">' +
         '<div class="quiz-q">' + esc(cq.q) + "</div>" + optsHtml +
       "</div>" +
@@ -2796,8 +2795,7 @@ function renderHwZone() {
         "</div>" +
         (item.status === "error" ? '<button class="hw-replace" data-retry-idx="' + idx + '">Повторить</button>' : "") +
         '<button class="hw-replace" data-remove-idx="' + idx + '">Убрать</button>' +
-      "</div>" +
-      (item.status === "toolarge" ? '<button class="cta" data-opentg-idx="' + idx + '" style="margin:-8px 0 12px;">Открыть чат с ботом в Telegram</button>' : "")
+      "</div>"
     );
   }).join("");
 
@@ -2832,10 +2830,6 @@ function renderHwZone() {
       });
     });
   });
-  Array.prototype.forEach.call(zone.querySelectorAll("[data-opentg-idx]"), function (btn) {
-    btn.addEventListener("click", openTeacherChat);
-  });
-
   var input = document.getElementById("hw-file");
   if (input) {
     input.addEventListener("change", function (e) {
@@ -2951,8 +2945,7 @@ function renderSongPhotoZone() {
         "</div>" +
         (item.status === "error" ? '<button class="hw-replace" data-song-retry-idx="' + idx + '">Повторить</button>' : "") +
         '<button class="hw-replace" data-song-remove-idx="' + idx + '">Убрать</button>' +
-      "</div>" +
-      (item.status === "toolarge" ? '<button class="cta" data-song-opentg-idx="' + idx + '" style="margin:-8px 0 12px;">Открыть чат с ботом в Telegram</button>' : "")
+      "</div>"
     );
   }).join("");
 
@@ -2985,10 +2978,6 @@ function renderSongPhotoZone() {
       }, item.name);
     });
   });
-  Array.prototype.forEach.call(zone.querySelectorAll("[data-song-opentg-idx]"), function (btn) {
-    btn.addEventListener("click", openTeacherChat);
-  });
-
   var input = document.getElementById("song-hw-file");
   if (input) {
     input.addEventListener("change", function (e) {
