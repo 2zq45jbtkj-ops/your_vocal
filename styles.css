@@ -94,7 +94,9 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  padding: 80px 24px 28px;
+  /* тот же приём, что и у .courses-head: в fullscreen 80px не хватает,
+     чтобы разойтись с кнопками Telegram, вне fullscreen — не меняем. */
+  padding: max(80px, calc(var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px) + 14px)) 24px 28px;
 }
 .auth-logo { width: 56px; height: 56px; border-radius: 24px; overflow: hidden; margin-bottom: 20px; box-shadow: var(--raised); }
 .auth-title { font-size: 27px; font-weight: 800; color: var(--ink); margin-bottom: 8px; }
@@ -124,7 +126,11 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 .auth-screen .back-btn { margin-bottom: 24px; }
 
 /* ---------- список уроков ---------- */
-.courses-head { padding: 58px 20px 4px; }
+/* В fullscreen заголовок «Курс вокала» заезжал под плавающую кнопку «Закрыть»:
+   58px меньше, чем занимают часы + собственные кнопки Telegram. Берём max,
+   а не просто сумму инсетов: на клиентах старее 8.0 fullscreen не включается,
+   инсеты там = 0, и отступ должен остаться прежним. */
+.courses-head { padding: max(58px, calc(var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px) + 14px)) 20px 4px; }
 .courses-title { font-size: 27px; font-weight: 800; color: var(--ink); }
 .courses-sub { font-size: 13px; color: var(--gray); margin-top: 2px; }
 .reset-link {
@@ -427,7 +433,7 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 /* результат теста */
 .result-screen {
   min-height: 100vh; display: flex; flex-direction: column;
-  padding: 58px 24px 130px; align-items: center; text-align: center;
+  padding: max(58px, calc(var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px) + 14px)) 24px 130px; align-items: center; text-align: center;
 }
 .result-badge {
   width: 68px; height: 68px; border-radius: 50%; background: var(--bg);
