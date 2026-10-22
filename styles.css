@@ -945,3 +945,58 @@ html.dark .chip.sel-v, body.dark .chip.sel-v { background: var(--blue); color: v
 }
 .srez-chev { font-size: 10px; transition: transform .2s ease; display: inline-block; }
 .srez-chev.open { transform: rotate(180deg); }
+
+/* ---------- схемы внутри лекции ----------
+   Цвета берём из переменных темы, кроме заливки шкалы и панелей: там нужен
+   именно градиент по светлоте, он задаётся инлайном в app.js. Текст поверх
+   заливки — var(--white-text), он читается и на светлой, и на тёмной. */
+.lscale, .ltable, .lpanels { margin: 18px 0 6px; }
+.lscale-title, .ltable-title, .lpanels-title {
+  font: 700 17px 'Manrope', sans-serif; color: var(--ink); margin-bottom: 10px;
+}
+.lscale-row { display: flex; border-radius: 12px; overflow: hidden; box-shadow: var(--raised-sm); }
+.lscale-cell {
+  flex: 1; aspect-ratio: 1 / 1.6; display: flex; align-items: center; justify-content: center;
+  font: 400 15px 'Inter', sans-serif; color: var(--white-text);
+}
+.lscale-ends {
+  display: flex; justify-content: space-between; margin-top: 6px;
+  font-size: 12px; color: var(--gray);
+}
+
+.ltable { border-radius: 12px; overflow: hidden; box-shadow: var(--raised-sm); }
+.ltable-head, .ltable-tr {
+  display: grid; grid-template-columns: repeat(var(--ltable-cols), 1fr); gap: 1px;
+}
+.ltable-head { background: var(--bgmuted); }
+.ltable-th {
+  padding: 10px 12px; font: 700 13px 'Manrope', sans-serif; color: var(--terra); line-height: 1.3;
+}
+.ltable-tr { border-top: 1px solid var(--line); }
+.ltable-td {
+  padding: 11px 12px; font-size: 14px; color: var(--ink); line-height: 1.4; align-self: center;
+}
+.ltable-branch { display: flex; flex-direction: column; gap: 4px; }
+.ltable-branch span { position: relative; padding-left: 14px; }
+.ltable-branch span::before {
+  content: "↳"; position: absolute; left: 0; color: var(--gray);
+}
+
+.lpanels-row { display: flex; gap: 14px; align-items: flex-start; }
+.lpanels-strip { display: flex; gap: 4px; flex: none; }
+.lpanel {
+  width: 34px; border-radius: 8px; overflow: hidden; background: var(--blue);
+  display: flex; flex-direction: column; box-shadow: var(--raised-sm);
+}
+.lpanel-num {
+  text-align: center; padding: 5px 0 2px;
+  font: 400 13px 'Inter', sans-serif; color: var(--white-text);
+}
+.lpanel-body { flex: 1; min-height: 84px; position: relative; padding: 0 4px; }
+.lpanel-fill { position: absolute; left: 4px; right: 4px; border-radius: 5px; background: var(--white-text); opacity: .55; }
+/* нумерация своя, маркеры списка дали бы «• 1.» */
+.lpanels-legend { margin: 0; padding: 0; list-style: none; font-size: 14px; color: var(--ink); line-height: 1.55; }
+.lpanels-legend b { font-weight: 600; }
+.lfig { margin: 18px 0 6px; }
+.lfig img { width: 100%; height: auto; display: block; border-radius: 12px; box-shadow: var(--raised-sm); }
+.lfig figcaption { margin-top: 7px; font-size: 12.5px; color: var(--gray); line-height: 1.4; }

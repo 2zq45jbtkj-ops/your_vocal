@@ -2010,6 +2010,97 @@ function renderAdminPlans() {
   wireActs();
 }
 
+/* ---------- схемы внутри лекции ----------
+   Рисуем разметкой, а не картинками: текст остаётся выделяемым, схема
+   тянется по ширине экрана и сама следует тёмной теме через переменные.
+   Неизвестные типы блоков оба рендерера молча пропускают, поэтому старые
+   лекции от появления этих типов не ломаются. */
+
+/* Шкала 1..n с нарастающей заливкой — «насколько сильно работает голос». */
+function lectureScaleHtml(blk) {
+  var n = blk.max || 10;
+  var cells = "";
+  for (var i = 1; i <= n; i++) {
+    var l = 88 - (i - 1) * (40 / (n - 1));   // один тон, разная светлота
+    cells += '<div class="lscale-cell" style="background:oklch(' + l.toFixed(1) + '% 0.055 235);">' +
+               "<span>" + i + "</span></div>";
+  }
+  return '<div class="lscale">' +
+      (blk.title ? '<div class="lscale-title">' + esc(blk.title) + "</div>" : "") +
+      '<div class="lscale-row">' + cells + "</div>" +
+      (blk.lowLabel || blk.highLabel
+        ? '<div class="lscale-ends"><span>' + esc(blk.lowLabel || "") + "</span><span>" +
+          esc(blk.highLabel || "") + "</span></div>"
+        : "") +
+    "</div>";
+}
+
+/* Таблица: cols — заголовки, rows — массивы ячеек. Ячейка-массив рисуется
+   «веткой» — как «средний → вопросительный / разговорный». */
+function lectureTableHtml(blk) {
+  var head = (blk.cols || []).map(function (c) {
+    return '<div class="ltable-th">' + esc(c) + "</div>";
+  }).join("");
+  var body = (blk.rows || []).map(function (row) {
+    return '<div class="ltable-tr">' + row.map(function (cell) {
+      if (Array.isArray(cell)) {
+        return '<div class="ltable-td"><div class="ltable-branch">' +
+          cell.map(function (x) { return "<span>" + esc(x) + "</span>"; }).join("") +
+          "</div></div>";
+      }
+      return '<div class="ltable-td">' + esc(cell == null ? "" : cell) + "</div>";
+    }).join("") + "</div>";
+  }).join("");
+  return '<div class="ltable" style="--ltable-cols:' + ((blk.cols || []).length || 2) + ';">' +
+      (blk.title ? '<div class="ltable-title">' + esc(blk.title) + "</div>" : "") +
+      '<div class="ltable-head">' + head + "</div>" + body +
+    "</div>";
+}
+
+/* Готовая картинка из lesson-content/2-images. loading=lazy — чтобы урок
+   открывался сразу, не дожидаясь схем ниже по тексту. */
+function lectureImageHtml(blk) {
+  if (!blk.src) return "";
+  return '<figure class="lfig">' +
+      '<img src="' + esc(blk.src) + '" alt="' + esc(blk.caption || "") + '" loading="lazy">' +
+      (blk.caption ? "<figcaption>" + esc(blk.caption) + "</figcaption>" : "") +
+    "</figure>";
+}
+
+/* Пронумерованные панели + расшифровка справа — схема «Дыхание».
+   zone говорит, ГДЕ в объёме стоит воздух, а не сколько его: у верхнего
+   дыхания заштрихована верхняя треть, у нижнего — нижняя. Показывать это
+   растущей снизу заливкой нельзя — верхнее дыхание выглядело бы как
+   «мало воздуха внизу», то есть ровно наоборот. */
+var LPANEL_ZONES = {
+  top:    { top: "4%",  height: "30%" },
+  middle: { top: "35%", height: "30%" },
+  bottom: { top: "66%", height: "30%" },
+  mixed:  { top: "35%", height: "61%" }   // живот + рёбра сразу
+};
+
+function lecturePanelsHtml(blk) {
+  var items = blk.items || [];
+  var panels = items.map(function (it, i) {
+    var z = LPANEL_ZONES[it.zone] || LPANEL_ZONES.middle;
+    return '<div class="lpanel">' +
+        '<div class="lpanel-num">' + (i + 1) + "</div>" +
+        '<div class="lpanel-body">' +
+          '<div class="lpanel-fill" style="top:' + z.top + ';height:' + z.height + ';"></div>' +
+        "</div>" +
+      "</div>";
+  }).join("");
+  var legend = items.map(function (it, i) {
+    return "<li><b>" + (i + 1) + ". " + esc(it.name) + "</b>" +
+      (it.note ? " — " + esc(it.note) : "") + "</li>";
+  }).join("");
+  return '<div class="lpanels">' +
+      (blk.title ? '<div class="lpanels-title">' + esc(blk.title) + "</div>" : "") +
+      '<div class="lpanels-row"><div class="lpanels-strip">' + panels + "</div>" +
+      '<ul class="lpanels-legend">' + legend + "</ul></div>" +
+    "</div>";
+}
+
 function planLectureHtml(lecture) {
   if (!lecture || !lecture.blocks) return "";
   var html = "";
@@ -2027,6 +2118,14 @@ function planLectureHtml(lecture) {
       html += '<div class="lecture-note">' + esc(blk.text) + "</div>";
     } else if (blk.type === "para") {
       html += '<p class="lecture-para">' + esc(blk.text) + "</p>";
+    } else if (blk.type === "scale") {
+      html += lectureScaleHtml(blk);
+    } else if (blk.type === "table") {
+      html += lectureTableHtml(blk);
+    } else if (blk.type === "panels") {
+      html += lecturePanelsHtml(blk);
+    } else if (blk.type === "image") {
+      html += lectureImageHtml(blk);
     }
   });
   return html;
@@ -2279,6 +2378,14 @@ function renderLecture() {
       html += '<div class="lecture-note">' + esc(blk.text) + "</div>";
     } else if (blk.type === "para") {
       html += '<p class="lecture-para">' + esc(blk.text) + "</p>";
+    } else if (blk.type === "scale") {
+      html += lectureScaleHtml(blk);
+    } else if (blk.type === "table") {
+      html += lectureTableHtml(blk);
+    } else if (blk.type === "panels") {
+      html += lecturePanelsHtml(blk);
+    } else if (blk.type === "image") {
+      html += lectureImageHtml(blk);
     }
   });
   html += "</div>";
