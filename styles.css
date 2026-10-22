@@ -1000,3 +1000,100 @@ html.dark .chip.sel-v, body.dark .chip.sel-v { background: var(--blue); color: v
 .lfig { margin: 18px 0 6px; }
 .lfig img { width: 100%; height: auto; display: block; border-radius: 12px; box-shadow: var(--raised-sm); }
 .lfig figcaption { margin-top: 7px; font-size: 12.5px; color: var(--gray); line-height: 1.4; }
+/* ---------- текстовые документы раздела «Ещё» ----------
+   Оферта, политика конфиденциальности и «О преподавателе» — одна вёрстка на
+   три экрана, см. renderDoc(). Только var(), без захардкоженных hex: иначе
+   экран не потемнеет вместе с темой. */
+.doc-body { padding: 4px 20px 130px; }
+.doc-version { font-size: 11.5px; color: var(--gray); margin-bottom: 18px; }
+.doc-h {
+  font: 700 14.5px 'Manrope', sans-serif; color: var(--ink);
+  margin: 22px 0 8px; line-height: 1.35;
+}
+.doc-p { font-size: 12.5px; color: var(--ink); line-height: 1.65; margin: 0 0 10px; }
+.doc-list { list-style: none; margin: 2px 0 12px; }
+.doc-list li {
+  position: relative; padding-left: 16px; margin-bottom: 8px;
+  font-size: 12.5px; color: var(--ink); line-height: 1.6;
+}
+.doc-list li::before {
+  content: ""; position: absolute; left: 3px; top: 8px;
+  width: 4px; height: 4px; border-radius: 50%; background: var(--terra);
+}
+.doc-note {
+  background: var(--bgmuted); border-radius: 14px; padding: 14px 16px;
+  font-size: 12.5px; color: var(--tx3); line-height: 1.6;
+  margin: 4px 0 18px; white-space: pre-line;
+}
+
+/* ---------- напоминание о домашнем задании при входе ----------
+   Шторка снизу, а не диалог по центру: на телефоне до кнопки внизу дотянуться
+   большим пальцем, а наверх экрана — нет. Показывается один раз за сессию
+   приложения, см. maybeShowHwReminder(). */
+#hw-reminder {
+  position: fixed; inset: 0; z-index: 9998;
+  display: flex; align-items: flex-end; justify-content: center;
+  background: oklch(20% 0.01 70 / 0.42);
+  animation: hwFade .18s ease;
+}
+@keyframes hwFade { from { opacity: 0 } to { opacity: 1 } }
+.hw-sheet {
+  width: 100%; max-width: 430px; background: var(--bg);
+  border-radius: 24px 24px 0 0; padding: 10px 20px 28px;
+  padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+  box-shadow: var(--raised-lg); animation: hwUp .26s cubic-bezier(.2,.8,.3,1);
+  max-height: 88vh; overflow-y: auto;
+}
+@keyframes hwUp { from { transform: translateY(100%) } to { transform: translateY(0) } }
+.hw-grip {
+  width: 38px; height: 4px; border-radius: 2px; background: var(--line);
+  margin: 0 auto 16px;
+}
+.hw-sheet-title { font: 800 19px 'Manrope', sans-serif; color: var(--ink); margin-bottom: 4px; }
+.hw-sheet-sub { font-size: 12.5px; color: var(--gray); line-height: 1.5; margin-bottom: 16px; }
+/* Обратный отсчёт: моноширинные цифры, иначе блок дёргается каждую секунду,
+   когда 1 сменяется на 8 и т.п. */
+.hw-countdown {
+  display: flex; gap: 8px; margin-bottom: 16px;
+}
+.hw-cd-cell {
+  flex: 1; text-align: center; padding: 10px 4px;
+  background: var(--bg); border-radius: 14px; box-shadow: var(--inset-sm);
+}
+.hw-cd-num {
+  font: 800 21px 'Manrope', sans-serif; color: var(--ink);
+  font-variant-numeric: tabular-nums; line-height: 1.1;
+}
+.hw-cd-num.urgent { color: var(--terra); }
+.hw-cd-num.overdue { color: var(--ink-red); }
+.hw-cd-label {
+  font-size: 10px; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--gray); margin-top: 3px;
+}
+.hw-sheet-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 11px 0; border-bottom: 1px solid var(--line);
+}
+.hw-sheet-item:last-of-type { border-bottom: none; }
+.hw-sheet-item-title { font: 600 13.5px 'Inter', sans-serif; color: var(--ink); line-height: 1.35; }
+.hw-sheet-item-due { font-size: 11.5px; color: var(--gray); margin-top: 2px; }
+.hw-sheet-item-due.overdue { color: var(--ink-red); }
+.hw-sheet-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
+.hw-later {
+  height: 46px; border: none; background: transparent; cursor: pointer;
+  font: 600 13.5px 'Inter', sans-serif; color: var(--gray);
+}
+
+/* Отметка «выполнено» на карточке домашнего задания в кабинете */
+.hw-check {
+  flex-shrink: 0; width: 24px; height: 24px; margin-top: 1px; cursor: pointer;
+  border-radius: 50%; border: none; background: var(--bg);
+  box-shadow: var(--inset-sm); display: flex; align-items: center; justify-content: center;
+  padding: 0;
+}
+.hw-check.done { background: var(--terra); box-shadow: var(--raised-sm); }
+.hw-check svg { width: 11px; height: 9px; opacity: 0; }
+.hw-check.done svg { opacity: 1; }
+.hw-check[disabled] { cursor: default; opacity: .6; }
+.hw-item-done .hw-sheet-item-title,
+.hw-item-done .hw-title { text-decoration: line-through; color: var(--locked); }

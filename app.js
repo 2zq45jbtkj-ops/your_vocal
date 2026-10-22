@@ -77,7 +77,10 @@ var state = {
   _srezTopicsOpen: false,    // список тем под колесом: раскрыт/свёрнут (жмём по колесу)
   _ownCabinetMsg: null,      // "not-found" | "no-token" | "net" — почему не открылась своя карточка
   feedbackMood: null, feedbackText: "", coursesFilter: null,
-  pendingUnstar: null, pendingUnstarData: null, pendingUnstarSecs: 0
+  pendingUnstar: null, pendingUnstarData: null, pendingUnstarSecs: 0,
+  docKey: null,              // какой текст открыт на экране "doc": offer|privacy|about
+  _hwReminderShown: false,   // шторку с дедлайном показываем один раз за сессию
+  _hwBusy: {}                // hwKey -> true, пока запрос «выполнено» в полёте
 };
 
 var audioEls = {};
@@ -341,6 +344,7 @@ function backTarget() {
     case "lesson-home": return "courses";
     case "favorites": return "courses";
     case "lesson-soon": return "courses";
+    case "doc": return "more";
     case "admin-hub": return "more";
     case "admin-students": return "admin-hub";
     case "admin-birthdays": return "admin-hub";
@@ -926,6 +930,10 @@ function loadStudentPublicData() {
           state.screen = "blocked";
         }
         syncTelegramChatId();
+        pingSeen();
+        // Напоминание о дедлайне — ровно здесь, а не при старте приложения:
+        // до этого момента список заданий ещё не загружен и считать не по чему.
+        maybeShowHwReminder();
       } else if (httpStatus === 404 || httpStatus === 400) {
         // Единственный случай, когда токен действительно недействителен: ученика
         // удалили или токен перегенерировали. Только здесь стираем код доступа.
@@ -1234,25 +1242,260 @@ function formatDue(due) {
   } catch (e) { return due; }
 }
 
+var SVG_HW_CHECK = '<svg viewBox="0 0 11 9" fill="none"><path d="M1 4.4L4.1 7.5L10 1.5" stroke="var(--white-text)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
 function renderHomeworkSection(homework) {
   if (!homework || !homework.length) {
     return '<div class="assessments-title">Домашнее задание</div>' +
       '<div class="instruction-note">Пока нет активных заданий — преподаватель добавит их после занятия.</div>';
   }
   var today = new Date(); today.setHours(0,0,0,0);
-  var items = homework.map(function (hw) {
+  var items = homework.map(function (hw, i) {
     var due = hw.due ? new Date(hw.due + "T00:00:00") : null;
-    var overdue = due && due < today;
-    return '<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 0;border-bottom:1px solid var(--line);">' +
+    var overdue = due && due < today && !hw.done;
+    var busy = state._hwBusy[hwKey(hw)];
+    return '<div class="' + (hw.done ? "hw-item-done" : "") + '" style="display:flex;align-items:flex-start;gap:10px;padding:12px 0;border-bottom:1px solid var(--line);">' +
       hwLevelBadge(hw.level) +
       '<div style="flex:1;min-width:0;">' +
-        '<div style="font:600 14px Manrope,sans-serif;color:var(--ink);line-height:1.35;">' + esc(hw.title || "") + "</div>" +
-        (due ? '<div style="font-size:12px;margin-top:3px;color:' + (overdue ? "oklch(56% 0.18 25)" : "var(--gray)") + ';">до ' + formatDue(hw.due) + (overdue ? " · просрочено" : "") + "</div>" : "") +
+        '<div class="hw-title" style="font:600 14px Manrope,sans-serif;color:var(--ink);line-height:1.35;">' + esc(hw.title || "") + "</div>" +
+        (due ? '<div style="font-size:12px;margin-top:3px;color:' + (overdue ? "var(--ink-red)" : "var(--gray)") + ';">до ' + formatDue(hw.due) + (overdue ? " · просрочено" : "") + "</div>" : "") +
       "</div>" +
+      // Отметка выполнения. Она не косметическая: пока задание не отмечено,
+      // бот раз в сутки напоминает о нём в чате (см. api/lessons.js?part=hw-reminder).
+      '<button class="hw-check' + (hw.done ? " done" : "") + '" data-hw-toggle="' + i + '"' +
+        (busy ? " disabled" : "") + ' aria-pressed="' + (hw.done ? "true" : "false") +
+        '" aria-label="Отметить выполненным">' + SVG_HW_CHECK + "</button>" +
     "</div>";
   }).join("");
   return '<div class="assessments-title">Домашнее задание</div>' +
     '<div class="cabinet-inset" style="padding:0 16px;">' + items + "</div>";
+}
+
+/* ---------- отметка «выполнено» и напоминание о дедлайне ----------
+
+   Задания приходят из baza-dannih (lesson_log.hw_items) и своего id не имеют —
+   склеиваются по паре «название + дедлайн», и ровно этой парой сервер потом
+   находит нужный элемент JSONB-массива. Отсюда hwKey(). */
+
+function hwKey(hw) {
+  return String((hw && hw.title) || "") + "|" + String((hw && hw.due) || "");
+}
+
+// Дедлайн — конец указанного дня по местному времени ученика, а не полночь:
+// «до 25 октября» для человека значит «весь день 25-го ещё мой».
+function hwDeadlineMs(due) {
+  if (!due) return null;
+  var t = new Date(String(due).slice(0, 10) + "T23:59:59").getTime();
+  return isNaN(t) ? null : t;
+}
+
+function pendingHomework() {
+  var data = state.studentPublicData;
+  if (!data || data === "loading") return [];
+  return (data.homework || []).filter(function (hw) {
+    return !hw.done && hwDeadlineMs(hw.due) !== null;
+  });
+}
+
+function toggleHwDone(idx) {
+  // В «Режиме админа» Николай смотрит чужой кабинет для диагностики —
+  // его клик не должен закрывать ученику реальное задание.
+  if (state.adminMode) return;
+  var data = state.studentPublicData;
+  var hw = data && data.homework && data.homework[idx];
+  if (!hw || !state.accessToken) return;
+
+  var key = hwKey(hw);
+  if (state._hwBusy[key]) return;
+  state._hwBusy[key] = true;
+
+  var next = !hw.done;
+  var prevStatus = hw.status;
+  // Оптимистично: галочка должна отзываться мгновенно, сеть у ученика
+  // может быть медленной. При ошибке откатываем обратно ниже.
+  hw.done = next;
+  hw.status = next ? "выполнено учеником" : "в приложении: не начато";
+  repaintHomework();
+
+  fetch(BAZA_API + "/api/student-public?token=" + encodeURIComponent(state.accessToken), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ hwDone: { title: hw.title, due: hw.due, done: next } })
+  })
+    .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); })
+    .catch(function () {
+      hw.done = !next;
+      hw.status = prevStatus;
+      alert("Не удалось сохранить отметку — проверь соединение и попробуй ещё раз.");
+    })
+    .then(function () {
+      delete state._hwBusy[key];
+      repaintHomework();
+    });
+}
+
+// Перерисовать всё, что показывает список ДЗ: экран «Кабинет» и открытую
+// шторку-напоминание. Шторка живёт в <body>, а не в #app, поэтому render()
+// её не трогает — обновляем отдельно.
+function repaintHomework() {
+  if (state.screen === "profile") render();
+  if (document.getElementById("hw-reminder")) {
+    if (!pendingHomework().length) closeHwReminder();
+    else paintHwSheet();
+  }
+}
+
+function wireHwToggles(root) {
+  Array.prototype.forEach.call((root || document).querySelectorAll("[data-hw-toggle]"), function (el) {
+    el.addEventListener("click", function (e) {
+      e.stopPropagation();
+      toggleHwDone(parseInt(el.getAttribute("data-hw-toggle"), 10));
+    });
+  });
+}
+
+/* Шторка «домашнее задание ждёт» с обратным отсчётом до ближайшего дедлайна.
+   Показывается один раз за запуск приложения (state._hwReminderShown) и
+   только если есть хотя бы одно невыполненное задание с дедлайном. */
+
+var _hwTimer = null;
+
+function hwCountdownParts(ms) {
+  var sec = Math.floor(Math.abs(ms) / 1000);
+  return {
+    overdue: ms < 0,
+    d: Math.floor(sec / 86400),
+    h: Math.floor((sec % 86400) / 3600),
+    m: Math.floor((sec % 3600) / 60),
+    s: sec % 60
+  };
+}
+
+function hwCountdownHtml(deadlineMs) {
+  var p = hwCountdownParts(deadlineMs - Date.now());
+  // < 24 часов — терракотовый, просрочено — красный. Отдельным классом, а не
+  // инлайновым цветом: в тёмной теме оба берутся из var() и не выцветают.
+  var cls = p.overdue ? " overdue" : ((p.d === 0) ? " urgent" : "");
+  var cells = [[p.d, "дней"], [p.h, "часов"], [p.m, "минут"], [p.s, "секунд"]];
+  return cells.map(function (c) {
+    return '<div class="hw-cd-cell">' +
+      '<div class="hw-cd-num' + cls + '">' + (c[0] < 10 ? "0" : "") + c[0] + "</div>" +
+      '<div class="hw-cd-label">' + c[1] + "</div>" +
+    "</div>";
+  }).join("");
+}
+
+function paintHwSheet() {
+  var sheet = document.getElementById("hw-reminder");
+  if (!sheet) return;
+  var pending = pendingHomework();
+  if (!pending.length) { closeHwReminder(); return; }
+
+  // Ближайший дедлайн — по нему и идёт отсчёт; остальные задания просто
+  // перечислены ниже, чтобы ученик видел весь долг разом.
+  var nearest = pending.slice().sort(function (a, b) {
+    return hwDeadlineMs(a.due) - hwDeadlineMs(b.due);
+  })[0];
+  var deadline = hwDeadlineMs(nearest.due);
+  var overdue = deadline - Date.now() < 0;
+  var all = (state.studentPublicData.homework || []);
+
+  // Формулировка подгоняется под то, что показывают цифры ниже: при
+  // просрочке отсчёт идёт не «до», а «от» дедлайна, и подпись «осталось»
+  // над выросшим счётчиком читалась бы как «ещё есть время».
+  sheet.querySelector("[data-hw-sub]").textContent = overdue
+    ? "Задание «" + (nearest.title || "") + "» просрочено на"
+    : "До срока по заданию «" + (nearest.title || "") + "» осталось";
+  sheet.querySelector("[data-hw-cd]").innerHTML = hwCountdownHtml(deadline);
+  sheet.querySelector("[data-hw-items]").innerHTML = all.map(function (hw) {
+    var i = all.indexOf(hw);
+    var left = hwDeadlineMs(hw.due);
+    var isOver = left !== null && left - Date.now() < 0 && !hw.done;
+    return '<div class="hw-sheet-item' + (hw.done ? " hw-item-done" : "") + '">' +
+      hwLevelBadge(hw.level) +
+      '<div style="flex:1;min-width:0;">' +
+        '<div class="hw-sheet-item-title">' + esc(hw.title || "") + "</div>" +
+        (hw.due ? '<div class="hw-sheet-item-due' + (isOver ? " overdue" : "") + '">до ' +
+          formatDue(hw.due) + (isOver ? " · просрочено" : "") + "</div>" : "") +
+      "</div>" +
+      '<button class="hw-check' + (hw.done ? " done" : "") + '" data-hw-toggle="' + i + '"' +
+        (state._hwBusy[hwKey(hw)] ? " disabled" : "") +
+        ' aria-label="Отметить выполненным">' + SVG_HW_CHECK + "</button>" +
+    "</div>";
+  }).join("");
+  wireHwToggles(sheet);
+}
+
+function closeHwReminder() {
+  if (_hwTimer) { clearInterval(_hwTimer); _hwTimer = null; }
+  var el = document.getElementById("hw-reminder");
+  if (el) el.remove();
+}
+
+function openHwReminder() {
+  closeHwReminder();
+  var el = document.createElement("div");
+  el.id = "hw-reminder";
+  el.innerHTML =
+    '<div class="hw-sheet">' +
+      '<div class="hw-grip"></div>' +
+      '<div class="hw-sheet-title">Домашнее задание ждёт</div>' +
+      '<div class="hw-sheet-sub" data-hw-sub></div>' +
+      '<div class="hw-countdown" data-hw-cd></div>' +
+      "<div data-hw-items></div>" +
+      '<div class="hw-sheet-actions">' +
+        '<button class="cta" data-hw-go>Открыть кабинет</button>' +
+        '<button class="hw-later" data-hw-later>Напомнить позже</button>' +
+      "</div>" +
+    "</div>";
+  document.body.appendChild(el);
+
+  // Клик по затемнению (но не по самой шторке) закрывает — привычный жест.
+  el.addEventListener("click", function (e) { if (e.target === el) closeHwReminder(); });
+  el.querySelector("[data-hw-later]").addEventListener("click", closeHwReminder);
+  el.querySelector("[data-hw-go]").addEventListener("click", function () {
+    closeHwReminder();
+    go("profile");
+  });
+
+  paintHwSheet();
+  // Только цифры отсчёта, раз в секунду: перерисовывать всю шторку целиком
+  // нельзя — это сбрасывало бы нажатие на галочке посреди клика.
+  _hwTimer = setInterval(function () {
+    var cd = document.querySelector("#hw-reminder [data-hw-cd]");
+    if (!cd) { closeHwReminder(); return; }
+    var pending = pendingHomework();
+    if (!pending.length) { closeHwReminder(); return; }
+    var nearest = pending.slice().sort(function (a, b) {
+      return hwDeadlineMs(a.due) - hwDeadlineMs(b.due);
+    })[0];
+    cd.innerHTML = hwCountdownHtml(hwDeadlineMs(nearest.due));
+  }, 1000);
+}
+
+function maybeShowHwReminder() {
+  if (state._hwReminderShown || state.adminMode) return;
+  // «Завершил» — доступ закрыт, экран blocked; напоминать такому ученику
+  // о домашнем задании поверх сообщения о закрытом доступе бессмысленно.
+  if (state.screen === "blocked") return;
+  if (!pendingHomework().length) return;
+  state._hwReminderShown = true;
+  openHwReminder();
+}
+
+/* Пинг «ученик открыл приложение» → students.last_seen_at в baza-dannih.
+   Без него бот не может отличить того, кто заходит и занимается, от того,
+   кто пропал: напоминание уходит только при совпадении обоих условий —
+   задание не отмечено И сутки не заходил. Шлём один раз за запуск. */
+var _seenPinged = false;
+function pingSeen() {
+  if (_seenPinged || state.adminMode || !state.accessToken) return;
+  _seenPinged = true;
+  fetch(BAZA_API + "/api/student-public?token=" + encodeURIComponent(state.accessToken), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ seen: true })
+  }).catch(function () { _seenPinged = false; });
 }
 
 /* «Колесо баланса» в кабинете ученика.
@@ -1470,6 +1713,7 @@ function renderProfile() {
     "</div>";
 
   wireActs();
+  wireHwToggles(app);
 }
 
 /* ---------- запись на занятие: календарь → время → подтверждение (1:1 по макету) ---------- */
@@ -1710,22 +1954,22 @@ function renderMore() {
       iconBg: supportIconBg
     },
     {
-      label: "Правила и оферта", isLink: true,
+      label: "Правила и оферта", isLink: true, doc: "offer",
       icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="3" y="1.5" width="10" height="13" rx="1.5" stroke="var(--gray)" stroke-width="1.4"/><path d="M5.5 5h5M5.5 8h5M5.5 11h3" stroke="var(--gray)" stroke-width="1.2" stroke-linecap="round"/></svg>',
       iconBg: "var(--bgmuted)"
     },
     {
-      label: "Политика конфиденциальности", isLink: true,
+      label: "Политика конфиденциальности", isLink: true, doc: "privacy",
       icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1.5l5.5 2v4c0 3.6-2.3 6-5.5 7-3.2-1-5.5-3.4-5.5-7v-4L8 1.5z" stroke="var(--gray)" stroke-width="1.4" stroke-linejoin="round"/></svg>',
       iconBg: "var(--bgmuted)"
     },
     {
-      label: "О преподавателе", isLink: true,
+      label: "О преподавателе", isLink: true, doc: "about",
       icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="var(--gray)" stroke-width="1.4"/><path d="M8 5.3v.1M7 7.3h1v3.5h1" stroke="var(--gray)" stroke-width="1.3" stroke-linecap="round"/></svg>',
       iconBg: "var(--bgmuted)"
     },
     {
-      label: "Сбросить и войти как другой ученик", danger: true,
+      label: "Сбросить и войти как другой ученик", danger: true, reset: true,
       icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 2H3.5A1.5 1.5 0 002 3.5v9A1.5 1.5 0 003.5 14H6M10.5 11l3-3-3-3M13 8H6" stroke="oklch(53% 0.18 25)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
       iconBg: "var(--soft-red)"
     }
@@ -1768,14 +2012,60 @@ function renderMore() {
   Array.prototype.forEach.call(app.querySelectorAll("[data-more-idx]"), function (el) {
     el.addEventListener("click", function () {
       var idx = parseInt(el.getAttribute("data-more-idx"), 10);
+      var item = items[idx] || {};
       if (idx === 0) { toggleDarkMode(); return; }
       if (idx === 1) { state.notifOn = !state.notifOn; saveState(); render(); return; }
-      if (idx === 6) { resetProgress(); return; }
-      if (items[idx] && items[idx].adminEntry) { go("admin-hub"); return; }
-      // «Написать в поддержку», «Правила и оферта», «Политика конфиденциальности»,
-      // «О преподавателе» — в дизайн-файле это заглушки без содержимого, оставляю как есть.
+      // Дальше — по флагу самого пункта, а не по его номеру: номер «Сбросить»
+      // съезжает, как только в список добавят ещё один пункт выше.
+      if (item.reset) { resetProgress(); return; }
+      if (item.doc) { openDoc(item.doc); return; }
+      if (item.adminEntry) { go("admin-hub"); return; }
+      // «Написать в поддержку» — в дизайн-файле заглушка без содержимого, оставляю как есть.
     });
   });
+  wireActs();
+}
+
+/* Текстовые экраны раздела «Ещё»: публичная оферта, политика конфиденциальности
+   и «О преподавателе». Вёрстка на все три одна — различается только содержимое,
+   которое лежит в legal.js (LEGAL_DOCS). Какой именно документ открыт, помнит
+   state.docKey; в localStorage он не пишется — экран живёт только в сессии. */
+function openDoc(key) {
+  state.docKey = key;
+  go("doc");
+}
+
+function renderDoc() {
+  var doc = (typeof LEGAL_DOCS !== "undefined") && LEGAL_DOCS[state.docKey];
+  if (!doc) { go("more"); return; }
+
+  var body = doc.sections.map(function (s) {
+    if (s.note) return '<div class="doc-note">' + esc(s.note) + "</div>";
+    var html = "";
+    if (s.h) html += '<div class="doc-h">' + esc(s.h) + "</div>";
+    (s.p || []).forEach(function (t) { html += '<p class="doc-p">' + esc(t) + "</p>"; });
+    if (s.list && s.list.length) {
+      html += '<ul class="doc-list">' +
+        s.list.map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") +
+        "</ul>";
+    }
+    // Абзац, который по смыслу идёт ПОСЛЕ списка (например «8.2. Для реализации
+    // любого из перечисленных прав…») — иначе он оторвался бы от своего перечня.
+    if (s.after) html += '<p class="doc-p">' + esc(s.after) + "</p>";
+    return html;
+  }).join("");
+
+  app.innerHTML =
+    '<div class="top pb8">' + backBtn("back") +
+      "<div>" +
+        '<div class="top-title lg">' + esc(doc.title) + "</div>" +
+        (doc.sub ? '<div class="top-sub">' + esc(doc.sub) + "</div>" : "") +
+      "</div>" +
+    "</div>" +
+    '<div class="doc-body">' +
+      (doc.version ? '<div class="doc-version">' + esc(doc.version) + "</div>" : "") +
+      body +
+    "</div>";
   wireActs();
 }
 
@@ -4013,6 +4303,7 @@ function render() {
     case "profile": renderProfile(); break;
     case "questions": renderQuestions(); break;
     case "more": renderMore(); break;
+    case "doc": renderDoc(); break;
     case "admin-hub": renderAdminHub(); break;
     case "admin-students": renderAdminStudents(); break;
     case "admin-birthdays": renderAdminBirthdays(); break;
