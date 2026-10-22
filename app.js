@@ -30,7 +30,8 @@ function syncTelegramChatId() {
 }
 
 var TOTAL_LESSONS = 30;
-var LESSON = null; // data/lesson-01.json
+var LESSON = null; // текущий урок: data/lesson-01.json либо план из lesson-plans.json
+var LESSON_ONE = null; // урок 1 целиком — единственный со своими mp3
 
 // Vercel режет тело запроса примерно на уровне ~4.5 МБ — держим запас.
 // Видео сверх этого лимита (по умолчанию — снятое обычной камерой телефона,
@@ -735,6 +736,7 @@ function roadmapCollapsed() {
 
 function renderCourses() {
   loadStudentPublicData(); // подтягивает unlockedLessons/progressByLesson для разблокировки
+  loadLessonPlans();       // уроки 2+ живут в планах, нужны не только на админ-экранах
   var stats = lessonStats();
   var filter = state.coursesFilter; // "inProgress" | "completed" | null — переключатель фильтра дорожной карты
   var favCount = Object.keys(state.favorites || {}).length;
@@ -1126,8 +1128,17 @@ function lessonFullyDone(n) {
 /* Разблокировка урока n: первый урок всегда открыт; следующий открывается,
    когда предыдущий пройден целиком; плюс персональный override из baza-dannih
    (students.extra_unlocked_lessons) открывает урок вне очереди. */
+/* Николай открывает курс целиком со своей карточки «(admin)» — ему нужен
+   доступ ко всем урокам сразу, а не по мере прохождения. Опознаём так же,
+   как на сайте: по «(admin)» в имени ученика. */
+function isAdminStudent() {
+  var name = ((state.firstName || "") + " " + (state.lastName || ""));
+  return /\(admin\)/i.test(name) || state.isAdmin === true;
+}
+
 function lessonUnlocked(n) {
   if (n === 1) return true;
+  if (isAdminStudent()) return true;
   if (state.unlockedLessons && state.unlockedLessons.indexOf(n) !== -1) return true;
   return lessonFullyDone(n - 1);
 }
@@ -1136,8 +1147,66 @@ function lessonUnlocked(n) {
    сейчас) — обычный экран урока; для любого другого разблокированного, но
    пока пустого урока — заглушка «Материалы скоро появятся», чтобы не падать
    на отсутствующих данных. */
+/* План из data/lesson-plans.json → объект урока той же формы, что lesson-01.json.
+   Лекция, тест и распевки совпадают по формату один в один. Песня — нет: в
+   планах вместо готовых треков с mp3 лежит trackIdeas (только названия), и
+   отдельного поля song.tracks там не существует. Поэтому песню переносим как
+   есть, а экран песни сам показывает задание вместо плеера (см. renderSong). */
+function planToLesson(plan, n) {
+  return {
+    id: n,
+    title: plan.topic || ("Урок " + n),
+    level: plan.level || "",
+    goal: plan.goal || "",
+    stepSubtitles: plan.stepSubtitles || { lecture: "", quiz: "", warmups: "", song: "" },
+    lecture: plan.lecture,
+    quiz: plan.quiz,
+    warmups: plan.warmups,
+    song: plan.song || {}
+  };
+}
+
+/* Номер урока → план. lessonId в планах почти везде null, поэтому опираемся
+   на порядок: план №1 — первый урок, и так далее. */
+function planForLesson(n) {
+  var plans = (LESSON_PLANS && LESSON_PLANS.plans) || [];
+  return plans[n - 1] || null;
+}
+
+/* Переключение LESSON на другой урок. Шаговые флаги глобальные (относятся к
+   текущему LESSON.id), поэтому при переходе поднимаем их из progressByLesson,
+   иначе новый урок унаследовал бы прогресс предыдущего. */
+function switchToLesson(n, plan) {
+  stopAllMedia();
+  LESSON = planToLesson(plan, n);
+  var pr = (state.progressByLesson && state.progressByLesson[n]) || {};
+  state.lectureViewed = !!pr.lecture;
+  state.quizDone = !!pr.quiz;
+  state.warmupsDone = !!pr.warmups;
+  state.songDone = !!pr.song;
+  state.quizIndex = 0;
+  state.quizScore = 0;
+  state.quizAnswers = new Array((LESSON.quiz && LESSON.quiz.questions || []).length).fill(null);
+  go("lesson-home");
+}
+
 function openLessonByNumber(n) {
   if (n === (LESSON && LESSON.id || 1)) { go("lesson-home"); return; }
+
+  // Урок 1 — единственный с собственным файлом и аудио; возвращаемся к нему из кэша
+  if (n === 1 && LESSON_ONE) { stopAllMedia(); LESSON = LESSON_ONE; go("lesson-home"); return; }
+
+  var plan = planForLesson(n);
+  if (plan) { switchToLesson(n, plan); return; }
+
+  // планов ещё нет в памяти — подгружаем и открываем, когда приедут
+  if (!LESSON_PLANS) {
+    loadLessonPlans();
+    state.pendingLessonNum = n;
+    state.comingSoonLessonNum = n;
+    go("lesson-soon");
+    return;
+  }
   state.comingSoonLessonNum = n;
   go("lesson-soon");
 }
@@ -1858,6 +1927,12 @@ function loadLessonPlans() {
     .then(function (data) {
       LESSON_PLANS = data;
       lessonPlansLoading = false;
+      if (state.pendingLessonNum != null) {
+        var want = state.pendingLessonNum;
+        state.pendingLessonNum = null;
+        var pl = planForLesson(want);
+        if (pl) { switchToLesson(want, pl); return; }
+      }
       if (state.screen === "admin-plans" || state.screen === "admin-plan") render();
     })
     .catch(function () {
@@ -2160,7 +2235,7 @@ function renderLessonHome() {
   var pct = progressPercent();
   app.innerHTML =
     '<div class="top pb8">' + backBtn("back") +
-      '<div><div class="top-title lg">' + esc(LESSON.title) + '</div><div class="top-sub">Урок 1 из ' + TOTAL_LESSONS + "</div></div>" +
+      '<div><div class="top-title lg">' + esc(LESSON.title) + '</div><div class="top-sub">Урок ' + ((LESSON && LESSON.id) || 1) + ' из ' + TOTAL_LESSONS + "</div></div>" +
     "</div>" +
     '<div class="lesson-progress-wrap">' +
       '<div class="lesson-progress-label">Прогресс урока · ' + pct + '%</div>' +
@@ -2329,7 +2404,12 @@ function pitchLabelText(semis) {
 var STJS_URL = "https://cdn.jsdelivr.net/npm/soundtouchjs@0.1.30/dist/soundtouch.js";
 var stjsModulePromise = null;
 function loadSoundTouch() {
-  if (!stjsModulePromise) stjsModulePromise = import(STJS_URL);
+  if (!stjsModulePromise) {
+    stjsModulePromise = import(STJS_URL).catch(function (err) {
+      stjsModulePromise = null;   // разовая осечка CDN не должна быть вечной
+      throw err;
+    });
+  }
   return stjsModulePromise;
 }
 
@@ -2345,7 +2425,13 @@ function getAudioBuffer(n, ex) {
   if (!audioBufferCache[n]) {
     audioBufferCache[n] = fetch(ex.src)
       .then(function (r) { return r.arrayBuffer(); })
-      .then(function (buf) { return getAudioCtx().decodeAudioData(buf); });
+      .then(function (buf) { return getAudioCtx().decodeAudioData(buf); })
+      .catch(function (err) {
+        // иначе отклонённый промис остаётся в кэше навсегда и трек
+        // больше никогда не загрузится, даже когда сеть вернётся
+        delete audioBufferCache[n];
+        throw err;
+      });
   }
   return audioBufferCache[n];
 }
@@ -3023,7 +3109,13 @@ function getSongAudioBuffer(ti, track) {
   if (!songAudioBufferCache[ti]) {
     songAudioBufferCache[ti] = fetch(track.audio)
       .then(function (r) { return r.arrayBuffer(); })
-      .then(function (buf) { return getAudioCtx().decodeAudioData(buf); });
+      .then(function (buf) { return getAudioCtx().decodeAudioData(buf); })
+      .catch(function (err) {
+        // иначе отклонённый промис остаётся в кэше навсегда и трек
+        // больше никогда не загрузится, даже когда сеть вернётся
+        delete songAudioBufferCache[ti];
+        throw err;
+      });
   }
   return songAudioBufferCache[ti];
 }
@@ -3073,11 +3165,14 @@ function playSongShifted(ti, track, startSeconds) {
 
 function fallbackToNativeSong(ti, startSeconds) {
   if (state.songPlayerKey !== ti) return;
-  var el = songAudioEls[ti];
-  if (!el) return;
+  var el = songAudioEl(ti);
+  if (!el) {
+    abortSongPlayback(ti);
+    return;
+  }
   el.currentTime = startSeconds || 0;
   var p = el.play();
-  if (p && p.catch) p.catch(function () {});
+  if (p && p.catch) p.catch(function () { abortSongPlayback(ti); });
 }
 
 function handleSongTrackEnded(ti) {
@@ -3096,6 +3191,29 @@ function handleSongTrackEnded(ti) {
     var next = LESSON.song.tracks[ti + 1];
     if (next) toggleSongAudio(ti + 1);
   }
+}
+
+/* Элемент <audio> трека. songAudioEls обнуляется в stopAllMedia(), а экран
+   песни после перехода (например, с распевок) не всегда успевает заново
+   привязать узлы — тогда воспроизведение молча не стартовало, а кнопка
+   оставалась в состоянии «играет». Поэтому если кэш пуст — берём узел из DOM. */
+function songAudioEl(ti) {
+  var el = songAudioEls[ti];
+  if (!el) {
+    el = document.getElementById("song-audio-" + ti);
+    if (el) songAudioEls[ti] = el;
+  }
+  return el;
+}
+
+/* Снять залипшее «играет», если трек стартовать не смог. Без этого кнопка
+   показывает паузу при полной тишине, и второе нажатие только «выключает». */
+function abortSongPlayback(ti) {
+  stopSongShiftedPlayback(ti);
+  if (state.songPlayerKey === ti) state.songPlayerKey = null;
+  state.songPlayerElapsed = 0;
+  setRing("song-" + ti, 0);
+  updateSongPlayBtn(ti);
 }
 
 function toggleSongAudio(ti) {
@@ -3127,12 +3245,14 @@ function toggleSongAudio(ti) {
     getAudioCtx();
     playSongShifted(ti, track);
   } else {
-    var el = songAudioEls[ti];
-    if (el) {
-      el.currentTime = 0;
-      var p = el.play();
-      if (p && p.catch) p.catch(function () {});
+    var el = songAudioEl(ti);
+    if (!el) {
+      abortSongPlayback(ti);
+      return;
     }
+    el.currentTime = 0;
+    var p = el.play();
+    if (p && p.catch) p.catch(function () { abortSongPlayback(ti); });
   }
 
   if (prev !== null && prev !== undefined) updateSongPlayBtn(prev);
@@ -3232,8 +3352,10 @@ function placeMark(ti, li, index, type) {
 }
 
 function submitSongMarks() {
+  var tracks = (LESSON.song && LESSON.song.tracks) || [];
+  if (!tracks.length) return;   // урок из плана: разметки нет, отправлять нечего
   var lines = [];
-  LESSON.song.tracks.forEach(function (track, ti) {
+  tracks.forEach(function (track, ti) {
     if (!trackAttempted(ti, track)) {
       lines.push(track.title + ": попытка не завершена");
       return;
@@ -3318,9 +3440,43 @@ function renderFeedback() {
   wireActs();
 }
 
+/* Песня для уроков, к которым ещё не записаны треки: показываем задание и
+   названия песен, чтобы шаг можно было выполнить вне приложения и отметить. */
+function renderSongWithoutTracks(song) {
+  var ideas = (song.trackIdeas || []).map(function (t) {
+    return '<li class="plan-wu-row">' + esc(t) + "</li>";
+  }).join("");
+  var lines = (song.lines || []).map(function (t) {
+    return '<li class="plan-wu-row">' + esc(t) + "</li>";
+  }).join("");
+  app.innerHTML =
+    '<div class="top">' + backBtn("back") +
+      '<div><div class="top-title">Упражнение с песней</div>' +
+      '<div class="top-sub">' + esc(LESSON.title) + " · шаг 4 из 4</div></div>" +
+    "</div>" +
+    '<div class="lecture-body">' +
+      (song.task ? '<p class="lecture-para">' + esc(song.task) + "</p>" : "") +
+      (song.hint ? '<div class="note-box">' + esc(song.hint) + "</div>" : "") +
+      (lines ? '<div class="lecture-h2">Строки для разбора</div><ul>' + lines + "</ul>" : "") +
+      (ideas ? '<div class="lecture-h2">На каких песнях разобрать</div><ul>' + ideas + "</ul>" : "") +
+      '<div class="note-box">Аудиофрагменты к этому уроку ещё не записаны — ' +
+      'разбери задание на любой из песен выше, а отметку поставь здесь.</div>' +
+    "</div>" +
+    '<div class="bottom-cta"><button class="cta" data-act="finish-lesson">Отметить шаг выполненным</button></div>';
+  wireActs();
+}
+
 function renderSong() {
   var s = state;
-  var song = LESSON.song;
+  var song = LESSON.song || {};
+
+  // У уроков из планов песня описана задачей и списком-подсказкой (trackIdeas),
+  // готовых треков с mp3 там нет. Без этой ветки song.tracks.forEach падал бы
+  // с TypeError и урок не открывался вообще.
+  if (!song.tracks || !song.tracks.length) {
+    renderSongWithoutTracks(song);
+    return;
+  }
 
   var exampleHtml = renderLineSegments(song.example);
 
@@ -3818,6 +3974,7 @@ fetch("data/lesson-01.json")
   })
   .then(function (data) {
     LESSON = data;
+    LESSON_ONE = data;
     state.quizAnswers = new Array(data.quiz.questions.length).fill(null);
     loadState();
     loadDarkMode();
