@@ -443,6 +443,10 @@ function renderTokenEntry() {
         .then(function (data) {
           if (data && data.ok) {
             state.isAdmin = true;
+            // Токен преподавателя: /api/students в baza-dannih закрыт и без
+            // него отвечает 401 (api/_auth.js). Тот же токен выдаёт пароль
+            // от сайта — обе пары подтверждают, что это Николай.
+            state._siteAuth = data.token || "";
             state._tokenInput = "";
             state._adminKey2 = "";
             state._tokenError = "";
@@ -975,9 +979,18 @@ function loadStudentPublicData() {
 // isAdmin теперь устанавливается при входе через двойной ключ — API-вызов не нужен.
 function loadIsAdmin() {}
 
+/* Заголовок для закрытых ручек baza-dannih. Токен кладётся при входе по
+   двум ключам и в localStorage не попадает (см. whitelist в saveState) —
+   значит после перезапуска Mini App ключи вводятся заново. */
+function bazaAuthHeaders(extra) {
+  var h = extra || {};
+  if (state._siteAuth) h["X-Site-Auth"] = state._siteAuth;
+  return h;
+}
+
 function loadAdminStudentsList() {
   if (state.adminStudentsList) return;
-  fetch(BAZA_API + "/api/students")
+  fetch(BAZA_API + "/api/students", { headers: bazaAuthHeaders() })
     .then(function (r) { return r.json(); })
     .then(function (data) {
       var students = (data && data.students) || [];
@@ -1099,7 +1112,10 @@ function deleteStudentWithConfirm(studentId, name) {
   var step2 = confirm("Последнее предупреждение. Данные ученика «" + name + "» удалятся без возможности отменить.\n\nТочно продолжить?");
   if (!step2) return;
 
-  fetch(BAZA_API + "/api/students?id=" + encodeURIComponent(studentId), { method: "DELETE" })
+  fetch(BAZA_API + "/api/students?id=" + encodeURIComponent(studentId), {
+    method: "DELETE",
+    headers: bazaAuthHeaders()
+  })
     .then(function (r) { return r.json(); })
     .then(function (data) {
       if (data && data.ok) {
