@@ -745,9 +745,8 @@ function roadmapCollapsed() {
 function renderCourses() {
   loadStudentPublicData(); // подтягивает unlockedLessons/progressByLesson для разблокировки
   loadLessonPlans();       // уроки 2+ живут в планах, нужны не только на админ-экранах
-  // Кнопки-фильтры «В работе / Завершено» заменены карточкой дедлайна со
-  // списком дел — дорожная карта ниже теперь всегда показывает все уроки.
-  var filter = null;
+  var stats = lessonStats();
+  var filter = state.coursesFilter; // "inProgress" | "completed" | null — переключатель фильтра дорожной карты
   var favCount = Object.keys(state.favorites || {}).length;
 
   var roadmapInner = roadmapScrollHtml(filter);
@@ -770,7 +769,10 @@ function renderCourses() {
         '<span class="fav-warmups-count">' + favCount + "</span>" +
       "</button>" +
     "</div>" +
-    deadlineCardHtml() +
+    '<div class="filter-row">' +
+      '<button class="filter-btn' + (filter === "inProgress" ? " active-blue" : "") + '" data-act="filter-inprogress">В работе · ' + stats.inProgress + "</button>" +
+      '<button class="filter-btn' + (filter === "completed" ? " active-terra" : "") + '" data-act="filter-completed">✓ Завершено · ' + stats.completed + "</button>" +
+    "</div>" +
     '<div class="roadmap-wrap' + (roadmapCollapsed() ? " collapsed" : "") + '">' +
       '<button class="roadmap-toggle" data-act="toggle-roadmap">' +
         '<span>Дорожная карта урока</span>' +
@@ -780,128 +782,6 @@ function renderCourses() {
     "</div>" +
     lessonsGridHtml();
   wireActs();
-  wireTodoRows();
-  startCoursesCountdown();
-}
-
-/* ---------- карточка «Дедлайн + что сделать» на экране «Уроки» ----------
-   Отсчёт — до ближайшего невыполненного ДЗ (те же данные, что в шторке
-   «Домашнее задание ждёт»). Список дел — ровно шаги из дорожной карты:
-   по каждому открытому, но не завершённому уроку — Лекция / Тест /
-   Распевки / Песня с отметкой, что уже пройдено. */
-
-var _coursesCdTimer = null;
-
-function nearestPendingHw() {
-  var pending = pendingHomework();
-  if (!pending.length) return null;
-  return pending.slice().sort(function (a, b) {
-    return hwDeadlineMs(a.due) - hwDeadlineMs(b.due);
-  })[0];
-}
-
-function lessonTodoSteps(n) {
-  var isOpenLesson = LESSON && n === (LESSON.id || 1);
-  var p = isOpenLesson
-    ? { lecture: state.lectureViewed, quiz: state.quizDone, warmups: state.warmupsDone, song: state.songDone }
-    : (state.progressByLesson && state.progressByLesson[n]) || {};
-  return [
-    { key: "lecture", label: isOpenLesson ? "Лекция «" + esc(LESSON.title) + "»" : "Лекция", done: !!p.lecture },
-    { key: "quiz", label: "Тест по теории", done: !!p.quiz },
-    { key: "warmups", label: "Распевки", done: !!p.warmups },
-    { key: "song", label: "Упражнение с песней", done: !!p.song }
-  ];
-}
-
-function deadlineTodoHtml() {
-  var groups = "";
-  for (var n = 1; n <= TOTAL_LESSONS; n++) {
-    if (!lessonUnlocked(n) || lessonStatus(n) === "completed") continue;
-    var isOpenLesson = LESSON && n === (LESSON.id || 1);
-    var steps = lessonTodoSteps(n);
-    var doneCount = steps.filter(function (st) { return st.done; }).length;
-    var currentIdx = -1;
-    for (var k = 0; k < steps.length; k++) { if (!steps[k].done) { currentIdx = k; break; } }
-    var rows = steps.map(function (st, i) {
-      var cls = st.done ? " done" : (i === currentIdx ? " current" : "");
-      return '<button class="todo-row' + cls + '" data-todo-lesson="' + n + '" data-todo-step="' + st.key + '">' +
-        '<span class="todo-dot' + cls + '">' + (st.done ? SVG.stepCheck : "") + "</span>" +
-        '<span class="todo-label">' + st.label + "</span>" +
-        (i === currentIdx ? '<span class="todo-next">Дальше</span>' : "") +
-      "</button>";
-    }).join("");
-    groups +=
-      '<div class="todo-group">' +
-        '<div class="todo-group-head">' +
-          '<span>Урок ' + n + (isOpenLesson ? " · " + esc(LESSON.title) : "") + "</span>" +
-          '<span class="todo-group-count">' + doneCount + " из 4</span>" +
-        "</div>" +
-        '<div class="todo-bar"><div style="width:' + (doneCount * 25) + '%"></div></div>' +
-        rows +
-      "</div>";
-  }
-  return groups || '<div class="todo-empty">Все открытые уроки пройдены — так держать! 🎉</div>';
-}
-
-function deadlineCardHtml() {
-  var hw = nearestPendingHw();
-  var top;
-  if (hw) {
-    var overdue = hwDeadlineMs(hw.due) - Date.now() < 0;
-    top =
-      '<div class="dl-head">' +
-        '<span class="dl-kicker' + (overdue ? " overdue" : "") + '" data-dl-kicker>' + (overdue ? "Просрочено на" : "До сдачи ДЗ") + "</span>" +
-        '<span class="dl-date">до ' + formatDue(hw.due) + "</span>" +
-      "</div>" +
-      '<div class="dl-title">' + esc(hw.title || "Домашнее задание") + "</div>" +
-      '<div class="dl-countdown" data-dl-cd>' + dlCountdownInner(hwDeadlineMs(hw.due)) + "</div>";
-  } else {
-    top =
-      '<div class="dl-head"><span class="dl-kicker calm">Сроков нет</span></div>' +
-      '<div class="dl-title">Домашних заданий с дедлайном пока нет</div>';
-  }
-  return '<div class="dl-card">' + top +
-    '<div class="dl-sep"></div>' +
-    '<div class="dl-todo-title">Что нужно сделать</div>' +
-    deadlineTodoHtml() +
-  "</div>";
-}
-
-function dlCountdownInner(deadlineMs) {
-  var p = hwCountdownParts(deadlineMs - Date.now());
-  var cls = p.overdue ? " overdue" : (p.d === 0 ? " urgent" : "");
-  var cells = [[p.d, "дн"], [p.h, "ч"], [p.m, "мин"], [p.s, "сек"]];
-  return cells.map(function (c, i) {
-    return (i ? '<span class="dl-colon' + cls + '">:</span>' : "") +
-      '<div class="dl-cell"><div class="dl-num' + cls + '">' + (c[0] < 10 ? "0" : "") + c[0] + "</div>" +
-      '<div class="dl-unit">' + c[1] + "</div></div>";
-  }).join("");
-}
-
-function startCoursesCountdown() {
-  if (_coursesCdTimer) { clearInterval(_coursesCdTimer); _coursesCdTimer = null; }
-  if (!app.querySelector("[data-dl-cd]")) return;
-  _coursesCdTimer = setInterval(function () {
-    var cd = app.querySelector("[data-dl-cd]");
-    if (state.screen !== "courses" || !cd) { clearInterval(_coursesCdTimer); _coursesCdTimer = null; return; }
-    var hw = nearestPendingHw();
-    if (!hw) { render(); return; }
-    var ms = hwDeadlineMs(hw.due);
-    cd.innerHTML = dlCountdownInner(ms);
-    var kicker = app.querySelector("[data-dl-kicker]");
-    if (kicker && ms - Date.now() < 0 && !kicker.classList.contains("overdue")) render();
-  }, 1000);
-}
-
-function wireTodoRows() {
-  Array.prototype.forEach.call(app.querySelectorAll("[data-todo-lesson]"), function (el) {
-    el.addEventListener("click", function () {
-      var n = parseInt(el.getAttribute("data-todo-lesson"), 10);
-      var step = el.getAttribute("data-todo-step");
-      if (LESSON && n === (LESSON.id || 1)) { go(step); return; }
-      openLessonByNumber(n);
-    });
-  });
 }
 
 /* ---------- избранные распевки: тот же плеер урока + снятие звезды с undo (1:1 по макету) ---------- */
@@ -1474,7 +1354,7 @@ function toggleHwDone(idx) {
 // шторку-напоминание. Шторка живёт в <body>, а не в #app, поэтому render()
 // её не трогает — обновляем отдельно.
 function repaintHomework() {
-  if (state.screen === "profile" || state.screen === "courses") render();
+  if (state.screen === "profile") render();
   if (document.getElementById("hw-reminder")) {
     if (!pendingHomework().length) closeHwReminder();
     else paintHwSheet();
