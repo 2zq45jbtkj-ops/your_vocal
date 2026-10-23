@@ -1097,3 +1097,79 @@ html.dark .chip.sel-v, body.dark .chip.sel-v { background: var(--blue); color: v
 .hw-check[disabled] { cursor: default; opacity: .6; }
 .hw-item-done .hw-sheet-item-title,
 .hw-item-done .hw-title { text-decoration: line-through; color: var(--locked); }
+
+/* ---------- «Уроки»: карточка дедлайна + список дел из дорожной карты ----------
+   Встала на место кнопок «В работе / Завершено». */
+.dl-card {
+  margin: 16px 18px 4px; padding: 18px 16px 14px;
+  background: var(--bg); border-radius: 24px; box-shadow: var(--raised-lg);
+}
+.dl-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dl-kicker {
+  font: 700 10.5px 'Inter', sans-serif; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--white-text); background: var(--blue);
+  padding: 4px 10px; border-radius: 10px; box-shadow: var(--raised-sm);
+}
+.dl-kicker.overdue { background: var(--ink-red); }
+.dl-kicker.calm { background: var(--bgmuted); color: var(--gray); box-shadow: var(--inset-sm); }
+.dl-date { font-size: 12px; color: var(--gray); }
+.dl-title {
+  font: 700 15px 'Manrope', sans-serif; color: var(--ink);
+  margin: 10px 2px 14px; line-height: 1.35;
+}
+/* Моноширинные цифры — чтобы блок не прыгал каждую секунду */
+.dl-countdown {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 14px 10px 10px; border-radius: 18px; box-shadow: var(--inset);
+}
+.dl-cell { flex: 1; text-align: center; min-width: 0; }
+.dl-num {
+  font: 800 32px 'Manrope', sans-serif; line-height: 1; color: var(--ink);
+  font-variant-numeric: tabular-nums; letter-spacing: -.01em;
+}
+.dl-num.urgent, .dl-colon.urgent { color: var(--terra); }
+.dl-num.overdue, .dl-colon.overdue { color: var(--ink-red); }
+.dl-colon {
+  font: 700 26px 'Manrope', sans-serif; line-height: 1.1; color: var(--disabled);
+  animation: dlBlink 1s steps(1) infinite;
+}
+@keyframes dlBlink { 50% { opacity: .25; } }
+.dl-unit {
+  font-size: 10px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--gray); margin-top: 6px;
+}
+.dl-sep { height: 1px; background: var(--line); margin: 16px 2px 14px; }
+.dl-todo-title {
+  font: 700 11px 'Inter', sans-serif; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--gray); margin: 0 2px 10px;
+}
+.todo-group + .todo-group { margin-top: 14px; }
+.todo-group-head {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+  font: 700 14px 'Manrope', sans-serif; color: var(--ink); margin: 0 2px 6px;
+}
+.todo-group-count { font-size: 12px; font-weight: 700; color: var(--blue); white-space: nowrap; }
+.todo-bar { height: 4px; background: var(--bgmuted); border-radius: 2px; overflow: hidden; margin: 0 2px 6px; }
+.todo-bar > div { height: 100%; background: var(--terra); border-radius: 2px; transition: width .3s ease; }
+.todo-row {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  padding: 9px 8px; margin: 2px 0; border: none; border-radius: 14px;
+  background: transparent; cursor: pointer; text-align: left;
+  font: 500 13.5px 'Inter', sans-serif; color: var(--ink);
+}
+.todo-row.current { background: var(--bg); box-shadow: var(--raised-sm); }
+.todo-row.done .todo-label { color: var(--locked); text-decoration: line-through; }
+.todo-dot {
+  flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%;
+  background: var(--bg); box-shadow: var(--inset-sm);
+  display: flex; align-items: center; justify-content: center;
+}
+.todo-dot svg { width: 10px; height: 8px; }
+.todo-dot.done { background: var(--terra); box-shadow: none; }
+.todo-dot.current { background: var(--blue); box-shadow: none; }
+.todo-label { flex: 1; min-width: 0; }
+.todo-next {
+  font: 700 11px 'Inter', sans-serif; color: var(--blue); white-space: nowrap;
+}
+.todo-next::after { content: " →"; }
+.todo-empty { font-size: 13px; color: var(--gray); padding: 4px 2px 2px; }
