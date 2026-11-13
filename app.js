@@ -230,6 +230,9 @@ function baseSubmitFields() {
   if (state.adminMode) f.append("adminTest", "1"); // видно в api/submit.js — отмечает тестовое действие Николая
   f.append("chatId", state.chatId || "");
   f.append("lessonTitle", LESSON ? LESSON.title : "");
+  f.append("lessonNo", LESSON && LESSON.id ? String(LESSON.id) : "");
+  // подпись Telegram: бот записи по ней узнаёт ученика и кладёт сдачу в «Ученики» → «ДЗ»
+  f.append("initData", (tg && tg.initData) || "");
   return f;
 }
 

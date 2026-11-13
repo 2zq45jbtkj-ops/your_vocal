@@ -60,6 +60,37 @@ async function rememberStudent(tagKey, chatIdOfStudent, firstName, lastName, tgI
   }));
 }
 
+/* Копия сдачи для «Ученики» → «ДЗ» в боте записи (тот же бот, поэтому file_id из
+   ответа Telegram годится и там). Ученика бот узнаёт по подписи Telegram (initData),
+   новых секретов не нужно. Ошибка здесь не мешает ученику: домашка уже у Николая. */
+var HW_INTAKE_URL = "https://vocal-bot.vercel.app/api/hw_intake";
+
+function fileOf(msg) {
+  if (!msg) return {};
+  if (msg.video) return { fileId: msg.video.file_id, fileType: "video" };
+  if (msg.photo && msg.photo.length) return { fileId: msg.photo[msg.photo.length - 1].file_id, fileType: "photo" };
+  if (msg.document) return { fileId: msg.document.file_id, fileType: "document" };
+  return {};
+}
+
+async function recordForBot(initData, rec) {
+  if (!initData) return;
+  rec.initData = initData;
+  // не больше 5 секунд: ученик не должен ждать бота записи
+  var ctl = new AbortController();
+  var timer = setTimeout(function () { ctl.abort(); }, 5000);
+  try {
+    await fetch(process.env.HW_INTAKE_URL || HW_INTAKE_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(rec),
+      signal: ctl.signal
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function rememberMessage(messageId, tagKey) {
   if (!messageId) return;
   await kvSet("msg:" + messageId, tagKey);
@@ -90,6 +121,15 @@ export default async function handler(req) {
   var studentChatId = (form.get("chatId") || "").toString();
   var lessonTitle = (form.get("lessonTitle") || "").toString();
   var isAdminTest = !!form.get("adminTest");
+  var initData = (form.get("initData") || "").toString();
+  var lessonNo = (form.get("lessonNo") || "").toString();
+  var save = function (kind2, title, body, msg) {
+    var f = fileOf(msg);
+    return recordForBot(initData, {
+      kind: kind2, title: title, body: body || "", lessonNo: lessonNo, topic: lessonTitle,
+      fileId: f.fileId || "", fileType: f.fileType || ""
+    }).catch(function () {});
+  };
   var who = (lastName + " " + firstName).trim() || "Без имени";
   var tagKey = studentHashtag(lastName, firstName);
   var head = (isAdminTest ? "🛠 ТЕСТ АДМИНА (не настоящий ученик)\n" : "") +
@@ -108,6 +148,7 @@ export default async function handler(req) {
       var r = await tgSendMessage(token, chatId, msg);
       if (!r.ok) return json({ ok: false, error: r.description || "Telegram отклонил сообщение" }, 502);
       if (r.result) await rememberMessage(r.result.message_id, tagKey).catch(function () {});
+      await save("test", "Тест: " + score + " из " + total, details ? "Ошибки:\n" + details : "");
       return json({ ok: true });
     }
 
@@ -121,6 +162,8 @@ export default async function handler(req) {
       var r3 = await tgSendMessage(token, chatId, fbMsg);
       if (!r3.ok) return json({ ok: false, error: r3.description || "Telegram отклонил сообщение" }, 502);
       if (r3.result) await rememberMessage(r3.result.message_id, tagKey).catch(function () {});
+      await save("review", "Обратная связь по уроку",
+        "Настроение: " + (moodEmoji[moodVal] || "") + " " + moodLabel + (fbText ? "\n\n" + fbText : ""));
       return json({ ok: true });
     }
 
@@ -129,6 +172,7 @@ export default async function handler(req) {
       var r2 = await tgSendMessage(token, chatId, "🎼 Разметка дыхания (песни)\n" + head + "\n\n" + text);
       if (!r2.ok) return json({ ok: false, error: r2.description || "Telegram отклонил сообщение" }, 502);
       if (r2.result) await rememberMessage(r2.result.message_id, tagKey).catch(function () {});
+      await save("markup", "Разметка дыхания в песне", text);
       return json({ ok: true });
     }
 
@@ -165,9 +209,11 @@ export default async function handler(req) {
         return json({ ok: false, error: result2.description || result.description || "Telegram отклонил файл" }, 502);
       }
       if (result2.result) await rememberMessage(result2.result.message_id, tagKey).catch(function () {});
+      await save(isSong ? "markup" : "video", isSong ? "Разметка песни, фото" : "Распевки, видео", "", result2.result);
       return json({ ok: true });
     }
     if (result.result) await rememberMessage(result.result.message_id, tagKey).catch(function () {});
+    await save(isSong ? "markup" : "video", isSong ? "Разметка песни, фото" : "Распевки, видео", "", result.result);
     return json({ ok: true });
   } catch (e) {
     return json({ ok: false, error: String(e && e.message ? e.message : e) }, 500);
