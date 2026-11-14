@@ -73,9 +73,12 @@ function fileOf(msg) {
   return {};
 }
 
-async function recordForBot(initData, rec) {
-  if (!initData) return;
-  rec.initData = initData;
+async function recordForBot(initData, accessToken, rec) {
+  // в Telegram ученика узнают по подписи; вне Telegram (значок «ДЗ» на экране
+  // телефона) — по его коду доступа
+  if (!initData && !accessToken) return;
+  if (initData) rec.initData = initData;
+  else rec.accessToken = accessToken;
   // не больше 5 секунд: ученик не должен ждать бота записи
   var ctl = new AbortController();
   var timer = setTimeout(function () { ctl.abort(); }, 5000);
@@ -122,10 +125,12 @@ export default async function handler(req) {
   var lessonTitle = (form.get("lessonTitle") || "").toString();
   var isAdminTest = !!form.get("adminTest");
   var initData = (form.get("initData") || "").toString();
+  var accessToken = (form.get("accessToken") || "").toString().trim().toLowerCase();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(accessToken)) accessToken = "";
   var lessonNo = (form.get("lessonNo") || "").toString();
   var save = function (kind2, title, body, msg) {
     var f = fileOf(msg);
-    return recordForBot(initData, {
+    return recordForBot(initData, accessToken, {
       kind: kind2, title: title, body: body || "", lessonNo: lessonNo, topic: lessonTitle,
       fileId: f.fileId || "", fileType: f.fileType || ""
     }).catch(function () {});

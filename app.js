@@ -10,6 +10,29 @@ if (location.search.indexOf("reset=1") !== -1) {
 }
 
 var tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
+// Открыто не из Telegram (Safari/Chrome или значок «ДЗ» на экране телефона):
+// скрипт Telegram на странице есть, но initData пустая — работаем как обычный
+// сайт, без кнопок Telegram. Назад — своими кнопками на экранах и жестом/кнопкой
+// «Назад» телефона (см. history ниже).
+if (tg && !tg.initData) tg = null;
+var BROWSER_MODE = !tg;
+if (BROWSER_MODE) document.documentElement.classList.add("browser-mode");
+
+// Личная ссылка из бота: ?k=<код доступа ученика>. Тот же код, что ученик
+// вводит вручную на экране входа, — новых секретов нет. Ссылка остаётся в
+// адресе, чтобы «На экран Домой» сохранил её в значке (у значка на iPhone своё
+// хранилище, отдельное от Safari).
+var LINK_TOKEN = (function () {
+  var m = /[?&]k=([0-9a-fA-F-]{36})(?:&|$)/.exec(location.search);
+  return m ? m[1].toLowerCase() : null;
+})();
+if (LINK_TOKEN) {
+  try {
+    var _saved = JSON.parse(localStorage.getItem("vocal-app") || "null");
+    // на этом устройстве раньше был другой ученик — его прогресс не смешиваем
+    if (_saved && _saved.accessToken && _saved.accessToken !== LINK_TOKEN) localStorage.removeItem("vocal-app");
+  } catch (e) {}
+}
 var app = document.getElementById("app");
 
 var BAZA_API = "https://baza-dannih.vercel.app";
@@ -233,6 +256,8 @@ function baseSubmitFields() {
   f.append("lessonNo", LESSON && LESSON.id ? String(LESSON.id) : "");
   // подпись Telegram: бот записи по ней узнаёт ученика и кладёт сдачу в «Ученики» → «ДЗ»
   f.append("initData", (tg && tg.initData) || "");
+  // вне Telegram подписи нет — бот записи узнаёт ученика по коду доступа
+  if (!state.adminMode) f.append("accessToken", state.accessToken || "");
   return f;
 }
 
@@ -338,7 +363,27 @@ function backBtn(handlerName) {
 
 function go(screen) {
   state.screen = screen;
+  if (BROWSER_MODE) pushBackEntry();
   render();
+}
+
+/* Вне Telegram нет его кнопки «Назад»: системная «Назад» на Android и жест на
+   iPhone листают историю страницы. Держим одну запись истории «над» приложением:
+   нажали «Назад» — откатываемся на экран выше (как Telegram BackButton) и снова
+   ставим запись. На главных экранах запись не ставим, там «Назад» закрывает. */
+function pushBackEntry() {
+  var t = state.screen === "quiz" || backTarget();
+  if (t && !(history.state && history.state.dzBack)) {
+    try { history.pushState({ dzBack: 1 }, "", location.href); } catch (e) {}
+  }
+}
+if (BROWSER_MODE) {
+  window.addEventListener("popstate", function () {
+    if (state.screen === "quiz" || backTarget()) {
+      handleBack();
+      pushBackEntry();
+    }
+  });
 }
 
 function backTarget() {
@@ -926,6 +971,12 @@ function loadStudentPublicData() {
     .then(function (data) {
       if (data && data.student) {
         state.studentPublicData = data;
+        // вход по личной ссылке: имя берём отсюда (обычно его ставит экран входа)
+        if (!state.adminMode && !state.firstName && data.student.name) {
+          state.firstName = data.student.name.split(" ")[0] || data.student.name;
+          state.lastName = data.student.name.split(" ").slice(1).join(" ") || "";
+          saveState();
+        }
         // Прогресс по шагам урока и персональная разблокировка («Доп. открытые
         // уроки») раньше приходили отдельным запросом в Notion — теперь это
         // часть той же выдачи по токену, одним запросом вместо двух.
@@ -951,6 +1002,11 @@ function loadStudentPublicData() {
           alert("Токен ученика «" + state.adminStudentName + "» больше недействителен — похоже, его перегенерировали на сайте.");
           exitAdminMode();
           return;
+        }
+        if (LINK_TOKEN && state.accessToken === LINK_TOKEN) {
+          state._tokenError = "Эта ссылка больше не работает. Попроси у Николая новую или введи код доступа.";
+          LINK_TOKEN = null;
+          try { history.replaceState(history.state, "", location.pathname); } catch (e) {}
         }
         state.accessToken = null;
         saveState();
@@ -4394,6 +4450,14 @@ fetch("data/lesson-01.json")
     LESSON_ONE = data;
     state.quizAnswers = new Array(data.quiz.questions.length).fill(null);
     loadState();
+    if (LINK_TOKEN && !state.isAdmin) {
+      if (state.accessToken !== LINK_TOKEN) {
+        state.accessToken = LINK_TOKEN;
+        state.firstName = ""; state.lastName = "";
+      }
+      if (state.screen === "token-entry" || state.screen === "tg") state.screen = "courses";
+      saveState();
+    }
     loadDarkMode();
     // Данные из baza-dannih не кэшируются между сессиями — загружаем заново
     state.studentPublicData = null;

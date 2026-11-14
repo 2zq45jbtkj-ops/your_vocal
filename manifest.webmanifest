@@ -1,7 +1,10 @@
 {
+  "id": "/",
   "name": "Домашка по вокалу",
   "short_name": "ДЗ",
   "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
   "background_color": "#F2ECE7",
   "theme_color": "#F2ECE7",
   "icons": [

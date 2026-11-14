@@ -1097,3 +1097,10 @@ html.dark .chip.sel-v, body.dark .chip.sel-v { background: var(--blue); color: v
 .hw-check[disabled] { cursor: default; opacity: .6; }
 .hw-item-done .hw-sheet-item-title,
 .hw-item-done .hw-title { text-decoration: line-through; color: var(--locked); }
+
+/* Вне Telegram (Safari/Chrome, значок «ДЗ» на экране телефона): отступы от
+   выреза и полоски «Домой» берём у телефона, а не у Telegram. */
+html.browser-mode {
+  --tg-safe-area-inset-top: env(safe-area-inset-top, 0px);
+  --tg-safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+}
