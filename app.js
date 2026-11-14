@@ -355,7 +355,11 @@ var SVG = {
   }
 };
 
+/* Своя стрелка «назад» нужна только вне Telegram (Safari/Chrome, значок «ДЗ»
+   на экране телефона). В Telegram на этих экранах уже есть его системная
+   кнопка «Назад» (tg.BackButton в render()) — вторая стрелка не нужна. */
 function backBtn(handlerName) {
+  if (!BROWSER_MODE) return "";
   return '<button class="back-btn" data-act="' + handlerName + '">' + SVG.back + "</button>";
 }
 
@@ -1703,7 +1707,7 @@ function renderProfile() {
     if (state.isAdmin) {
       // Своя карточка грузится асинхронно — показываем заглушку и не зовём
       // openOwnCabinet повторно, иначе render() зациклится сам на себе.
-      app.innerHTML = '<div style="padding:58px 20px;"><div class="courses-empty">Открываю твой кабинет…</div></div>';
+      app.innerHTML = '<div style="padding:var(--screen-top) 20px;"><div class="courses-empty">Открываю твой кабинет…</div></div>';
       if (!state._openingOwnCabinet) { state._openingOwnCabinet = true; openOwnCabinet(); }
       wireActs();
       return;
@@ -1766,7 +1770,7 @@ function renderProfile() {
   }
 
   app.innerHTML =
-    '<div style="padding:58px 20px 130px;">' +
+    '<div style="padding:var(--screen-top) 20px 130px;">' +
       '<div class="profile-head">' +
         '<div class="profile-avatar">' + esc(initials || "?") + "</div>" +
         '<div>' +
@@ -1966,7 +1970,7 @@ function renderQuestions() {
       "</div>";
   }
 
-  app.innerHTML = '<div style="padding:58px 22px 130px;">' + html + "</div>";
+  app.innerHTML = '<div style="padding:var(--screen-top) 22px 130px;">' + html + "</div>";
 
   Array.prototype.forEach.call(app.querySelectorAll("[data-cal-date]"), function (el) {
     el.addEventListener("click", function () {
@@ -2079,7 +2083,7 @@ function renderMore() {
   }).join("");
 
   app.innerHTML =
-    '<div style="padding:58px 20px 130px;">' +
+    '<div style="padding:var(--screen-top) 20px 130px;">' +
       '<div class="courses-title" style="margin-bottom:18px;">Ещё</div>' +
       itemsHtml +
     "</div>";
@@ -3882,7 +3886,7 @@ function renderFeedback() {
   MOODS.forEach(function (m) { if (m.v === s.feedbackMood) label = m.label; });
 
   app.innerHTML =
-    '<div class="auth-screen" style="padding-top:58px;padding-bottom:130px;">' +
+    '<div class="auth-screen" style="padding-top:var(--screen-top);padding-bottom:130px;">' +
       '<div class="auth-title">Как прошёл урок?</div>' +
       '<div class="auth-sub">Домашнее задание выполнено. Оцени, как всё прошло — это поможет сделать курс лучше.</div>' +
       '<div class="mood-row">' + moodsHtml + "</div>" +

@@ -130,7 +130,11 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 .auth-screen .back-btn { margin-bottom: 24px; }
 
 /* ---------- список уроков ---------- */
-.courses-head { padding: 58px 20px 4px; }
+/* Верхний зазор главных экранов (Уроки, Кабинет, Ещё и т.п.). Место под часы
+   и кнопки Telegram уже резервирует #app — здесь только небольшой отступ,
+   чтобы заголовок стоял сразу под строкой «Закрыть». Было 58px. */
+:root { --screen-top: 12px; }
+.courses-head { padding: var(--screen-top) 20px 4px; }
 .courses-title { font-size: 27px; font-weight: 800; color: var(--ink); }
 .courses-sub { font-size: 13px; color: var(--gray); margin-top: 2px; }
 .reset-link {
@@ -433,7 +437,7 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 /* результат теста */
 .result-screen {
   min-height: 100vh; display: flex; flex-direction: column;
-  padding: 58px 24px 130px; align-items: center; text-align: center;
+  padding: var(--screen-top) 24px 130px; align-items: center; text-align: center;
 }
 .result-badge {
   width: 68px; height: 68px; border-radius: 50%; background: var(--bg);
