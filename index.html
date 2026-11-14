@@ -13,7 +13,19 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
-  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="manifest" id="app-manifest" href="/manifest.webmanifest">
+  <meta name="apple-mobile-web-app-title" content="ДЗ">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <script>
+    /* Личная ссылка ?k=… — значок «ДЗ» на экране телефона открывает её же,
+       чтобы приложение сразу знало, чьё это ДЗ. */
+    (function () {
+      var m = /[?&]k=([0-9a-fA-F-]{36})(?:&|$)/.exec(location.search);
+      if (m) document.getElementById("app-manifest").href = "/api/manifest?k=" + m[1].toLowerCase();
+    })();
+  </script>
 </head>
 <body>
   <div id="app" aria-live="polite"></div>
