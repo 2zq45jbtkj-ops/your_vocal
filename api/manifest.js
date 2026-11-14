@@ -12,7 +12,7 @@ export default function handler(req) {
   var body = {
     id: start,
     name: "Домашка по вокалу",
-    short_name: "ДЗ",
+    short_name: "СЕПТ · ДЗ",
     start_url: start,
     scope: "/",
     display: "standalone",
