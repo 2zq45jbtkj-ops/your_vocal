@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#F2ECE7">
+  <title>Домашка по вокалу</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
+  <link rel="manifest" id="app-manifest" href="/manifest.webmanifest">
+  <meta name="apple-mobile-web-app-title" content="СЕПТ · ДЗ">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <script>
+    /* Личная ссылка ?k=… — значок «ДЗ» на экране телефона открывает её же,
+       чтобы приложение сразу знало, чьё это ДЗ. */
+    (function () {
+      var m = /[?&]k=([0-9a-fA-F-]{36})(?:&|$)/.exec(location.search);
+      if (m) document.getElementById("app-manifest").href = "/api/manifest?k=" + m[1].toLowerCase();
+    })();
+  </script>
+</head>
+<body>
+  <div id="app" aria-live="polite"></div>
+  <!-- Тексты оферты / политики / «О преподавателе» — только данные, без логики.
+       Обязательно до app.js: renderDoc() читает LEGAL_DOCS при первом рендере. -->
+  <script>
+    /* ТОЛЬКО ДЛЯ ТЕСТОВОЙ КОПИИ: демо-ученик, чтобы показать экран «Написать в поддержку». В main не попадает. */
+    try { localStorage.setItem("vocal-app", JSON.stringify({ tgId: "@demo", firstName: "Демо", lastName: "Ученик", screen: "more" })); } catch (e) {}
+  </script>
+  <script src="legal.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
