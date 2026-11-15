@@ -16,7 +16,9 @@
    Если бот записи не ответил, карточку присылаем отсюда сами (без «Ответить»):
    обращение не должно потеряться. */
 
-import { get, del } from "@vercel/blob";
+import { get, del, put } from "@vercel/blob";
+import crypto from "node:crypto";
+import { keyOk, MEDIA_RE } from "./_media.mjs";
 import {
   identityOf, callBot, adminChat, botToken, json, tgJson, tgForm, fileLink, humanSize,
   TG_PHOTO_MAX, TG_FILE_MAX, TG_BATCH_MAX, KEEP_DAYS
@@ -56,6 +58,7 @@ async function start(body, who) {
   } catch (e) {
     console.log("support: bot start failed", String(e && e.message ? e.message : e));
   }
+  if (who.selftest) return json({ ok: false, error: "Бот записи не принял карточку" }, 502);
 
   // запасной путь: бот записи недоступен — карточку шлём сами, чтобы обращение дошло
   var admin = adminChat();
@@ -207,6 +210,7 @@ async function send(body, who, origin) {
   } catch (e) {
     console.log("support: bot send failed", String(e && e.message ? e.message : e));
   }
+  if (who.selftest) return json({ ok: false, error: "Бот записи не принял вложения" }, 502);
 
   // запасной путь: бот записи недоступен — шлём сами
   var caption = "📎 " + (name ? name + ": в" : "В") + "ложения к обращению в поддержку";
@@ -280,8 +284,79 @@ async function send(body, who, origin) {
   return json({ ok: true, sent: messageIds.length, linked: linked });
 }
 
+/* ---------- самопроверка всего пути без ученика ----------
+   GET /api/support?k=<ключ /upload>&photo=media/…&video=media/…&w=&h=&d=&big=<МБ>
+   Копирует тестовые фото и видео из /upload в хранилище поддержки (как их грузит
+   приложение), добавляет файл больше 50 МБ и проходит те же шаги start → send, что
+   и обращение ученика. Николаю приходит одно тестовое обращение с пометкой
+   «автоматическая проверка». */
+
+async function copyIn(src, name) {
+  if (!MEDIA_RE.test(src)) throw new Error("bad source " + src);
+  var g = await get(src, { access: "private" });
+  if (!g || g.statusCode !== 200) throw new Error("no source " + src);
+  var buf = Buffer.from(await new Response(g.stream).arrayBuffer());
+  var b = await put("support/" + name, buf, { access: "private", addRandomSuffix: true, contentType: g.blob.contentType });
+  return { pathname: b.pathname, size: buf.length };
+}
+
+async function selfTest(u, k) {
+  var items = [];
+  var photos = 0, videos = 0;
+  var ph = u.searchParams.get("photo"), vd = u.searchParams.get("video");
+  if (ph) {
+    var a = await copyIn(ph, "selftest-photo.jpg");
+    items.push({ pathname: a.pathname, size: a.size, kind: "photo", name: "selftest-photo.jpg" });
+    photos++;
+  }
+  if (vd) {
+    var v = await copyIn(vd, "selftest-video.mp4");
+    items.push({
+      pathname: v.pathname, size: v.size, kind: "video", name: "selftest-video.mp4",
+      width: Number(u.searchParams.get("w")) || undefined, height: Number(u.searchParams.get("h")) || undefined,
+      duration: Number(u.searchParams.get("d")) || undefined
+    });
+    videos++;
+  }
+  var bigLink = "";
+  var bigMB = Math.min(200, Math.max(0, parseInt(u.searchParams.get("big") || "0", 10) || 0));
+  if (bigMB) {
+    var big = crypto.randomBytes(bigMB * 1024 * 1024);
+    var bb = await put("support/selftest-big.mp4", big, { access: "private", addRandomSuffix: true, contentType: "video/mp4", multipart: true });
+    items.push({ pathname: bb.pathname, size: big.length, kind: "video", name: "selftest-big.mp4" });
+    bigLink = fileLink(u.origin, bb.pathname);
+    videos++;
+  }
+  var who = { initData: "", accessToken: "", user: null, selftest: k };
+  var s1 = await (await start({
+    text: "Тестовое обращение: проверяю, что текст, фото, видео и большой файл доходят до тебя.",
+    counts: { photo: photos, video: videos }
+  }, who)).json();
+  if (!s1.ok || !items.length) return json({ start: s1, items: items.map(function (i) { return i.pathname; }) }, s1.ok ? 200 : 502);
+  var s2 = await (await send({ headerId: s1.headerId, name: s1.name, items: items }, who, u.origin)).json();
+  return json({ start: s1, send: s2, items: items.map(function (i) { return i.pathname + " " + i.size; }), bigLink: bigLink });
+}
+
 /* Проверка настройки (только да/нет, без значений). */
-export async function GET() {
+export async function GET(request) {
+  var tu = new URL(request.url);
+  var tk = tu.searchParams.get("k");
+  if (tk) {
+    if (!keyOk(tk)) return json({ error: "Нет доступа" }, 403);
+    var drop = tu.searchParams.get("drop");
+    if (drop) {
+      // убрать файл, оставшийся после самопроверки
+      if (!/^support\/selftest-[\w.\-]+$/.test(drop)) return json({ error: "Неверное имя файла" }, 400);
+      await del(drop);
+      return json({ ok: true, deleted: drop });
+    }
+    try {
+      return await selfTest(tu, tk);
+    } catch (e) {
+      console.log("support: selftest failed", String(e && e.message ? e.message : e));
+      return json({ ok: false, error: String(e && e.message ? e.message : e) }, 500);
+    }
+  }
   var raw = String(process.env.TELEGRAM_BOT_TOKEN || "");
   var botCheck = 0;
   try {

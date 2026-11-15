@@ -9,6 +9,7 @@
    не нужно, а чужой не сможет ни подделать обращение, ни перебрать коды. */
 
 import crypto from "node:crypto";
+import { keyOk } from "./_media.mjs";
 
 export var SUPPORT_INTAKE_URL = process.env.SUPPORT_INTAKE_URL || "https://vocal-bot.vercel.app/api/support_intake";
 export var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -74,6 +75,10 @@ export function checkInitData(initData) {
 /* Кто пишет — то, что пришло от приложения. Возвращает null, если ни подписи
    Telegram, ни кода доступа нет. */
 export function identityOf(body) {
+  // самопроверка поддержки (GET /api/support?k=…): ключ — личный ключ Николая от /upload
+  if (body.selftest && keyOk(String(body.selftest))) {
+    return { initData: "", user: null, accessToken: "", selftest: String(body.selftest) };
+  }
   var initData = String(body.initData || "");
   var user = initData ? checkInitData(initData) : null;
   var token = String(body.accessToken || "").trim().toLowerCase();
@@ -91,7 +96,7 @@ export async function callBot(action, identity, extra, timeoutMs) {
     ts: Math.floor(Date.now() / 1000),
     initData: identity.initData || "",
     accessToken: identity.accessToken || ""
-  }, extra || {});
+  }, identity.selftest ? { selftest: identity.selftest } : {}, extra || {});
   var raw = JSON.stringify(payload);
   var ctl = new AbortController();
   var timer = setTimeout(function () { ctl.abort(); }, timeoutMs || 8000);
