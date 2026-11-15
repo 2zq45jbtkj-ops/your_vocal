@@ -1,7 +1,8 @@
 /* Файлы, загруженные через /upload (только с ключом k):
    GET /api/media?k=…                  список [{pathname, name, size, uploadedAt, url}]
    GET /api/media?k=…&get=media/…      скачать (переадресация на временный адрес, 1 час)
-   GET /api/media?k=…&get=…&b64=1      маленький файл (до 3 МБ) в base64 JSON — для проверки
+   GET /api/media?k=…&get=…&b64=1[&offset=N&length=M]  кусок файла (до 3 МБ) в base64 JSON:
+                                       {size, sha256 всего файла, offset, length, eof, base64}
    GET /api/media?k=…&delete=media/…   удалить */
 
 import { list, get, del, issueSignedToken, presignUrl } from "@vercel/blob";
@@ -30,14 +31,31 @@ export async function GET(request) {
   if (p) {
     if (!MEDIA_RE.test(p)) return json({ error: "Неверное имя файла" }, 400);
     if (u.searchParams.get("b64")) {
+      var MAXC = 3 * 1024 * 1024;
+      var off = Math.max(0, parseInt(u.searchParams.get("offset") || "0", 10) || 0);
+      var len = parseInt(u.searchParams.get("length") || String(MAXC), 10) || MAXC;
+      len = Math.min(Math.max(1, len), MAXC);
       var f = await get(p, { access: "private" }).catch(function () { return null; });
       if (!f || f.statusCode !== 200) return json({ error: "Файла нет" }, 404);
-      var buf = Buffer.from(await new Response(f.stream).arrayBuffer());
-      if (buf.length > 3 * 1024 * 1024) return json({ error: "Больше 3 МБ: скачай без b64" }, 413);
+      // Читаем поток целиком: считаем sha256 всего файла и берём только нужный кусок
+      var h = (await import("node:crypto")).createHash("sha256");
+      var parts = [];
+      var pos = 0;
+      var reader = f.stream.getReader();
+      for (;;) {
+        var step = await reader.read();
+        if (step.done) break;
+        var c = Buffer.from(step.value);
+        h.update(c);
+        var a = Math.max(off, pos), b = Math.min(off + len, pos + c.length);
+        if (b > a) parts.push(c.subarray(a - pos, b - pos));
+        pos += c.length;
+      }
+      var chunk = Buffer.concat(parts);
       return json({
-        pathname: p, size: buf.length,
-        sha256: (await import("node:crypto")).createHash("sha256").update(buf).digest("hex"),
-        base64: buf.toString("base64")
+        pathname: p, size: pos, sha256: h.digest("hex"),
+        offset: off, length: chunk.length, eof: off + chunk.length >= pos,
+        base64: chunk.toString("base64")
       });
     }
     try {
