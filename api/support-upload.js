@@ -52,3 +52,8 @@ export async function POST(request) {
     return json({ error: String(e && e.message ? e.message : e) }, 400);
   }
 }
+
+/* Проверка настройки: есть ли ключ хранилища (только да/нет, без значения). */
+export async function GET() {
+  return json({ ready: Boolean(process.env.BLOB_READ_WRITE_TOKEN), store: Boolean(process.env.BLOB_STORE_ID) });
+}

@@ -1121,3 +1121,4 @@ html.browser-mode {
 .support-sent-check svg { width: 26px; height: 22px; }
 .support-sent { text-align: center; }
 .support-more-btn { margin-top: 12px; background: var(--bg); color: var(--ink); }
+.support-textarea:focus { outline: none; box-shadow: var(--inset), 0 0 0 2px var(--soft-blue); }

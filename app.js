@@ -2282,7 +2282,7 @@ function renderSupport() {
       "</div>" +
     "</div>" +
     '<div class="support-body">' +
-      '<div class="instruction-note">Опиши, что случилось или о чём хочешь спросить. Можно приложить сколько угодно фото и видео — например, снимок экрана или запись упражнения.</div>' +
+      '<div class="instruction-note">Опиши, что случилось или о чём хочешь спросить. Можно приложить сколько угодно фото и видео: например, снимок экрана или запись упражнения.</div>' +
       '<label class="field-label" for="support-text">СООБЩЕНИЕ</label>' +
       '<textarea id="support-text" class="feedback-textarea support-textarea" maxlength="' + SUPPORT_MAX_TEXT + '" placeholder="Например: не открывается видео в третьем уроке"' + (busy ? " disabled" : "") + ">" + esc(u.text) + "</textarea>" +
       '<div class="support-files">' + listHtml + "</div>" +
