@@ -2271,7 +2271,7 @@ function renderSupport() {
       '<div class="lesson-progress-bar support-progress"><div id="support-progress-fill" style="width:' + supportProgressPct() + '%;"></div></div>';
   }
   var errorHtml = u.status === "error"
-    ? '<div class="support-error">' + esc(u.error || "Не получилось отправить.") + " Проверь интернет и нажми «Отправить ещё раз» — уже загруженное заново грузить не придётся.</div>"
+    ? '<div class="support-error">' + esc(u.error || "Не получилось отправить. Проверь интернет и нажми «Отправить ещё раз»: уже загруженное заново грузить не придётся.") + "</div>"
     : "";
 
   app.innerHTML =
@@ -2419,6 +2419,14 @@ function supportBatches(items) {
 
 function sendSupport() {
   var u = supportUI;
+  var who = supportIdentity();
+  if (!who.initData && !who.accessToken) {
+    // вне Telegram и без кода доступа бот не узнает, кто пишет, и не сможет ответить
+    u.status = "error";
+    u.error = "Не получилось понять, кто пишет. Открой приложение из Telegram или по своей личной ссылке и попробуй ещё раз.";
+    render();
+    return;
+  }
   u.status = "sending";
   u.error = "";
   u.stage = "upload";
@@ -2502,7 +2510,7 @@ function sendSupport() {
     .catch(function (e) {
       u.files.forEach(function (f) { if (f.status === "uploading") f.status = "idle"; });
       u.status = "error";
-      u.error = e && e.message && /[а-яё]/i.test(e.message) ? e.message : "Не получилось отправить.";
+      u.error = e && e.message && /[а-яё]/i.test(e.message) ? e.message.replace(/[.!\s]*$/, ".") + " Нажми «Отправить ещё раз»." : "";
       if (state.screen === "support") render();
     });
 }
