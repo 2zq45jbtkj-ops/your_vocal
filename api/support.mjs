@@ -73,7 +73,7 @@ async function start(body, who) {
     "🆘 <b>Поддержка: обращение из приложения</b>\nОт: " + esc(name) + idLine +
     (text ? "\n\n" + esc(text) : "") +
     (att ? "\n\n📎 Вложения ниже: " + att : "") +
-    "\n\n<i>Бот записи сейчас не ответил, поэтому кнопкой «Ответить» тут ответить не получится — напиши ученику сам.</i>";
+    "\n\n<i>Бот записи сейчас не ответил, поэтому кнопкой «Ответить» тут ответить не получится: напиши ученику сам.</i>";
   var sent = await tgJson("sendMessage", { chat_id: admin, text: msg, parse_mode: "HTML" });
   if (!sent.ok) return json({ ok: false, error: "Telegram не принял сообщение" }, 502);
   return json({ ok: true, headerId: sent.result.message_id, name: name.split(" (")[0] });
@@ -252,8 +252,14 @@ async function send(body, who, origin) {
   return json({ ok: true, sent: messageIds.length, linked: linked });
 }
 
+/* Проверка настройки (только да/нет, без значений). */
+export async function GET() {
+  return json({ token: Boolean(process.env.TELEGRAM_BOT_TOKEN), admin: Boolean(process.env.ADMIN_CHAT_ID) });
+}
+
 export async function POST(request) {
-  if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.ADMIN_CHAT_ID) {
+  if (!process.env.TELEGRAM_BOT_TOKEN) {
+    console.log("support: no bot token");
     return json({ ok: false, error: "Бот не настроен" }, 500);
   }
   var body;
@@ -263,6 +269,7 @@ export async function POST(request) {
     return json({ ok: false, error: "Некорректный запрос" }, 400);
   }
   var who = identityOf(body || {});
+  console.log("support:", body && body.action, who ? (who.user ? "telegram" : "code") : "unknown");
   if (!who) return json({ ok: false, error: "Не получилось узнать, кто ты. Открой приложение заново" }, 403);
   try {
     if (body.action === "start") return await start(body, who);

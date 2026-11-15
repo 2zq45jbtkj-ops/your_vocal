@@ -38,7 +38,9 @@ export async function POST(request) {
       request: request,
       onBeforeGenerateToken: async function (pathname, clientPayload) {
         if (!/^support\/[\w.\-]+$/.test(pathname)) throw new Error("Неверное имя файла");
-        if (!(await allowed(clientPayload))) throw new Error("Нет доступа");
+        var ok = await allowed(clientPayload);
+        console.log("support-upload:", pathname, ok ? "allowed" : "denied");
+        if (!ok) throw new Error("Нет доступа");
         return {
           allowedContentTypes: ["image/*", "video/*"],
           maximumSizeInBytes: 4 * 1024 * 1024 * 1024,
@@ -49,6 +51,7 @@ export async function POST(request) {
     });
     return json(result);
   } catch (e) {
+    console.log("support-upload: failed", String(e && e.message ? e.message : e));
     return json({ error: String(e && e.message ? e.message : e) }, 400);
   }
 }
