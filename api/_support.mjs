@@ -31,8 +31,10 @@ export function adminChat() {
   return String(process.env.ADMIN_CHAT_ID || "").trim();
 }
 
+// общий секрет обоих проектов (SUPPORT_SECRET); без него — по токену бота
 function supportKey() {
-  return crypto.createHash("sha256").update("vocal-support:" + botToken()).digest();
+  var secret = String(process.env.SUPPORT_SECRET || "").trim() || botToken();
+  return crypto.createHash("sha256").update("vocal-support:" + secret).digest();
 }
 
 export function sign(text) {

@@ -181,6 +181,34 @@ async function send(body, who, origin) {
   }).filter(function (it) { return PATH_RE.test(it.pathname); });
   if (!items.length) return json({ ok: false, error: "Нет файлов" }, 400);
 
+  // вложения шлёт сам бот записи: тот же бот и тот же чат, что и карточка, поэтому
+  // «Ответить» на любом вложении дойдёт ученику. Файлы он берёт по подписанным ссылкам.
+  try {
+    var viaBot = await callBot("send", who, {
+      headerId: headerId,
+      name: name,
+      items: items.map(function (it) {
+        return {
+          url: fileLink(origin, it.pathname), kind: it.kind, size: it.size, name: it.name,
+          width: it.width, height: it.height, duration: it.duration
+        };
+      })
+    }, 58000);
+    if (viaBot.status === 200 && viaBot.data && viaBot.data.ok) {
+      var gone = (viaBot.data.delivered || []).map(function (i) { return items[i] && items[i].pathname; }).filter(Boolean);
+      if (gone.length) {
+        try { await del(gone); } catch (e) { console.log("support: delete failed", String(e)); }
+      }
+      console.log("support: sent by bot", (viaBot.data.messageIds || []).length);
+      return json({ ok: true, sent: (viaBot.data.messageIds || []).length, linked: viaBot.data.linked || 0 });
+    }
+    console.log("support: bot send status", viaBot.status, viaBot.data && viaBot.data.error);
+    if (viaBot.status === 200) return json({ ok: false, error: "Telegram не принял файл" }, 502);
+  } catch (e) {
+    console.log("support: bot send failed", String(e && e.message ? e.message : e));
+  }
+
+  // запасной путь: бот записи недоступен — шлём сами
   var caption = "📎 " + (name ? name + ": в" : "В") + "ложения к обращению в поддержку";
   var messageIds = [];
   var delivered = [];   // уже в Telegram — стереть из хранилища
@@ -263,7 +291,10 @@ export async function GET() {
   } catch (e) {
     botCheck = -1;
   }
-  return json({ token: Boolean(botToken()), tokenClean: raw === raw.trim(), admin: Boolean(adminChat()), botCheck: botCheck });
+  return json({
+    token: Boolean(botToken()), tokenClean: raw === raw.trim(), admin: Boolean(adminChat()),
+    secret: Boolean(String(process.env.SUPPORT_SECRET || "").trim()), botCheck: botCheck
+  });
 }
 
 export async function POST(request) {
