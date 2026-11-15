@@ -14,11 +14,13 @@ async function allowed(clientPayload) {
   var who = identityOf(p);
   if (!who) return false;
   if (who.user) return true; // подпись Telegram проверена токеном бота
-  // код доступа — спросим бот записи, есть ли такой ученик
+  // код доступа (или подпись, которую проверит бот) — спросим бот записи
   try {
     var r = await callBot("check", who, null, 6000);
     if (r.status === 200 && r.data && r.data.found) return true;
-    if (r.status === 200 || r.status === 403) return false;
+    if (r.status === 200) return false;
+    console.log("support-upload: bot check status", r.status);
+    if (r.status === 403) return false;
   } catch (e) {
     // бот записи не ответил — не мешаем ученику, код уже похож на настоящий
   }

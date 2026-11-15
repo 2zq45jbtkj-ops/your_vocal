@@ -21,8 +21,14 @@ export var TG_BATCH_MAX = 48 * 1024 * 1024;
 // большие видео остаются в хранилище и приходят Николаю ссылкой — столько дней
 export var KEEP_DAYS = 30;
 
+// значения из Vercel могли вставить с переводом строки — Telegram в адресе его
+// прощает, а подпись (HMAC) нет, поэтому всегда обрезаем пробелы
 export function botToken() {
-  return process.env.TELEGRAM_BOT_TOKEN || "";
+  return String(process.env.TELEGRAM_BOT_TOKEN || "").trim();
+}
+
+export function adminChat() {
+  return String(process.env.ADMIN_CHAT_ID || "").trim();
 }
 
 function supportKey() {
@@ -70,8 +76,10 @@ export function identityOf(body) {
   var user = initData ? checkInitData(initData) : null;
   var token = String(body.accessToken || "").trim().toLowerCase();
   if (!UUID_RE.test(token)) token = "";
-  if (!user && !token) return null;
-  return { initData: user ? initData : "", user: user, accessToken: user ? "" : token };
+  if (!user && !token && !initData) return null;
+  // подпись Telegram, которую мы не смогли проверить сами, всё равно передаём
+  // боту записи: он проверит её своим токеном
+  return { initData: initData, user: user, accessToken: user ? "" : token };
 }
 
 /* Запрос к боту записи: тело JSON + заголовок X-Support-Sign. */

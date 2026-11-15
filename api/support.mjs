@@ -18,7 +18,7 @@
 
 import { get, del } from "@vercel/blob";
 import {
-  identityOf, callBot, json, tgJson, tgForm, fileLink, humanSize,
+  identityOf, callBot, adminChat, botToken, json, tgJson, tgForm, fileLink, humanSize,
   TG_PHOTO_MAX, TG_FILE_MAX, TG_BATCH_MAX, KEEP_DAYS
 } from "./_support.mjs";
 
@@ -58,7 +58,7 @@ async function start(body, who) {
   }
 
   // запасной путь: бот записи недоступен — карточку шлём сами, чтобы обращение дошло
-  var admin = process.env.ADMIN_CHAT_ID;
+  var admin = adminChat();
   var name, idLine = "";
   if (who.user) {
     name = [who.user.first_name, who.user.last_name].filter(Boolean).join(" ") || "Без имени";
@@ -167,7 +167,7 @@ async function sendLink(admin, headerId, item, link, name) {
 }
 
 async function send(body, who, origin) {
-  var admin = process.env.ADMIN_CHAT_ID;
+  var admin = adminChat();
   var headerId = parseInt(body.headerId, 10) || 0;
   var name = String(body.name || "").slice(0, 80);
   var items = (Array.isArray(body.items) ? body.items : []).slice(0, 10).map(function (it) {
@@ -254,11 +254,20 @@ async function send(body, who, origin) {
 
 /* Проверка настройки (только да/нет, без значений). */
 export async function GET() {
-  return json({ token: Boolean(process.env.TELEGRAM_BOT_TOKEN), admin: Boolean(process.env.ADMIN_CHAT_ID) });
+  var raw = String(process.env.TELEGRAM_BOT_TOKEN || "");
+  var botCheck = 0;
+  try {
+    // подписанный запрос к боту записи с несуществующим кодом: 200 = подписи совпадают
+    var r = await callBot("check", { initData: "", accessToken: "00000000-0000-0000-0000-000000000000" }, null, 6000);
+    botCheck = r.status;
+  } catch (e) {
+    botCheck = -1;
+  }
+  return json({ token: Boolean(botToken()), tokenClean: raw === raw.trim(), admin: Boolean(adminChat()), botCheck: botCheck });
 }
 
 export async function POST(request) {
-  if (!process.env.TELEGRAM_BOT_TOKEN) {
+  if (!botToken()) {
     console.log("support: no bot token");
     return json({ ok: false, error: "Бот не настроен" }, 500);
   }
