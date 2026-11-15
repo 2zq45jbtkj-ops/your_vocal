@@ -8,7 +8,7 @@
       ← {ok, headerId, name}
    2) action "send": {initData|accessToken, headerId, name, items:[{pathname,size,kind,
       name,width,height,duration}]} — пачка вложений, уже загруженных приложением в
-      хранилище (api/support-upload.js). Фото до 10 МБ и видео до 50 МБ уходят в
+      хранилище (api/support-upload.mjs). Фото до 10 МБ и видео до 50 МБ уходят в
       Telegram альбомами по 10 штук ответом на карточку, крупнее — ссылкой
       (Telegram не принимает от бота файлы больше 50 МБ). Отправленное стирается
       из хранилища сразу, большие файлы — через 30 дней (api/support-cleanup.js).
@@ -20,7 +20,7 @@ import { get, del } from "@vercel/blob";
 import {
   identityOf, callBot, json, tgJson, tgForm, fileLink, humanSize,
   TG_PHOTO_MAX, TG_FILE_MAX, TG_BATCH_MAX, KEEP_DAYS
-} from "./_support.js";
+} from "./_support.mjs";
 
 var PATH_RE = /^support\/[\w.\-]+$/;
 

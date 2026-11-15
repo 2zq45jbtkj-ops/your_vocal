@@ -1,5 +1,5 @@
-/* Общие хелперы «Написать в поддержку» (api/support.js, api/support-upload.js,
-   api/support-file.js). Файл с "_" — Vercel не делает из него роут.
+/* Общие хелперы «Написать в поддержку» (api/support.mjs, api/support-upload.mjs,
+   api/support-file.mjs). Файл с "_" — Vercel не делает из него роут.
 
    Кто пишет: в Telegram ученика узнаём по подписи Telegram (initData, проверка
    токеном бота), вне Telegram (значок «СЕПТ · ДЗ» на экране телефона) — по его

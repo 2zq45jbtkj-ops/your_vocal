@@ -1,10 +1,10 @@
 /* Раз в день (cron в vercel.json): стираем из хранилища файлы обращений в
    поддержку старше 30 дней — большие видео, которые ушли Николаю ссылкой, и
    брошенные загрузки (ученик закрыл приложение, не дождавшись отправки).
-   Всё, что ушло в Telegram, стирается сразу при отправке (api/support.js). */
+   Всё, что ушло в Telegram, стирается сразу при отправке (api/support.mjs). */
 
 import { list, del } from "@vercel/blob";
-import { KEEP_DAYS } from "./_support.js";
+import { KEEP_DAYS } from "./_support.mjs";
 
 export async function GET(request) {
   var secret = process.env.CRON_SECRET;

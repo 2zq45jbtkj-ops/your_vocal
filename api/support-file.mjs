@@ -4,7 +4,7 @@
    и проигрывается с перемоткой. Файлы живут 30 дней (api/support-cleanup.js). */
 
 import { issueSignedToken, presignUrl, get } from "@vercel/blob";
-import { checkFileSig } from "./_support.js";
+import { checkFileSig } from "./_support.mjs";
 
 export async function GET(request) {
   var u = new URL(request.url);

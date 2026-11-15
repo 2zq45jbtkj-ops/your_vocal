@@ -6,7 +6,7 @@
    проекту подключено хранилище Blob (Storage → your-vocal-support). */
 
 import { handleUpload } from "@vercel/blob/client";
-import { identityOf, callBot, json } from "./_support.js";
+import { identityOf, callBot, json } from "./_support.mjs";
 
 async function allowed(clientPayload) {
   var p = {};
