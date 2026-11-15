@@ -1,9 +1,34 @@
 {
   "functions": {
-    "api/support.mjs": { "maxDuration": 60 },
-    "api/support-upload.mjs": { "maxDuration": 15 },
-    "api/support-file.mjs": { "maxDuration": 30 },
-    "api/support-cleanup.mjs": { "maxDuration": 60 }
+    "api/support.mjs": {
+      "maxDuration": 60
+    },
+    "api/support-upload.mjs": {
+      "maxDuration": 15
+    },
+    "api/support-file.mjs": {
+      "maxDuration": 30
+    },
+    "api/support-cleanup.mjs": {
+      "maxDuration": 60
+    },
+    "api/media.mjs": {
+      "maxDuration": 60
+    },
+    "api/media-upload.mjs": {
+      "maxDuration": 15
+    }
   },
-  "crons": [{ "path": "/api/support-cleanup", "schedule": "0 4 * * *" }]
+  "crons": [
+    {
+      "path": "/api/support-cleanup",
+      "schedule": "0 4 * * *"
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/upload",
+      "destination": "/upload.html"
+    }
+  ]
 }

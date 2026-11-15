@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Загрузка файлов</title>
+<style>
+  :root { --bg:#f4f5f7; --card:#fff; --ink:#1d2129; --gray:#6b7280; --line:#e3e5ea; --blue:#3f6f9c; --ok:#2e7d4f; --bad:#b4442c; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#16181d; --card:#22252c; --ink:#eceef2; --gray:#9aa1ad; --line:#30343c; --blue:#6f9fcf; --ok:#5fbf86; --bad:#e07a62; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; -webkit-text-size-adjust:100%; }
+  main { max-width:560px; margin:0 auto; padding:20px 16px calc(32px + env(safe-area-inset-bottom)); }
+  h1 { font-size:22px; margin:8px 0 4px; }
+  p.sub { color:var(--gray); margin:0 0 18px; font-size:15px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:14px; }
+  label.pick { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; min-height:120px; border:2px dashed var(--line); border-radius:14px; cursor:pointer; text-align:center; padding:16px; }
+  label.pick b { font-size:17px; }
+  label.pick span { color:var(--gray); font-size:14px; }
+  input[type=file] { display:none; }
+  .file { padding:10px 0; border-top:1px solid var(--line); }
+  .file:first-child { border-top:0; }
+  .row { display:flex; justify-content:space-between; gap:10px; align-items:baseline; }
+  .name { font-weight:600; word-break:break-word; }
+  .meta { color:var(--gray); font-size:13px; white-space:nowrap; }
+  .bar { height:6px; background:var(--line); border-radius:3px; overflow:hidden; margin-top:6px; }
+  .bar i { display:block; height:100%; width:0; background:var(--blue); transition:width .2s; }
+  .ok { color:var(--ok); font-size:13px; margin-top:4px; }
+  .bad { color:var(--bad); font-size:13px; margin-top:4px; }
+  h2 { font-size:16px; margin:0 0 6px; }
+  .empty { color:var(--gray); font-size:14px; }
+  .denied { color:var(--bad); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Загрузка файлов</h1>
+  <p class="sub">Треки, видео и фото любого размера. Файлы сразу попадают в закрытое хранилище, и Claude может их забрать.</p>
+  <div id="app"></div>
+</main>
+<script src="/vendor/blob-client.js"></script>
+<script>
+(function () {
+  var k = new URLSearchParams(location.search).get("k") || "";
+  var app = document.getElementById("app");
+  var queue = [];
+  var busy = false;
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function size(n) {
+    var mb = n / 1048576;
+    if (mb >= 1024) return (mb / 1024).toFixed(1).replace(".", ",") + " ГБ";
+    if (mb >= 10) return Math.round(mb) + " МБ";
+    if (mb >= 0.1) return mb.toFixed(1).replace(".", ",") + " МБ";
+    return Math.max(1, Math.round(n / 1024)) + " КБ";
+  }
+  function safeName(name) {
+    var n = String(name || "file").normalize("NFC");
+    var m = n.match(/^(.*?)(\.[A-Za-z0-9]{1,6})?$/);
+    var tr = { а:"a",б:"b",в:"v",г:"g",д:"d",е:"e",ё:"e",ж:"zh",з:"z",и:"i",й:"y",к:"k",л:"l",м:"m",н:"n",о:"o",п:"p",р:"r",с:"s",т:"t",у:"u",ф:"f",х:"h",ц:"c",ч:"ch",ш:"sh",щ:"sch",ъ:"",ы:"y",ь:"",э:"e",ю:"yu",я:"ya" };
+    var base = (m[1] || "file").toLowerCase().split("").map(function (c) { return tr[c] !== undefined ? tr[c] : c; }).join("")
+      .replace(/[^\w.\-]+/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "").slice(0, 80) || "file";
+    return base + (m[2] || "").toLowerCase();
+  }
+
+  if (!k) {
+    app.innerHTML = '<div class="card denied">Эта страница открывается только по личной ссылке.</div>';
+    return;
+  }
+
+  app.innerHTML =
+    '<div class="card"><label class="pick"><input id="f" type="file" multiple>' +
+    '<b>Выбрать файлы</b><span>Можно сразу несколько</span></label></div>' +
+    '<div class="card" id="q" hidden></div>' +
+    '<div class="card"><h2>Уже загружено</h2><div id="list" class="empty">Загружаю список…</div></div>';
+
+  document.getElementById("f").addEventListener("change", function (e) {
+    Array.prototype.forEach.call(e.target.files || [], function (file) {
+      queue.push({ file: file, done: 0, status: "wait", error: "" });
+    });
+    e.target.value = "";
+    renderQueue();
+    run();
+  });
+
+  function renderQueue() {
+    var q = document.getElementById("q");
+    if (!queue.length) { q.hidden = true; return; }
+    q.hidden = false;
+    q.innerHTML = queue.map(function (it) {
+      var pct = it.file.size ? Math.round(it.done / it.file.size * 100) : 100;
+      var state = it.status === "ok" ? '<div class="ok">Загружено</div>'
+        : it.status === "err" ? '<div class="bad">Не загрузилось: ' + esc(it.error) + '</div>'
+        : '<div class="bar"><i style="width:' + (it.status === "up" ? pct : 0) + '%"></i></div>';
+      return '<div class="file"><div class="row"><span class="name">' + esc(it.file.name) + '</span>' +
+        '<span class="meta">' + (it.status === "up" ? pct + "% · " : "") + size(it.file.size) + '</span></div>' + state + '</div>';
+    }).join("");
+  }
+
+  function run() {
+    if (busy) return;
+    var it = queue.find(function (x) { return x.status === "wait"; });
+    if (!it) { loadList(); return; }
+    busy = true;
+    it.status = "up";
+    renderQueue();
+    var path = "media/" + Date.now().toString(36) + "-" + safeName(it.file.name);
+    window.BlobClient.upload(path, it.file, {
+      access: "private",
+      handleUploadUrl: "/api/media-upload",
+      clientPayload: JSON.stringify({ k: k }),
+      contentType: it.file.type || "application/octet-stream",
+      multipart: it.file.size > 8 * 1024 * 1024,
+      onUploadProgress: function (ev) { it.done = ev.loaded || 0; renderQueue(); }
+    }).then(function () {
+      it.status = "ok";
+    }, function (e) {
+      it.status = "err";
+      var m = String(e && e.message || e || "");
+      it.error = /Нет доступа|403/.test(m) ? "ссылка без доступа" : "проверь интернет и выбери файл ещё раз";
+    }).then(function () {
+      busy = false;
+      renderQueue();
+      run();
+    });
+  }
+
+  function loadList() {
+    fetch("/api/media?k=" + encodeURIComponent(k), { cache: "no-store" }).then(function (r) {
+      if (r.status === 403) throw new Error("denied");
+      return r.json();
+    }).then(function (d) {
+      var el = document.getElementById("list");
+      var files = (d && d.files) || [];
+      if (!files.length) { el.className = "empty"; el.textContent = "Пока ничего нет."; return; }
+      el.className = "";
+      el.innerHTML = files.map(function (f) {
+        var when = new Date(f.uploadedAt);
+        return '<div class="file"><div class="row"><span class="name">' + esc(f.name) + '</span><span class="meta">' + size(f.size) + '</span></div>' +
+          '<div class="meta">' + when.toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) + '</div></div>';
+      }).join("");
+    }).catch(function (e) {
+      var el = document.getElementById("list");
+      el.className = "denied";
+      el.textContent = String(e && e.message) === "denied" ? "Ссылка без доступа: проверь, что открыл её целиком." : "Не получилось загрузить список. Обнови страницу.";
+    });
+  }
+
+  loadList();
+})();
+</script>
+</body>
+</html>
