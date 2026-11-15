@@ -397,6 +397,7 @@ function backTarget() {
     case "favorites": return "courses";
     case "lesson-soon": return "courses";
     case "doc": return "more";
+    case "support": return "more";
     case "admin-hub": return "more";
     case "admin-students": return "admin-hub";
     case "admin-birthdays": return "admin-hub";
@@ -2028,7 +2029,7 @@ function renderMore() {
       iconBg: notifIconBg
     },
     {
-      label: "Написать в поддержку", isLink: true,
+      label: "Написать в поддержку", isLink: true, support: true,
       icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 3h12v8H5l-3 3V3z" stroke="' + supportIconColor + '" stroke-width="1.4" stroke-linejoin="round"/></svg>',
       iconBg: supportIconBg
     },
@@ -2099,7 +2100,7 @@ function renderMore() {
       if (item.reset) { resetProgress(); return; }
       if (item.doc) { openDoc(item.doc); return; }
       if (item.adminEntry) { go("admin-hub"); return; }
-      // «Написать в поддержку» — в дизайн-файле заглушка без содержимого, оставляю как есть.
+      if (item.support) { openSupport(); return; }
     });
   });
   wireActs();
@@ -2146,6 +2147,364 @@ function renderDoc() {
       body +
     "</div>";
   wireActs();
+}
+
+/* ---------- «Написать в поддержку» ----------
+   Ученик пишет сообщение и прикладывает сколько угодно фото и видео — всё
+   приходит Николаю в бот записи (@your_vocal_teacher_bot), ответ Николая
+   приходит ученику в Telegram, в чат с ботом.
+   Файлы любого размера сначала уходят прямо в хранилище (vendor/blob-client.js,
+   грузится только на этом экране), потом api/support.js пересылает их в
+   Telegram: до 50 МБ — обычными фото и видео, крупнее — ссылкой. */
+
+var SUPPORT_MAX_TEXT = 3000;
+var SUPPORT_TG_PHOTO = 10 * 1024 * 1024;
+var SUPPORT_TG_FILE = 50 * 1024 * 1024;
+var SUPPORT_BATCH = 48 * 1024 * 1024;
+
+var supportUI = {
+  text: "",
+  files: [],        // {file, name, size, kind, status: idle|uploading|uploaded|sent, pathname, meta}
+  status: "idle",   // idle | sending | sent | error
+  stage: "",        // upload | send
+  headerId: null,   // карточка обращения у Николая — при «Повторить» новую не шлём
+  name: "",
+  error: "",
+  loaded: 0, total: 0, sentFiles: 0
+};
+
+function supportResetForm() {
+  supportUI.text = "";
+  supportUI.files = [];
+  supportUI.status = "idle";
+  supportUI.stage = "";
+  supportUI.headerId = null;
+  supportUI.name = "";
+  supportUI.error = "";
+  supportUI.loaded = 0; supportUI.total = 0; supportUI.sentFiles = 0;
+}
+
+function openSupport() {
+  if (supportUI.status === "sent") supportResetForm();
+  loadBlobClient();
+  go("support");
+}
+
+var _blobClientPromise = null;
+function loadBlobClient() {
+  if (window.BlobClient) return Promise.resolve(window.BlobClient);
+  if (_blobClientPromise) return _blobClientPromise;
+  _blobClientPromise = new Promise(function (resolve, reject) {
+    var s = document.createElement("script");
+    s.src = "/vendor/blob-client.js";
+    s.onload = function () { window.BlobClient ? resolve(window.BlobClient) : reject(new Error("no client")); };
+    s.onerror = function () { _blobClientPromise = null; reject(new Error("load failed")); };
+    document.head.appendChild(s);
+  });
+  return _blobClientPromise;
+}
+
+function supportIdentity() {
+  return {
+    initData: (tg && tg.initData) || "",
+    // в «Режиме админа» код ученика не шлём — пишет сам Николай (по подписи Telegram)
+    accessToken: state.adminMode ? "" : (state.accessToken || "")
+  };
+}
+
+function supportSizeText(bytes) {
+  var mb = bytes / (1024 * 1024);
+  if (mb >= 1024) return (mb / 1024).toFixed(1).replace(".", ",") + " ГБ";
+  if (mb >= 10) return Math.round(mb) + " МБ";
+  if (mb >= 0.1) return mb.toFixed(1).replace(".", ",") + " МБ";
+  return Math.max(1, Math.round(bytes / 1024)) + " КБ";
+}
+
+function supportKind(file) {
+  if (/^video\//.test(file.type || "")) return "video";
+  if (/^image\//.test(file.type || "")) return "photo";
+  return /\.(mov|mp4|m4v|webm|3gp|avi|mkv)$/i.test(file.name || "") ? "video" : "photo";
+}
+
+function supportPathname(item, i) {
+  var ext = (String(item.name || "").match(/\.([A-Za-z0-9]{1,5})$/) || [])[1];
+  if (!ext) ext = item.kind === "video" ? "mp4" : "jpg";
+  return "support/" + item.kind + "-" + Date.now().toString(36) + "-" + i + "." + ext.toLowerCase();
+}
+
+var SUPPORT_ICON = {
+  photo: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1.8" y="3" width="12.4" height="10" rx="2" stroke="oklch(38% 0.06 235)" stroke-width="1.4"/><circle cx="5.6" cy="6.6" r="1.2" stroke="oklch(38% 0.06 235)" stroke-width="1.2"/><path d="M2.5 11.5l3.4-3 2.4 2 2.2-1.8 3 2.6" stroke="oklch(38% 0.06 235)" stroke-width="1.3" stroke-linejoin="round"/></svg>',
+  video: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="3.5" width="9.5" height="9" rx="2" stroke="oklch(38% 0.1 38)" stroke-width="1.4"/><path d="M11 7l3.5-2v6L11 9" stroke="oklch(38% 0.1 38)" stroke-width="1.4" stroke-linejoin="round"/></svg>'
+};
+
+function supportFileHint(item) {
+  var size = supportSizeText(item.size);
+  if (item.status === "uploading") return size + " · загружаю…";
+  if (item.status === "uploaded") return size + " · загружено";
+  if (item.status === "sent") return size + " · отправлено ✓";
+  return size;
+}
+
+function renderSupport() {
+  var u = supportUI;
+  if (u.status === "sent") { renderSupportSent(); return; }
+  var busy = u.status === "sending";
+  var canSend = !busy && (u.text.trim() || u.files.length);
+
+  var listHtml = u.files.map(function (item, idx) {
+    return (
+      '<div class="hw-attached support-file">' +
+        '<div class="hw-icon' + (item.kind === "video" ? " terra" : "") + '">' + SUPPORT_ICON[item.kind] + "</div>" +
+        '<div style="flex:1;min-width:0;">' +
+          '<div class="hw-name support-file-name">' + esc(item.name) + "</div>" +
+          '<div class="hw-hint" id="support-hint-' + idx + '">' + supportFileHint(item) + "</div>" +
+        "</div>" +
+        (busy || item.status === "sent" ? "" : '<button class="hw-replace" data-support-remove="' + idx + '">Убрать</button>') +
+      "</div>"
+    );
+  }).join("");
+
+  var progressHtml = "";
+  if (busy) {
+    progressHtml =
+      '<div class="lesson-progress-label" id="support-progress-label" style="margin-top:4px;">' + supportProgressLabel() + "</div>" +
+      '<div class="lesson-progress-bar support-progress"><div id="support-progress-fill" style="width:' + supportProgressPct() + '%;"></div></div>';
+  }
+  var errorHtml = u.status === "error"
+    ? '<div class="support-error">' + esc(u.error || "Не получилось отправить.") + " Проверь интернет и нажми «Отправить ещё раз» — уже загруженное заново грузить не придётся.</div>"
+    : "";
+
+  app.innerHTML =
+    '<div class="top pb8">' + backBtn("back") +
+      "<div>" +
+        '<div class="top-title lg">Написать в поддержку</div>' +
+        '<div class="top-sub">Николай ответит тебе в Telegram</div>' +
+      "</div>" +
+    "</div>" +
+    '<div class="support-body">' +
+      '<div class="instruction-note">Опиши, что случилось или о чём хочешь спросить. Можно приложить сколько угодно фото и видео — например, снимок экрана или запись упражнения.</div>' +
+      '<label class="field-label" for="support-text">СООБЩЕНИЕ</label>' +
+      '<textarea id="support-text" class="feedback-textarea support-textarea" maxlength="' + SUPPORT_MAX_TEXT + '" placeholder="Например: не открывается видео в третьем уроке"' + (busy ? " disabled" : "") + ">" + esc(u.text) + "</textarea>" +
+      '<div class="support-files">' + listHtml + "</div>" +
+      (busy ? "" :
+        '<div class="hw-choice">' +
+          '<label class="hw-upload"><input type="file" accept="image/*,video/*" multiple id="support-file" style="display:none;">' +
+            SVG.upload + (u.files.length ? "Прикрепить ещё фото или видео" : "Прикрепить фото или видео") +
+          "</label>" +
+        "</div>") +
+      progressHtml +
+      errorHtml +
+      '<button class="cta" id="support-send"' + (canSend ? "" : " disabled") + ">" +
+        (busy ? "Отправляю…" : u.status === "error" ? "Отправить ещё раз" : "Отправить") +
+      "</button>" +
+    "</div>";
+
+  var ta = document.getElementById("support-text");
+  ta.addEventListener("input", function () {
+    supportUI.text = ta.value;
+    var btn = document.getElementById("support-send");
+    if (btn && supportUI.status !== "sending") btn.disabled = !(supportUI.text.trim() || supportUI.files.length);
+  });
+  Array.prototype.forEach.call(app.querySelectorAll("[data-support-remove]"), function (btn) {
+    btn.addEventListener("click", function () {
+      supportUI.files.splice(parseInt(btn.getAttribute("data-support-remove"), 10), 1);
+      render();
+    });
+  });
+  var input = document.getElementById("support-file");
+  if (input) {
+    input.addEventListener("change", function (e) {
+      Array.prototype.slice.call(e.target.files || []).forEach(function (f) {
+        supportUI.files.push({ file: f, name: f.name || "файл", size: f.size || 0, kind: supportKind(f), status: "idle" });
+      });
+      if (supportUI.status === "error") supportUI.status = "idle";
+      render();
+    });
+  }
+  document.getElementById("support-send").addEventListener("click", function () {
+    if (supportUI.status === "sending") return;
+    if (!(supportUI.text.trim() || supportUI.files.length)) return;
+    sendSupport();
+  });
+  wireActs();
+}
+
+function renderSupportSent() {
+  var u = supportUI;
+  var n = u.files.length;
+  var what = n ? " и " + n + " " + plural(n, "вложение", "вложения", "вложений") : "";
+  app.innerHTML =
+    '<div class="auth-screen support-sent" style="padding-top:var(--screen-top);padding-bottom:130px;">' +
+      '<div class="support-sent-check">' + SVG_HW_CHECK + "</div>" +
+      '<div class="auth-title">Сообщение отправлено</div>' +
+      '<div class="auth-sub">Николай получил твоё сообщение' + what + ". Ответ придёт тебе в Telegram, в чат с ботом.</div>" +
+      '<div class="spacer"></div>' +
+      '<button class="cta" id="support-done">Готово</button>' +
+      '<button class="cta support-more-btn" id="support-again">Написать ещё</button>' +
+    "</div>";
+  document.getElementById("support-done").addEventListener("click", function () {
+    supportResetForm();
+    go("more");
+  });
+  document.getElementById("support-again").addEventListener("click", function () {
+    supportResetForm();
+    render();
+  });
+  wireActs();
+}
+
+function plural(n, one, few, many) {
+  var a = n % 10, b = n % 100;
+  if (a === 1 && b !== 11) return one;
+  if (a >= 2 && a <= 4 && (b < 12 || b > 14)) return few;
+  return many;
+}
+
+function supportProgressPct() {
+  var u = supportUI;
+  if (u.stage === "send") {
+    var all = u.files.length || 1;
+    return Math.round(70 + 30 * u.sentFiles / all);
+  }
+  return u.total ? Math.round(70 * u.loaded / u.total) : 0;
+}
+
+function supportProgressLabel() {
+  var u = supportUI;
+  if (u.stage === "send") return "Пересылаю Николаю: " + u.sentFiles + " из " + u.files.length;
+  if (!u.files.length) return "Отправляю…";
+  return "Загружаю файлы: " + Math.round(100 * u.loaded / (u.total || 1)) + "%";
+}
+
+function supportUpdateProgress() {
+  var l = document.getElementById("support-progress-label");
+  var f = document.getElementById("support-progress-fill");
+  if (l) l.textContent = supportProgressLabel();
+  if (f) f.style.width = supportProgressPct() + "%";
+  supportUI.files.forEach(function (item, idx) {
+    var h = document.getElementById("support-hint-" + idx);
+    if (h) h.textContent = supportFileHint(item);
+  });
+}
+
+function supportPost(body) {
+  var id = supportIdentity();
+  body.initData = id.initData;
+  body.accessToken = id.accessToken;
+  return fetch("/api/support", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body)
+  }).then(function (r) {
+    return r.json().catch(function () { return {}; }).then(function (d) {
+      if (!r.ok || !d.ok) throw new Error(d.error || "Не получилось отправить.");
+      return d;
+    });
+  });
+}
+
+/* Пачки для Telegram: альбом до 10 штук и до 48 МБ; большое фото (файлом) и всё,
+   что крупнее 50 МБ (ссылкой), — по одному. */
+function supportBatches(items) {
+  var out = [], cur = [], curSize = 0;
+  items.forEach(function (it) {
+    var single = it.size > SUPPORT_TG_FILE || (it.kind === "photo" && it.size > SUPPORT_TG_PHOTO);
+    if (single) { out.push([it]); return; }
+    if (cur.length && (cur.length >= 10 || curSize + it.size > SUPPORT_BATCH)) { out.push(cur); cur = []; curSize = 0; }
+    cur.push(it); curSize += it.size;
+  });
+  if (cur.length) out.push(cur);
+  return out;
+}
+
+function sendSupport() {
+  var u = supportUI;
+  u.status = "sending";
+  u.error = "";
+  u.stage = "upload";
+  u.sentFiles = u.files.filter(function (f) { return f.status === "sent"; }).length;
+  u.total = u.files.reduce(function (s, f) { return s + f.size; }, 0);
+  u.loaded = u.files.reduce(function (s, f) { return s + (f.status === "uploaded" || f.status === "sent" ? f.size : 0); }, 0);
+  render();
+
+  var identity = JSON.stringify(supportIdentity());
+  var pending = u.files.filter(function (f) { return f.status === "idle" || f.status === "uploading"; });
+
+  var uploadAll = pending.length
+    ? loadBlobClient().then(function (client) {
+        // по одному файлу: на телефоне так надёжнее и прогресс честный
+        return pending.reduce(function (p, item, i) {
+          return p.then(function () {
+            item.status = "uploading";
+            supportUpdateProgress();
+            var before = u.loaded;
+            var metaP = item.kind === "video" ? readVideoMeta(item.file) : Promise.resolve(null);
+            return metaP.then(function (meta) {
+              item.meta = meta;
+              return client.upload(supportPathname(item, i), item.file, {
+                access: "private",
+                handleUploadUrl: "/api/support-upload",
+                clientPayload: identity,
+                contentType: item.file.type || undefined,
+                multipart: item.size > 8 * 1024 * 1024,
+                onUploadProgress: function (ev) {
+                  u.loaded = before + Math.min(ev.loaded || 0, item.size);
+                  supportUpdateProgress();
+                }
+              });
+            }).then(function (blob) {
+              item.pathname = blob.pathname;
+              item.status = "uploaded";
+              u.loaded = before + item.size;
+              supportUpdateProgress();
+            });
+          });
+        }, Promise.resolve());
+      })
+    : Promise.resolve();
+
+  uploadAll
+    .then(function () {
+      u.stage = "send";
+      supportUpdateProgress();
+      if (u.headerId) return null;
+      var counts = { photo: 0, video: 0 };
+      u.files.forEach(function (f) { counts[f.kind]++; });
+      return supportPost({
+        action: "start", text: u.text.trim(), counts: counts,
+        firstName: state.firstName || "", lastName: state.lastName || ""
+      }).then(function (d) { u.headerId = d.headerId; u.name = d.name || ""; });
+    })
+    .then(function () {
+      var left = u.files.filter(function (f) { return f.status === "uploaded"; });
+      return supportBatches(left).reduce(function (p, batch) {
+        return p.then(function () {
+          return supportPost({
+            action: "send", headerId: u.headerId, name: u.name,
+            items: batch.map(function (f) {
+              return {
+                pathname: f.pathname, size: f.size, kind: f.kind, name: f.name,
+                width: f.meta && f.meta.width, height: f.meta && f.meta.height, duration: f.meta && f.meta.duration
+              };
+            })
+          }).then(function () {
+            batch.forEach(function (f) { f.status = "sent"; });
+            u.sentFiles += batch.length;
+            supportUpdateProgress();
+          });
+        });
+      }, Promise.resolve());
+    })
+    .then(function () {
+      u.status = "sent";
+      if (state.screen === "support") render();
+    })
+    .catch(function (e) {
+      u.files.forEach(function (f) { if (f.status === "uploading") f.status = "idle"; });
+      u.status = "error";
+      u.error = e && e.message && /[а-яё]/i.test(e.message) ? e.message : "Не получилось отправить.";
+      if (state.screen === "support") render();
+    });
 }
 
 /* «Режим админа» — хаб admin-only функций. Раньше пункт «Режим админа» в
@@ -4383,6 +4742,7 @@ function render() {
     case "questions": renderQuestions(); break;
     case "more": renderMore(); break;
     case "doc": renderDoc(); break;
+    case "support": renderSupport(); break;
     case "admin-hub": renderAdminHub(); break;
     case "admin-students": renderAdminStudents(); break;
     case "admin-birthdays": renderAdminBirthdays(); break;

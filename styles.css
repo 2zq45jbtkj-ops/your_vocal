@@ -1108,3 +1108,16 @@ html.browser-mode {
   --tg-safe-area-inset-top: env(safe-area-inset-top, 0px);
   --tg-safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
 }
+
+/* ---------- «Написать в поддержку» ---------- */
+.support-body { padding: 0 20px 130px; }
+.support-textarea { height: 140px; margin-bottom: 16px; display: block; }
+.support-file { margin-bottom: 10px; }
+.support-files { margin-bottom: 6px; }
+.support-file-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.support-progress { margin-bottom: 16px; }
+.support-error { font-size: 12.5px; line-height: 1.5; color: var(--ink-terra, var(--terra)); background: var(--soft-terra); border-radius: 14px; padding: 12px 16px; margin-bottom: 16px; }
+.support-sent-check { width: 68px; height: 68px; border-radius: 50%; background: var(--blue); box-shadow: var(--raised-lg); display: flex; align-items: center; justify-content: center; margin: 40px auto 20px; }
+.support-sent-check svg { width: 26px; height: 22px; }
+.support-sent { text-align: center; }
+.support-more-btn { margin-top: 12px; background: var(--bg); color: var(--ink); }

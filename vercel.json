@@ -1,0 +1,9 @@
+{
+  "functions": {
+    "api/support.js": { "maxDuration": 60 },
+    "api/support-upload.js": { "maxDuration": 15 },
+    "api/support-file.js": { "maxDuration": 30 },
+    "api/support-cleanup.js": { "maxDuration": 60 }
+  },
+  "crons": [{ "path": "/api/support-cleanup", "schedule": "0 4 * * *" }]
+}

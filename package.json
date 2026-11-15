@@ -2,6 +2,7 @@
   "name": "your-vocal",
   "private": true,
   "dependencies": {
-    "@neondatabase/serverless": "^0.10.0"
+    "@neondatabase/serverless": "^0.10.0",
+    "@vercel/blob": "2.8.0"
   }
 }
