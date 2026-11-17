@@ -1259,3 +1259,21 @@ html.dark .cab-zone.on, body.dark .cab-zone.on { background: color-mix(in srgb, 
 .rep-item { display: flex; gap: 6px; }
 .rep-item + .rep-item { margin-top: 6px; }
 .rep-n { flex-shrink: 0; min-width: 1.3em; }
+
+/* ---------- Верхний край на iPhone (значок на экране «Домой») ----------
+   iOS 26 кладёт размытие поверх верха веб-приложения. Убрать его можно
+   только так: у самого края должна стоять закреплённая (fixed) полоса на
+   всю ширину, выше 10px, с обычным сплошным фоном и без backdrop-filter.
+   Тогда iOS красит край её цветом, а не размывает. Полоса — цвета фона
+   (светлая/тёмная тема сами), закрывает только зону часов. В Telegram и
+   в обычной вкладке браузера её нет. */
+#top-edge { display: none; }
+@media (display-mode: standalone) {
+  #top-edge {
+    display: block;
+    position: fixed; top: 0; left: 0; right: 0;
+    height: max(12px, env(safe-area-inset-top, 0px));
+    background-color: var(--bg);
+    z-index: 2147483647;
+  }
+}
