@@ -1,0 +1,56 @@
+/* Распевки с проверкой: пианино играет распевку, микрофон слушает голос.
+   Экраны и цвета перенесены с макета «переключатель Полоски / Ноты» и «Оценка». */
+
+.pt { --green: oklch(62% 0.12 150); --soft-green: oklch(91% 0.04 150); --yellow: oklch(78% 0.11 85); --star: oklch(84% 0.15 92); }
+html.dark .pt { --soft-green: oklch(38% 0.05 150); }
+
+/* ---------- списки ---------- */
+.pt-intro { font: 500 13px/1.5 Inter, sans-serif; color: var(--tx3); margin: 0 0 14px; }
+.pt .seg { display: flex; margin: 0 0 14px; border-radius: 14px; box-shadow: var(--inset-sm); padding: 4px; }
+.pt .seg div { flex: 1; height: 32px; border-radius: 11px; display: flex; align-items: center; justify-content: center;
+  font: 700 12.5px Inter, sans-serif; color: var(--gray); cursor: pointer; transition: background .2s, color .2s; }
+.pt .seg div.on { background: var(--bg); box-shadow: var(--raised-sm); color: var(--terra); }
+.pt-list { display: flex; flex-direction: column; gap: 10px; }
+.pt-row { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 20px; background: var(--bg); box-shadow: var(--raised-sm); cursor: pointer; }
+.pt-row .ic { width: 42px; height: 42px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  font: 800 15px Manrope, sans-serif; color: var(--white-text); }
+.pt-row b { display: block; font: 700 15px Manrope, sans-serif; color: var(--ink); }
+.pt-row .sub { font: 500 12.5px/1.4 Inter, sans-serif; color: var(--gray); margin-top: 2px; }
+.pt-row .pct { font: 800 13px Manrope, sans-serif; color: var(--green); flex-shrink: 0; }
+.pt-goal { font: 600 13px/1.45 Inter, sans-serif; color: var(--tx3); margin: -2px 0 14px; }
+
+/* ---------- экран распевки ---------- */
+.pt-sing { position: relative; min-height: 100vh; min-height: 100dvh; }
+.pt-sing .seg { margin: 6px 16px 10px; }
+.pt-lane { margin: 4px 16px 0; border-radius: 22px; box-shadow: var(--inset); height: 300px; position: relative; overflow: hidden; }
+.pt-lane svg { display: block; position: absolute; inset: 0; width: 100%; height: 100%; }
+.pt-hint { text-align: center; font: 700 15px Manrope, sans-serif; color: var(--ink); margin: 14px 20px 0; min-height: 40px; }
+.pt-hint small { display: block; font: 500 12.5px Inter, sans-serif; color: var(--gray); margin-top: 3px; }
+.pt-mini { position: fixed; left: 16px; right: 16px; bottom: calc(26px + env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px; background: var(--bg); border-radius: 22px; box-shadow: var(--raised); z-index: 5; }
+.pt-mini .pl { width: 46px; height: 46px; border-radius: 50%; background: var(--terra); display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--raised); border: 0; flex-shrink: 0; cursor: pointer; color: var(--white-text); }
+.pt-mini .pl svg { width: 15px; height: 15px; display: block; }
+.pt-mini .bar { height: 8px; border-radius: 5px; box-shadow: var(--inset-sm); overflow: hidden; }
+.pt-mini .bar i { display: block; height: 100%; width: 0; background: var(--terra); border-radius: 5px; }
+.pt-mini .times { display: flex; justify-content: space-between; font: 600 11.5px Inter, sans-serif; color: var(--gray); margin-top: 6px; }
+
+/* ---------- оценка ---------- */
+.pt-res { padding: 6px 22px calc(40px + env(safe-area-inset-bottom)); }
+.pt-res .card { background: var(--bg); border-radius: 22px; box-shadow: var(--raised); padding: 14px 16px; }
+.pt-res .stars { text-align: center; }
+.pt-res .star { font-size: 30px; color: var(--star); }
+.pt-res .star.off { color: var(--line); }
+.pt-res h2 { font: 800 24px Manrope, sans-serif; text-align: center; margin: 6px 0 0; color: var(--ink); }
+.pt-res .big { font: 800 38px/1 Manrope, sans-serif; color: var(--terra); }
+.pt-res p { font: 500 13.5px/1.5 Inter, sans-serif; color: var(--tx3); margin: 0; }
+.pt-res p b { color: var(--ink); }
+.pt-res .sec { font: 700 11.5px Inter, sans-serif; letter-spacing: .06em; text-transform: uppercase; color: var(--gray); margin-bottom: 10px; }
+.pt-res .kdots { display: flex; flex-wrap: wrap; gap: 6px; }
+.pt-res .kdots i { width: 20px; height: 20px; border-radius: 7px; display: block; }
+.pt-res .legend { display: flex; gap: 14px; font: 600 11.5px Inter, sans-serif; color: var(--gray); margin-top: 12px; }
+.pt-res .legend i { display: inline-block; width: 16px; height: 5px; border-radius: 3px; margin-right: 5px; vertical-align: 2px; }
+.pt-res .btns { display: flex; gap: 10px; margin-top: 16px; }
+.pt-res .btns button { flex: 1; height: 48px; border-radius: 16px; border: 0; font: 700 14px Manrope, sans-serif; display: flex; align-items: center;
+  justify-content: center; box-shadow: var(--raised); cursor: pointer; background: var(--bg); color: var(--blue); }
+.pt-res .btns button.main { background: var(--terra); color: var(--white-text); }

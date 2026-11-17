@@ -407,6 +407,9 @@ function backTarget() {
     case "admin-plan": return "admin-plans";
     case "karaoke": return "profile";
     case "karaoke-play": return "karaoke";
+    case "pitch": return "profile";
+    case "pitch-topic": return "pitch";
+    case "pitch-sing": case "pitch-score": return "pitch-topic";
     case "admin-karaoke": return "admin-hub";
     case "admin-karaoke-songs": return "admin-karaoke";
     case "admin-karaoke-edit": return "admin-karaoke-songs";
@@ -2004,10 +2007,12 @@ function renderCabMain(data) {
       '<div class="cab-row" data-act="cab-voice"><div class="cab-ico">' + CAB_ICO_VOICE + '</div><div class="cab-row-txt"><b>Мой голос</b><div>Тип голоса, диапазон и цель</div></div><div class="cab-chev">›</div></div>' +
       '<div class="cab-row" data-act="cab-wheel"><div class="cab-ico">' + CAB_ICO_WHEEL + '</div><div class="cab-row-txt"><b>Колесо баланса</b><div>' + srezLine + '</div></div><div class="cab-chev">›</div></div>' +
       '<div class="cab-row" data-act="cab-karaoke"><div class="cab-ico">' + CAB_ICO_KARAOKE + '</div><div class="cab-row-txt"><b>Караоке</b><div>Твои песни под минус, с текстом</div></div><div class="cab-chev">›</div></div>' +
+      '<div class="cab-row" data-act="cab-pitch"><div class="cab-ico">' + CAB_ICO_PITCH + '</div><div class="cab-row-txt"><b>Распевки с проверкой</b><div>Поёшь с пианино, телефон слушает, попадаешь ли в ноты</div></div><div class="cab-chev">›</div></div>' +
     "</div>";
 }
 
 var CAB_ICO_VOICE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="9" y="3" width="6" height="11" rx="3" stroke="var(--terra)" stroke-width="1.8"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" stroke="var(--terra)" stroke-width="1.8" stroke-linecap="round"/></svg>';
+var CAB_ICO_PITCH = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 17c2.5 0 3-4 5.5-4s3 3 5.5 3 3-7 7-7" stroke="var(--terra)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20" cy="9" r="1.6" fill="var(--terra)"/></svg>';
 var CAB_ICO_KARAOKE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M9 18V5l11-2v13" stroke="var(--terra)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="18" r="3" stroke="var(--terra)" stroke-width="1.8"/><circle cx="17" cy="16" r="3" stroke="var(--terra)" stroke-width="1.8"/></svg>';
 var CAB_ICO_WHEEL = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><polygon points="12,3 20.5,9 17.5,19.5 6.5,19.5 3.5,9" stroke="var(--blue)" stroke-width="1.8" stroke-linejoin="round"/><polygon points="12,8 16,10.5 14.5,15.5 9,15 8,10.5" fill="var(--blue)" fill-opacity=".3" stroke="var(--blue)" stroke-width="1.4"/></svg>';
 
@@ -3520,12 +3525,12 @@ var MAIN_TAB_SCREENS = ["courses", "profile", "questions", "more"];
    и на них, даже если открыт конкретный шаг урока, а не список уроков. */
 var LESSON_SUB_SCREENS = ["lesson-home", "lecture", "quiz", "quiz-result", "warmups", "song", "feedback", "favorites", "lesson-soon"];
 /* Дока нет ТОЛЬКО на экранах входа — на всех остальных она закреплена всегда. */
-var NO_DOCK_SCREENS = ["tg", "name", "token-entry", "blocked", "karaoke-play", "admin-karaoke-edit"];
+var NO_DOCK_SCREENS = ["tg", "name", "token-entry", "blocked", "karaoke-play", "admin-karaoke-edit", "pitch-sing", "pitch-score"];
 
 function activeDockTab() {
   if (MAIN_TAB_SCREENS.indexOf(state.screen) !== -1) return state.screen;
   if (LESSON_SUB_SCREENS.indexOf(state.screen) !== -1) return "courses";
-  if (CAB_SCREENS.indexOf(state.screen) !== -1 || state.screen === "karaoke") return "profile";
+  if (CAB_SCREENS.indexOf(state.screen) !== -1 || state.screen === "karaoke" || state.screen === "pitch" || state.screen === "pitch-topic") return "profile";
   return null;
 }
 
@@ -4291,6 +4296,7 @@ function stopAllMedia() {
   state.songPlayerKey = null;
   state.songPlayerElapsed = 0;
   if (window.karaokeStopAll) window.karaokeStopAll();
+  if (window.pitchStopAll) window.pitchStopAll();
 }
 
 /* ---------- упражнение с песней ---------- */
@@ -5271,6 +5277,7 @@ function render() {
     case "admin-plans": renderAdminPlans(); break;
     case "admin-plan": renderAdminPlanDetail(); break;
     case "karaoke": case "karaoke-play": case "admin-karaoke": case "admin-karaoke-songs": case "admin-karaoke-edit": renderKaraokeScreen(); break;
+    case "pitch": case "pitch-topic": case "pitch-sing": case "pitch-score": renderPitchScreen(); break;
     case "lesson-home": renderLessonHome(); break;
     case "lesson-soon": renderLessonSoon(); break;
     case "blocked": renderBlocked(); break;
