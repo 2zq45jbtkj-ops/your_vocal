@@ -271,7 +271,8 @@ function karEngineNew(song) {
     pitch: Math.max(-6, Math.min(6, Math.round(Number(song.pitchSemitones) || 0))),
     tempo: Math.max(70, Math.min(120, Math.round((Number(song.tempoPct) || 100) / 5) * 5)),
     dur: Number(song.music.durationSec) || 0,
-    shifter: null, buf: null, bufP: null, pos: 0, posAt: 0, gen: 0
+    shifter: null, buf: null, bufP: null, pos: 0, posAt: 0, gen: 0,
+    voice: false   // «С голосом»: играет плюс (голос Николая) вместо минуса
   };
   el.playbackRate = KE.tempo / 100;
   el.addEventListener("loadedmetadata", function () { if (KE && KE.el === el && el.duration && isFinite(el.duration)) KE.dur = el.duration; });
@@ -304,10 +305,10 @@ function karTime() {
 function karDecode() {
   if (KE.buf) return Promise.resolve(KE.buf);
   if (!KE.bufP) {
-    var url = KE.song.music.url;
+    var url = karSrcUrl();
     KE.bufP = fetch(url).then(function (r) { return r.arrayBuffer(); })
       .then(function (ab) { return getAudioCtx().decodeAudioData(ab); })
-      .then(function (b) { if (KE) KE.buf = b; return b; })
+      .then(function (b) { if (KE && karSrcUrl() === url) KE.buf = b; return b; })
       .catch(function (e) { if (KE) KE.bufP = null; throw e; });
   }
   return KE.bufP;
@@ -338,6 +339,39 @@ function karStartShifted(t) {
     KE.busy = false; KE.pitch = 0; karPaintChips();
     KE.el.currentTime = t; karNativePlay();
   });
+}
+
+function karSrcUrl() {
+  return KE.voice && KE.song.voice && KE.song.voice.url ? KE.song.voice.url : KE.song.music.url;
+}
+
+/* «С голосом» вкл/выкл (вариант B, выбран Николаем 17.11): та же позиция,
+   тональность и темп, меняется только дорожка — плюс или минус. */
+function karSetVoice(on) {
+  if (!KE || KE.voice === on) return;
+  var t = karTime(), was = KE.playing || KE.busy;
+  karPause();
+  KE.voice = on;
+  KE.buf = null; KE.bufP = null;
+  var el = KE.el;
+  el.src = karSrcUrl();
+  el.playbackRate = KE.tempo / 100;
+  KE.pos = t;
+  karPaintChips();
+  if (KE.pitch === 0) {
+    var started = false;
+    var go2 = function () {
+      if (!KE || KE.el !== el || KE.voice !== on) return;
+      if (Math.abs((el.currentTime || 0) - t) > 0.3) { try { el.currentTime = t; } catch (e) {} }
+      // если файл ещё нельзя перематывать, повторим на следующем событии загрузки
+      if (Math.abs((el.currentTime || 0) - t) > 0.3 && !el.seekable.length) return;
+      ["loadedmetadata", "canplay", "canplaythrough"].forEach(function (ev) { el.removeEventListener(ev, go2); });
+      el.playbackRate = KE.tempo / 100;
+      if (was && !started) { started = true; karNativePlay(); }
+    };
+    ["loadedmetadata", "canplay", "canplaythrough"].forEach(function (ev) { el.addEventListener(ev, go2); });
+    el.load(); // новая дорожка: позицию ставим, когда она загрузится
+  } else if (was) karStartShifted(t);
 }
 
 function karNativePlay() {
@@ -701,10 +735,14 @@ function karPaintChips() {
     chs.querySelector('[data-kp="loop-off"]').onclick = karLoopOff;
     return;
   }
+  var hasVoice = !!(KE.song.voice && KE.song.voice.url);
   chs.innerHTML =
+    (hasVoice ? '<span class="gch' + (KE.voice ? " on" : "") + '" data-kp="voice">С голосом <b>' + (KE.voice ? "вкл" : "выкл") + "</b></span>" : "") +
     '<span class="gch" data-kp="pitch">Тональность <b>' + karSign(KE.pitch) + "</b></span>" +
     '<span class="gch" data-kp="tempo">Темп <b>' + KE.tempo + "%</b></span>" +
     '<span class="gch" data-kp="marks">Пометки <b>' + (KAR.showMarks ? "вкл" : "выкл") + "</b></span>";
+  var vc = chs.querySelector('[data-kp="voice"]');
+  if (vc) vc.onclick = function () { karSetVoice(!KE.voice); };
   chs.querySelector('[data-kp="pitch"]').onclick = function () { karOpenSheet("pitch"); };
   chs.querySelector('[data-kp="tempo"]').onclick = function () { karOpenSheet("tempo"); };
   chs.querySelector('[data-kp="marks"]').onclick = function () { KAR.showMarks = !KAR.showMarks; karPaintLyrics(); karPaintChips(); };

@@ -243,3 +243,4 @@ html.dark .kadm .gapb { background: oklch(36% 0.03 235); }
   padding: 8px 14px; border-radius: 12px; background: oklch(24% 0.02 250 / .9); color: #fff; font: 600 13px Inter, sans-serif; transition: opacity .25s, transform .25s; }
 .kp .ktoast.on { opacity: 1; transform: translate(-50%, 0); }
 .kp .ktoast.err { background: oklch(50% 0.15 25 / .92); }
+.kp .gch[data-kp="voice"].on b { margin-left: 0; } /* «С голосом вкл» — как на картинке B */
