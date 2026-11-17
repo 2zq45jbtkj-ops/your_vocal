@@ -129,10 +129,18 @@ function karSession() {
   });
 }
 
+/* Список песен ученика. Старый список показываем сразу, но при каждом входе
+   на экран перечитываем его с базы: иначе песня, которую Николай только что
+   добавил (через «Разметку караоке» или с другого устройства), не появлялась
+   до перезапуска приложения (17.11). */
 function karLoadSongs(force) {
-  if (KAR.songs === "loading") return;
-  if (KAR.songs && !force && KAR.songsFor === state.accessToken) return;
-  KAR.songs = "loading"; KAR.songsErr = null; KAR.songsFor = state.accessToken;
+  if (KAR.loading) return;
+  var tok = state.accessToken;
+  var have = KAR.songsFor === tok && Array.isArray(KAR.songs);
+  if (have && !force) return;
+  KAR.loading = true; KAR.songsErr = null;
+  if (!have) { KAR.songs = "loading"; KAR.songsFor = tok; }
+  var before = have ? karSongsKey(KAR.songs) : null;
   karSession().then(function (sess) {
     var h = { "X-Player-Session": sess };
     return Promise.all([
@@ -140,13 +148,23 @@ function karLoadSongs(force) {
       fetch("/api/karaoke", { headers: h }).then(function (r) { return r.ok ? r.json() : {}; }).catch(function () { return {}; })
     ]);
   }).then(function (res) {
-    KAR.songs = ((res[0] && res[0].songs) || []).filter(function (s) { return s.music && s.music.url; });
+    KAR.loading = false;
+    if (state.accessToken !== tok) return;
+    var songs = ((res[0] && res[0].songs) || []).filter(function (s) { return s.music && s.music.url; });
+    KAR.songs = songs; KAR.songsFor = tok; KAR.loadedAt = Date.now();
     KAR.marks = (res[1] && res[1].marks) || {};
-    if (state.screen === "karaoke") render();
+    if (state.screen === "karaoke" && karSongsKey(songs) !== before) { KAR.justLoaded = true; render(); }
   }).catch(function () {
+    KAR.loading = false;
+    if (state.accessToken !== tok) return;
+    if (have) return; // старый список остаётся на экране
     KAR.songs = null; KAR.songsErr = true;
-    if (state.screen === "karaoke") render();
+    if (state.screen === "karaoke") { KAR.justLoaded = true; render(); }
   });
+}
+
+function karSongsKey(list) {
+  return JSON.stringify((list || []).map(function (s) { return [s.id, s.title, s.artist, s.music && s.music.url, (s.lyrics || "").length, (s.lyricTimes || []).length]; }));
 }
 
 /* Строки песни: пустые строки текста — граница куплета, в списке их нет,
@@ -188,7 +206,10 @@ function karLineHtml(l, withMarks) {
    ========================================================================== */
 
 function renderKaraokeList() {
-  karLoadSongs(false);
+  // перечитать при каждом заходе; не перечитывать только когда экран
+  // перерисован самим ответом базы
+  var force = !KAR.justLoaded; KAR.justLoaded = false;
+  karLoadSongs(force);
   var body;
   if (KAR.songs === "loading" || (KAR.songs == null && !KAR.songsErr)) {
     body = '<div class="instruction-note">Загружаю песни…</div>';
