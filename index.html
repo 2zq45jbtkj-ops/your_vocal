@@ -39,5 +39,32 @@
   <script src="karaoke.js"></script>
   <script src="pitch.js"></script>
   <script src="bylo.js"></script>
+  <script>
+    /* Новая версия без ручного перезапуска: значок на экране телефона держит
+       страницу в памяти, поэтому при возвращении в приложение сверяем версию
+       (api/version.js) и перезагружаемся, если вышла новая. Не трогаем экраны,
+       где что-то записывается или печатается. */
+    (function () {
+      var v0 = null, BUSY = /^(bylo|admin-karaoke-edit|pitch-sing|support|feedback|quiz|cab-voice)$/;
+      function check(mayReload) {
+        fetch("/api/version?t=" + Date.now(), { cache: "no-store" })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (j) {
+            if (!j || !j.v) return;
+            if (v0 === null) { v0 = j.v; return; }
+            if (j.v === v0 || !mayReload) return;
+            var scr = window.state && state.screen;
+            if (scr && BUSY.test(scr)) return;
+            location.reload();
+          })
+          .catch(function () {});
+      }
+      check(false);
+      document.addEventListener("visibilitychange", function () {
+        if (document.visibilityState === "visible") check(true);
+      });
+      window.addEventListener("pageshow", function (e) { if (e.persisted) check(true); });
+    })();
+  </script>
 </body>
 </html>
