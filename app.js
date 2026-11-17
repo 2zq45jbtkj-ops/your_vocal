@@ -98,6 +98,7 @@ var state = {
   _adminStudentsErr: false,  // список учеников не загрузился (а не «пуст»)
   _srezCompare: [],          // id срезов, выбранных для сравнения на колесе
   _srezTopicsOpen: false,    // список тем под колесом: раскрыт/свёрнут (жмём по колесу)
+  _wheelZone: null,          // номер зоны, подсвеченной после нажатия на точку колеса
   _ownCabinetMsg: null,      // "not-found" | "no-token" | "net" — почему не открылась своя карточка
   feedbackMood: null, feedbackText: "", coursesFilter: null,
   pendingUnstar: null, pendingUnstarData: null, pendingUnstarSecs: 0,
@@ -396,6 +397,7 @@ function backTarget() {
     case "lesson-home": return "courses";
     case "favorites": return "courses";
     case "lesson-soon": return "courses";
+    case "cab-lessons": case "cab-hw": case "cab-voice": case "cab-wheel": return "profile";
     case "doc": return "more";
     case "support": return "more";
     case "admin-hub": return "more";
@@ -1022,17 +1024,17 @@ function loadStudentPublicData() {
         // Код доступа верный — не стираем его и никуда не выкидываем.
         state.studentPublicData = null;
         state._profileErr = "server";
-        if (state.screen === "profile") render();
+        if (isCabinetScreen(state.screen)) render();
         return;
       }
       // Не только «Кабинет»: от этих же данных зависят разблокировка уроков на
       // «Курсах» и экран закрытого доступа.
-      if (["profile", "courses", "blocked"].indexOf(state.screen) !== -1) render();
+      if (isCabinetScreen(state.screen) || ["courses", "blocked"].indexOf(state.screen) !== -1) render();
     })
     .catch(function () {
       state.studentPublicData = null;
       state._profileErr = "net";
-      if (state.screen === "profile") render();
+      if (isCabinetScreen(state.screen)) render();
     });
 }
 
@@ -1418,7 +1420,7 @@ function toggleHwDone(idx) {
 // шторку-напоминание. Шторка живёт в <body>, а не в #app, поэтому render()
 // её не трогает — обновляем отдельно.
 function repaintHomework() {
-  if (state.screen === "profile") render();
+  if (isCabinetScreen(state.screen)) render();
   if (document.getElementById("hw-reminder")) {
     if (!pendingHomework().length) closeHwReminder();
     else paintHwSheet();
@@ -1749,7 +1751,6 @@ function renderProfile() {
     var artArr = Array.isArray(intake.articulatory) ? intake.articulatory : [];
 
     voiceHtml =
-      '<div class="assessments-title">Голосовой профиль</div>' +
       '<div class="cabinet-inset">' +
         (voiceTypeStr || rangeStr ? '<div class="cabinet-grid-2col">' +
           (voiceTypeStr ? '<div><div class="profile-card-label">Тип голоса</div><div class="profile-card-value">' + esc(voiceTypeStr) + "</div></div>" : "") +
@@ -1770,30 +1771,341 @@ function renderProfile() {
       "</div>";
   }
 
-  app.innerHTML =
-    '<div style="padding:var(--screen-top) 20px 130px;">' +
-      '<div class="profile-head">' +
-        '<div class="profile-avatar">' + esc(initials || "?") + "</div>" +
+  var head =
+      '<div class="profile-head cab-head">' +
+        '<div class="profile-avatar cab-ava">' + esc(initials || "?") + "</div>" +
         '<div>' +
-          '<div class="profile-name">' + esc(name) + "</div>" +
+          '<div class="profile-name cab-name">' + esc(name) + "</div>" +
           (statusLabel ? '<div class="profile-status"><span style="color:var(--terra);font-weight:600;">' + esc(statusLabel) + "</span></div>" : "") +
         "</div>" +
-      "</div>" +
-      voiceHtml +
-      renderHomeworkSection(homework) +
-      renderSrezySection(data ? data.srezy : [], data ? data.wheelTopics : []) +
-      (state.studentPublicData === "loading" ? '<div class="instruction-note" style="margin-top:16px;">Загружаю данные…</div>' : "") +
+      "</div>";
+  var loadingNote = (state.studentPublicData === "loading" ? '<div class="instruction-note" style="margin-top:16px;">Загружаю данные…</div>' : "") +
       (!data && state.studentPublicData !== "loading"
         ? '<div class="instruction-note" style="margin-top:16px;">' +
             (state._profileErr === "server"
               ? "Сервер не отвечает. Код доступа сохранён — просто открой кабинет ещё раз через минуту."
               : "Нет соединения. Открой кабинет ещё раз.") +
           "</div>"
-        : "") +
-    "</div>";
+        : "");
+
+  var body;
+  switch (state.screen) {
+    case "cab-lessons": body = cabBack() + renderCabLessons(data); break;
+    case "cab-hw": body = cabBack() + renderCabHw(data, homework); break;
+    case "cab-voice": body = cabBack() + '<div class="cab-screen-title">Мой голос</div>' +
+      (voiceHtml || '<div class="instruction-note">Николай заполнит твой голосовой профиль после первых уроков.</div>'); break;
+    case "cab-wheel": body = cabBack() + renderCabWheel(data); break;
+    default: body = head + renderCabMain(data);
+  }
+
+  app.innerHTML =
+    '<div style="padding:var(--screen-top) 20px 130px;">' + body + loadingNote + "</div>";
 
   wireActs();
   wireHwToggles(app);
+  wireCabWheelDots(app);
+}
+
+/* ---------- Кабинет: главная, «Мои уроки», «Домашние задания», «Колесо баланса» ----------
+   Собрано 1:1 по макету, который выбрал Николай 17.11 (kabinet-sborka-2,
+   golos-i-koleso, koleso-tochki). Данные об абонементе и уроках приходят из
+   бота записи через baza-dannih (subscription, upcomingLessons, nextSrez,
+   hwTracker), сам Mini App их не считает. */
+
+var CAB_SCREENS = ["cab-lessons", "cab-hw", "cab-voice", "cab-wheel"];
+var MONTHS_GEN = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
+var WEEKDAYS_FULL = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
+var NB = " ";
+
+function isCabinetScreen(s) { return s === "profile" || CAB_SCREENS.indexOf(s) !== -1; }
+
+function plural(n, one, few, many) {
+  var a = Math.abs(n) % 100, b = a % 10;
+  if (a > 10 && a < 20) return many;
+  if (b > 1 && b < 5) return few;
+  if (b === 1) return one;
+  return many;
+}
+
+// "2026-12-05" → «5 декабря» (неразрывный пробел, чтобы дата не рвалась на две строки)
+function dayMonth(ymdStr) {
+  if (!ymdStr) return "";
+  var p = String(ymdStr).slice(0, 10).split("-");
+  return parseInt(p[2], 10) + NB + MONTHS_GEN[parseInt(p[1], 10) - 1];
+}
+
+// ISO из базы → «суббота, 22 ноября, 11:30» во времени самого ученика
+function lessonWhen(iso) {
+  var d = new Date(iso);
+  if (isNaN(d)) return "";
+  return WEEKDAYS_FULL[d.getDay()] + ", " + d.getDate() + NB + MONTHS_GEN[d.getMonth()] + ", " +
+    d.getHours() + ":" + ("0" + d.getMinutes()).slice(-2);
+}
+
+function cabBack() {
+  return '<button class="cab-back" data-act="back"><span class="cab-back-ico">' +
+    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+    "</span><span>Кабинет</span></button>";
+}
+
+function cabRing(p, size, stroke, label, sub) {
+  var r = (size - stroke) / 2, c = 2 * Math.PI * r;
+  return '<div class="cab-ring" style="width:' + size + "px;height:" + size + 'px;">' +
+    '<svg width="' + size + '" height="' + size + '">' +
+      '<circle cx="' + size / 2 + '" cy="' + size / 2 + '" r="' + r + '" fill="none" stroke="var(--bgmuted)" stroke-width="' + stroke + '"/>' +
+      (p > 0 ? '<circle cx="' + size / 2 + '" cy="' + size / 2 + '" r="' + r + '" fill="none" stroke="var(--terra)" stroke-width="' + stroke +
+        '" stroke-linecap="round" stroke-dasharray="' + (c * Math.min(1, p)).toFixed(1) + " " + c.toFixed(1) + '"/>' : "") +
+    "</svg>" +
+    '<div class="cab-ring-txt"><div class="cab-ring-val">' + label + "</div>" + (sub ? '<div class="cab-ring-sub">' + sub + "</div>" : "") + "</div></div>";
+}
+
+// Состояние каждого урока абонемента: использованные, оставшиеся и «золотой»
+// (урок-срез) среди оставшихся — по списку ближайших записанных уроков.
+function cabLessonSlots(data) {
+  var sub = data && data.subscription;
+  if (!sub || !sub.lessonsTotal) return [];
+  var used = sub.lessonsTotal - sub.lessonsLeft;
+  var up = (data.upcomingLessons || []);
+  var out = [];
+  for (var i = 0; i < sub.lessonsTotal; i++) {
+    if (i < used) out.push("used");
+    else out.push(up[i - used] && up[i - used].golden ? "gold" : "left");
+  }
+  return out;
+}
+
+function cabTermLines(sub) {
+  if (!sub || !sub.termDays) return "";
+  if (!sub.started) return '<div class="cab-term">Срок начнётся с' + NB + "первого урока</div>";
+  return '<div class="cab-term">Срок до' + NB + dayMonth(sub.termEnd) +
+    (sub.extraEnd ? '<br><span class="cab-term-extra">' + esc(sub.extraLabel).replace(" ", NB) + " до" + NB + dayMonth(sub.extraEnd) + "</span>" : "") +
+    "</div>";
+}
+
+function renderCabMain(data) {
+  var sub = data && data.subscription;
+  var slots = cabLessonSlots(data);
+  var tracker = (data && data.hwTracker) || [];
+  var okN = tracker.filter(function (t) { return t.state === "ok"; }).length;
+
+  var lessonsTile = '<div class="cab-tile" data-act="cab-lessons">' +
+      '<div class="cab-tile-h">Уроки</div>' +
+      (sub
+        ? '<div class="cab-big-row"><span class="cab-big">' + sub.lessonsLeft + '</span><span class="cab-big-of">из' + NB + sub.lessonsTotal + "</span></div>" +
+          '<div class="cab-dots">' + slots.map(function (s) { return '<span class="cab-dot ' + s + '"></span>'; }).join("") + "</div>" +
+          cabTermLines(sub)
+        : '<div class="cab-big-row"><span class="cab-big">0</span></div><div class="cab-term">Абонемента пока нет</div>') +
+    "</div>";
+  var hwTile = '<div class="cab-tile cab-tile-hw" data-act="cab-hw">' +
+      '<div class="cab-tile-h">Домашние задания</div>' +
+      (tracker.length
+        ? cabRing(okN / tracker.length, 88, 9, okN + NB + "из" + NB + tracker.length, "сдано")
+        : '<div class="cab-term" style="align-self:flex-start;">Задания появятся после урока</div>') +
+    "</div>";
+
+  var srezLine = data && data.nextSrez
+    ? 'Следующий срез <span class="cab-gold-txt">★' + NB + dayMonth(data.nextSrez) + "</span>"
+    : "Срез — на последнем уроке месяца";
+
+  return '<div class="cab-tiles">' + lessonsTile + hwTile + "</div>" +
+    '<button class="cta terra cab-cta" data-act="cab-renew">Пополнить уроки</button>' +
+    '<div class="cab-card cab-rows">' +
+      '<div class="cab-row" data-act="cab-voice"><div class="cab-ico">' + CAB_ICO_VOICE + '</div><div class="cab-row-txt"><b>Мой голос</b><div>Тип голоса, диапазон и цель</div></div><div class="cab-chev">›</div></div>' +
+      '<div class="cab-row" data-act="cab-wheel"><div class="cab-ico">' + CAB_ICO_WHEEL + '</div><div class="cab-row-txt"><b>Колесо баланса</b><div>' + srezLine + '</div></div><div class="cab-chev">›</div></div>' +
+    "</div>";
+}
+
+var CAB_ICO_VOICE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="9" y="3" width="6" height="11" rx="3" stroke="var(--terra)" stroke-width="1.8"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" stroke="var(--terra)" stroke-width="1.8" stroke-linecap="round"/></svg>';
+var CAB_ICO_WHEEL = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><polygon points="12,3 20.5,9 17.5,19.5 6.5,19.5 3.5,9" stroke="var(--blue)" stroke-width="1.8" stroke-linejoin="round"/><polygon points="12,8 16,10.5 14.5,15.5 9,15 8,10.5" fill="var(--blue)" fill-opacity=".3" stroke="var(--blue)" stroke-width="1.4"/></svg>';
+
+function renderCabLessons(data) {
+  var sub = data && data.subscription;
+  var up = (data && data.upcomingLessons) || [];
+  var slots = cabLessonSlots(data);
+  var circles = slots.map(function (s, i) {
+    if (s === "used") return '<div class="cab-lesson used">✓</div>';
+    if (s === "gold") return '<div class="cab-lesson gold">★</div>';
+    return '<div class="cab-lesson left">' + (i + 1) + "</div>";
+  }).join("");
+  var left = sub ? sub.lessonsLeft : 0;
+  var card = '<div class="cab-card">' +
+      '<div class="cab-card-title">Мои уроки</div>' +
+      (slots.length ? '<div class="cab-lessons' + (slots.length > 8 ? " many" : "") + '">' + circles + "</div>" : "") +
+      '<div class="cab-left-row"><div>' +
+        '<div class="cab-left">' + (sub ? "Осталось " + left + NB + plural(left, "урок", "урока", "уроков") : "Абонемента пока нет") + "</div>" +
+        (up.length ? '<div class="cab-mute">Ближайший: ' + lessonWhen(up[0].at) + "</div>" : "") +
+      "</div>" +
+      '<button class="cta terra cab-cta-sm" data-act="cab-renew">Пополнить</button></div>' +
+    "</div>";
+
+  var gold = data && data.nextSrez
+    ? '<div class="cab-gold-note"><div class="cab-lesson gold">★</div><div>Золотой урок ' + dayMonth(data.nextSrez) +
+      ": делаем срез и заполняем колесо баланса</div></div>"
+    : "";
+
+  var term = "";
+  if (sub && sub.termDays) {
+    term = '<div class="cab-card cab-rows">' +
+      '<div class="cab-row cab-row-static"><div class="cab-row-txt"><b>Срок абонемента</b><div>' + sub.termDays + NB + plural(sub.termDays, "день", "дня", "дней") + " с первого урока</div></div>" +
+        '<div class="cab-term-val">' + (sub.started ? "до" + NB + dayMonth(sub.termEnd) : "с первого урока") + "</div></div>" +
+      (sub.extraLabel
+        ? '<div class="cab-row cab-row-static"><div class="cab-row-txt"><b>' + esc(sub.extraLabel) + "</b><div>чтобы успеть пройти оставшиеся уроки</div></div>" +
+          '<div class="cab-term-val extra">' + (sub.started ? "до" + NB + dayMonth(sub.extraEnd) : "") + "</div></div>"
+        : "") +
+      "</div>";
+  }
+  return card + gold + term;
+}
+
+function renderCabHw(data, homework) {
+  var tracker = (data && data.hwTracker) || [];
+  var okN = tracker.filter(function (t) { return t.state === "ok"; }).length;
+  var sq = "", lab = "";
+  tracker.forEach(function (t, i) {
+    sq += '<div class="cab-sq ' + t.state + '">' + (t.state === "ok" ? SVG_HW_CHECK : "") + "</div>";
+    lab += '<div class="cab-sq-lab">' + (i + 1) + "</div>";
+  });
+  // Открытые задания: всё, что не сдано, плюс сданное, пока не прошёл его срок —
+  // чтобы отмеченное задание не пропадало из-под пальца.
+  var today = new Date(); today.setHours(0, 0, 0, 0);
+  var list = "";
+  (homework || []).forEach(function (hw, i) {
+    var due = hw.due ? new Date(String(hw.due).slice(0, 10) + "T00:00:00") : null;
+    if (hw.done && !(due && due >= today)) return;
+    var overdue = due && due < today && !hw.done;
+    var busy = state._hwBusy[hwKey(hw)];
+    list += '<div class="cab-hw' + (hw.done ? " hw-item-done" : "") + '">' +
+      '<button class="hw-check' + (hw.done ? " done" : "") + '" data-hw-toggle="' + i + '"' + (busy ? " disabled" : "") +
+        ' aria-pressed="' + (hw.done ? "true" : "false") + '" aria-label="Отметить выполненным">' + SVG_HW_CHECK + "</button>" +
+      '<div style="flex:1;min-width:0;"><div class="hw-title cab-hw-title">' + esc(hw.title || "") + "</div>" +
+        (due ? '<div class="cab-hw-due' + (overdue ? " red" : "") + '">до ' + dayMonth(hw.due) + (overdue ? " · просрочено" : "") + "</div>" : "") +
+      "</div></div>";
+  });
+  return '<div class="cab-card">' +
+      '<div class="cab-card-title">Домашние задания' + (tracker.length ? "<small>сдано " + okN + " из " + tracker.length + "</small>" : "") + "</div>" +
+      (tracker.length
+        ? '<div class="cab-sqs">' + sq + '</div><div class="cab-sqs">' + lab + "</div>" +
+          '<div class="cab-mute cab-sq-cap">Каждый квадрат — задание после урока. Пустой — не сдано.</div>'
+        : '<div class="cab-mute">Задания появятся здесь после урока.</div>') +
+      (list ? '<div class="cab-hw-list">' + list + "</div>" : "") +
+    "</div>";
+}
+
+/* «Колесо баланса» отдельным экраном. Вокруг колеса — точки с номерами зон;
+   нажал точку — страница едет к этой зоне в списке и подсвечивает её
+   (просьба Николая 17.11). Сравнение срезов работает как раньше. */
+function renderCabWheel(data) {
+  var gold = data && data.nextSrez
+    ? '<div class="cab-gold-note"><div class="cab-lesson gold">★</div><div>Следующий срез ' + dayMonth(data.nextSrez) + ", на золотом уроке</div></div>"
+    : "";
+  var srezy = data ? data.srezy : [];
+  var wheelTopics = data ? data.wheelTopics : [];
+  var list = Array.isArray(srezy) ? srezy : [];
+  var current = (Array.isArray(wheelTopics) && wheelTopics.length)
+    ? wheelTopics
+    : (list.length ? (list[list.length - 1].topics || []) : []);
+  if (!current.length) {
+    return '<div class="cab-screen-title">Колесо баланса</div>' + gold +
+      '<div class="instruction-note">Колесо заполним вместе на первом срезе.</div>';
+  }
+  var order = current.map(function (t) { return t.name; });
+  var series = [{ topics: current, color: "var(--terra)", fill: 0.18 }];
+  var picked = [];
+  state._srezCompare.forEach(function (id, i) {
+    var found = null;
+    for (var k = 0; k < list.length; k++) if (list[k].id === id) found = list[k];
+    if (found) {
+      picked.push(found);
+      series.push({ topics: found.topics, color: SREZ_COMPARE_COLORS[i % SREZ_COMPARE_COLORS.length], fill: 0.07 });
+    }
+  });
+  var sel = state._wheelZone;
+
+  var rows = current.map(function (t, i) {
+    var score = (t.score === null || t.score === undefined) ? null : Number(t.score);
+    var cmp = picked.map(function (z, k) {
+      var pv = null;
+      (z.topics || []).forEach(function (x) { if (x.name === t.name) pv = x.score; });
+      return '<span class="srez-cmp" style="color:' + SREZ_COMPARE_COLORS[k % SREZ_COMPARE_COLORS.length] + ';">' +
+        (pv === null || pv === undefined ? "—" : pv) + "</span>";
+    }).join("");
+    var pct = score === null ? 0 : Math.max(0, Math.min(10, score)) * 10;
+    return '<div class="cab-zone' + (sel === i ? " on" : "") + '" id="cab-zone-' + i + '">' +
+      '<div class="cab-zone-num">' + (i + 1) + "</div>" +
+      '<div style="flex:1;min-width:0;"><div class="srez-row-head">' +
+        '<span class="srez-name">' + esc(t.name) + "</span>" + cmp +
+        '<span class="cab-zone-score">' + (score === null ? "—" : score + " из 10") + "</span></div>" +
+        '<div class="srez-bar"><div class="srez-bar-fill" style="width:' + pct + '%;"></div></div>' +
+      "</div></div>";
+  }).join("");
+
+  var recent = list.slice().reverse().slice(0, 5);
+  var hist = "";
+  if (list.length) {
+    hist = '<div class="srez-hist-title">Срезы</div>' +
+      '<div class="srez-hist-hint">Нажми на дату, чтобы наложить срез на колесо — можно сравнить до трёх.' +
+        (list.length > recent.length ? " Показаны последние " + recent.length + " из " + list.length + "." : "") + "</div>" +
+      recent.map(function (z) {
+        var at = state._srezCompare.indexOf(z.id);
+        var col = at > -1 ? SREZ_COMPARE_COLORS[at % SREZ_COMPARE_COLORS.length] : "";
+        var scored = (z.topics || []).filter(function (t) { return t.score !== null && t.score !== undefined; }).length;
+        return '<div class="srez-hist-item' + (at > -1 ? " on" : "") + '" data-act="srez-toggle" data-srez-id="' + esc(z.id) + '"' +
+            (col ? ' style="border-color:' + col + ';"' : "") + ">" +
+            '<span class="srez-hist-date">' + esc(z.date || "") + "</span>" +
+            '<span class="srez-hist-count">' + scored + " из " + (z.topics || []).length + "</span></div>";
+      }).join("");
+  }
+
+  return '<div class="cab-screen-title">Колесо баланса</div>' + gold +
+    '<div class="cabinet-inset">' +
+      cabWheelSvg(order, series, sel) +
+      '<div class="cab-wheel-hint">Нажми на точку — покажу, что это за зона</div>' +
+      '<div class="srez-hist-title">Зоны колеса</div>' + rows + hist +
+    "</div>";
+}
+
+function cabWheelSvg(order, series, sel) {
+  var cx = 120, cy = 120, R = 88, n = order.length;
+  var svg = srezWheelSvg(order, series);
+  // srezWheelSvg рисует колесо в поле 220×220 с центром 110 и радиусом 92 —
+  // кладём его внутрь поля побольше, чтобы снаружи поместились точки.
+  var inner = svg.replace(/^<svg[^>]*>/, "").replace(/<\/svg>$/, "");
+  var k = R / 92;
+  var dotR = n > 12 ? 9 : 11, fs = n > 12 ? 9 : 11;
+  var dots = order.map(function (_, i) {
+    var a = -Math.PI / 2 + (i * 2 * Math.PI) / n;
+    var x = (cx + 104 * Math.cos(a)).toFixed(1), y = (cy + 104 * Math.sin(a)).toFixed(1);
+    var on = sel === i;
+    return '<g class="cab-wdot' + (on ? " on" : "") + '" data-zone="' + i + '">' +
+      '<circle cx="' + x + '" cy="' + y + '" r="20" fill="transparent"/>' +
+      (on ? '<circle cx="' + x + '" cy="' + y + '" r="' + (dotR + 4) + '" fill="var(--terra)" fill-opacity=".18"/>' : "") +
+      '<circle cx="' + x + '" cy="' + y + '" r="' + dotR + '" class="cab-wdot-c"/>' +
+      '<text x="' + x + '" y="' + (Number(y) + fs * 0.36).toFixed(1) + '" text-anchor="middle" font-size="' + fs + '" class="cab-wdot-t">' + (i + 1) + "</text></g>";
+  }).join("");
+  return '<svg viewBox="0 0 240 240" class="cab-wheel">' +
+    '<g transform="translate(' + (cx - 110 * k).toFixed(2) + " " + (cy - 110 * k).toFixed(2) + ") scale(" + k.toFixed(4) + ')">' + inner + "</g>" +
+    dots + "</svg>";
+}
+
+function wireCabWheelDots(root) {
+  Array.prototype.forEach.call((root || document).querySelectorAll(".cab-wdot"), function (el) {
+    el.addEventListener("click", function () {
+      var i = parseInt(el.getAttribute("data-zone"), 10);
+      state._wheelZone = i;
+      render();
+      var row = document.getElementById("cab-zone-" + i);
+      if (row && row.scrollIntoView) {
+        try { row.scrollIntoView({ behavior: "smooth", block: "center" }); } catch (e) { row.scrollIntoView(); }
+      }
+    });
+  });
+}
+
+function openRenew() {
+  // Покупка уроков живёт в боте: start=renew — чтобы бот знал, откуда пришли.
+  var url = "https://t.me/" + TEACHER_BOT_USERNAME + "?start=renew";
+  if (tg && tg.openTelegramLink) tg.openTelegramLink(url);
+  else window.open(url, "_blank");
 }
 
 /* ---------- запись на занятие: календарь → время → подтверждение (1:1 по макету) ---------- */
@@ -3018,6 +3330,7 @@ var NO_DOCK_SCREENS = ["tg", "name", "token-entry", "blocked"];
 function activeDockTab() {
   if (MAIN_TAB_SCREENS.indexOf(state.screen) !== -1) return state.screen;
   if (LESSON_SUB_SCREENS.indexOf(state.screen) !== -1) return "courses";
+  if (CAB_SCREENS.indexOf(state.screen) !== -1) return "profile";
   return null;
 }
 
@@ -4634,6 +4947,11 @@ var ACTS = {
   "finish-lesson": function () { state.songDone = true; saveState(); sendProgressToBaza((LESSON.id || 1), "song"); submitSongMarks(); go("feedback"); },
   "reset-progress": resetProgress,
   "go-profile": function () { go("profile"); },
+  "cab-lessons": function () { go("cab-lessons"); },
+  "cab-hw": function () { go("cab-hw"); },
+  "cab-voice": function () { go("cab-voice"); },
+  "cab-wheel": function () { state._wheelZone = null; go("cab-wheel"); },
+  "cab-renew": function () { openRenew(); },
   "go-courses": function () { go("courses"); },
   "go-questions": function () { go("questions"); },
   "go-more": function () { go("more"); },
@@ -4746,7 +5064,7 @@ function render() {
     case "name": renderName(); break;
     case "courses": renderCourses(); break;
     case "favorites": renderFavorites(); break;
-    case "profile": renderProfile(); break;
+    case "profile": case "cab-lessons": case "cab-hw": case "cab-voice": case "cab-wheel": renderProfile(); break;
     case "questions": renderQuestions(); break;
     case "more": renderMore(); break;
     case "doc": renderDoc(); break;
