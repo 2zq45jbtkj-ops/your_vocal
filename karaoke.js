@@ -228,12 +228,23 @@ function renderKaraokeList() {
   }
   // Николай смотрит кабинет ученика (или свой) — отсюда же добавляет песни
   // этому ученику, без захода в «Ещё → Разметка караоке».
-  var admAdd = state.isAdmin ? '<button class="cta" data-kar-adm-add style="margin-top:14px;">+ Новая песня</button>' : "";
+  // Значок на телефоне открывается по личной ссылке как ученик (своя карточка
+  // Николая) — там тоже есть «+ Новая песня»: один раз просит ключи админа и
+  // возвращает сюда уже в режиме админа.
+  var spName = String((state.studentPublicData && state.studentPublicData.student && state.studentPublicData.student.name) || (state.firstName || "") + " " + (state.lastName || "")).toLowerCase();
+  var ownCard = !state.isAdmin && spName.indexOf("септ") !== -1 && spName.indexOf("никола") !== -1;
+  var admAdd = (state.isAdmin || ownCard) ? '<button class="cta" data-kar-adm-add style="margin-top:14px;">+ Новая песня</button>' : "";
   app.innerHTML = '<div style="padding:var(--screen-top) 20px 130px;">' + cabBack() +
     '<div class="cab-screen-title">Караоке</div>' + body + admAdd + "</div>";
   wireActs();
   var addBtn = app.querySelector("[data-kar-adm-add]");
   if (addBtn) addBtn.addEventListener("click", function () {
+    if (!state.isAdmin) {
+      state._afterAdminLogin = "karaoke";
+      state._tokenInput = ""; state._adminKey2 = ""; state._tokenError = "";
+      go("token-entry");
+      return;
+    }
     var tok = state.accessToken;
     var st = (state.adminStudentsList || []).filter(function (x) { return x && x.telegramToken && x.telegramToken === tok; })[0];
     KAR.songs = null; // после разметки список ученика перечитается

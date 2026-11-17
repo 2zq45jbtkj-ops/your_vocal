@@ -415,6 +415,7 @@ function backTarget() {
     case "admin-plans": return "admin-hub";
     case "admin-plan": return "admin-plans";
     case "karaoke": return "profile";
+    case "token-entry": return state._afterAdminLogin ? "karaoke" : null;
     case "karaoke-play": return (window.KAR && KAR.fromAdmEdit) ? "admin-karaoke-edit" : "karaoke";
     case "pitch": return "profile";
     case "bylo": return "profile";
@@ -524,6 +525,12 @@ function renderTokenEntry() {
             state._adminKey2 = "";
             state._tokenError = "";
             saveState();
+            // пришёл из «Караоке» своей карточки — сразу туда же, уже админом
+            if (state._afterAdminLogin === "karaoke") {
+              state._afterAdminLogin = null; state._goKaraoke = true;
+              openOwnCabinet();
+              return;
+            }
             go("admin-hub");
           } else {
             state._tokenError = "Неверные ключи. Попробуй ещё раз.";
@@ -1136,6 +1143,7 @@ function enterAdminMode(student) {
         state.studentPublicData = data;
         state.firstName = data.student.name.split(" ")[0] || data.student.name;
         state.lastName = data.student.name.split(" ").slice(1).join(" ") || "";
+        if (state._goKaraoke) { state._goKaraoke = false; KAR.songs = null; go("karaoke"); return; }
         go("profile");
       } else {
         state.adminMode = false;
