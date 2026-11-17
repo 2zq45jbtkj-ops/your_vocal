@@ -8,7 +8,12 @@
 .kp {
   position: fixed; inset: 0; z-index: 50; overflow: hidden; isolation: isolate;
   display: flex; flex-direction: column;
-  background: oklch(62% 0.09 45);
+  --kp-base: oklch(62% 0.09 45);
+  /* Сплошной цвет — не у самого .kp, а слоем под ним (::before) и у страницы.
+     iOS 26 красит полосу под часами в фон закреплённого элемента у верхнего
+     края; с непрозрачным фоном у .kp полоса выходила плоской серой. Так верх
+     ведёт себя как в кабинете: матовый и прозрачный, свечение видно (17.11). */
+  background: transparent;
   --g1: oklch(58% 0.16 38 / 1); --g2: oklch(54% 0.10 235 / 1); --g3: oklch(64% 0.11 45 / .9);
   --frost: oklch(52% 0.06 45 / .22);
   --hi: oklch(99% 0.005 80); --dim: oklch(99% 0.005 80 / .55);
@@ -17,12 +22,15 @@
   -webkit-user-select: none; user-select: none;
 }
 html.dark .kp {
-  background: oklch(26% 0.012 235);
+  --kp-base: oklch(26% 0.012 235);
   --g1: oklch(52% 0.14 38 / .85); --g2: oklch(50% 0.09 235 / .85); --g3: oklch(60% 0.08 50 / .5);
   --frost: oklch(22% 0.012 235 / .35);
   --hi: oklch(98% 0.005 80); --dim: oklch(98% 0.005 80 / .36);
   --glass: oklch(100% 0 0 / .10); --glass-b: oklch(100% 0 0 / .18);
 }
+.kp::before { content: ""; position: absolute; inset: 0; z-index: -3; background: var(--kp-base); pointer-events: none; }
+html.kp-open, html.kp-open body { background: oklch(62% 0.09 45); }
+html.dark.kp-open, html.dark.kp-open body { background: oklch(26% 0.012 235); }
 /* Пятна и так мягкие (радиальный градиент), поэтому без filter: blur —
    размытие пересчитывалось бы в каждом кадре и тормозило на слабых телефонах. */
 .kp .amb { position: absolute; inset: -25%; z-index: -2; pointer-events: none; }
@@ -42,9 +50,16 @@ html.dark .kp {
 
 .kp .lyr { position: relative; flex: 1; min-height: 0; overflow: hidden; padding: 0 26px;
   -webkit-mask: linear-gradient(transparent, #000 12%, #000 78%, transparent); mask: linear-gradient(transparent, #000 12%, #000 78%, transparent); }
+/* Свайп текста как в Apple Music: палец листает текст сам, без прокрутки страницы. */
+.kp .lyr { touch-action: none; }
+.kp .lyr.selm { touch-action: pan-y; }
+.kp .lyr.free p.f1, .kp .lyr.free p.f2, .kp .lyr.free p.f3 { color: var(--dim); text-shadow: none; }
+.kp .lyr.free p.f1 .mk, .kp .lyr.free p.f2 .mk, .kp .lyr.free p.f3 .mk { color: oklch(92% 0.06 50); text-shadow: none; }
+html.dark .kp .lyr.free p.f1 .mk, html.dark .kp .lyr.free p.f2 .mk, html.dark .kp .lyr.free p.f3 .mk { color: oklch(80% 0.08 50); }
+.kp .lyr.free p.f2 .ktag, .kp .lyr.free p.f3 .ktag { opacity: 1; }
 .kp .lyr-in { position: relative; transition: transform .7s cubic-bezier(.22, .8, .25, 1); will-change: transform; }
 .kp .lyr p { font: 800 25px/1.25 Manrope, sans-serif; color: var(--dim); margin: 0 0 20px; position: relative;
-  transition: color .35s, font-size .35s, text-shadow .35s; cursor: pointer; }
+  transition: color .35s, text-shadow .35s; cursor: pointer; }
 .kp .lyr p.gap { margin-top: 18px; }
 /* Размытие дальних строк — тенью текста, а не filter: blur. На iPhone filter
    внутри маски с анимацией давал чёрные рамки и полосы по краям строк (17.11).
@@ -54,7 +69,9 @@ html.dark .kp {
 .kp .lyr p.f1 .mk, .kp .lyr p.f2 .mk, .kp .lyr p.f3 .mk { color: transparent; text-shadow: 0 0 2.4px oklch(92% 0.06 50); }
 html.dark .kp .lyr p.f1 .mk, html.dark .kp .lyr p.f2 .mk, html.dark .kp .lyr p.f3 .mk { text-shadow: 0 0 2.4px oklch(80% 0.08 50); }
 .kp .lyr p.f2 .ktag, .kp .lyr p.f3 .ktag { opacity: .55; }
-.kp .lyr p.cur { color: var(--hi); font-size: 30px; text-shadow: 0 0 22px oklch(100% 0 0 / .55), 0 0 2px oklch(100% 0 0 / .4); filter: none; }
+/* Звучащая строка того же размера, что и остальные: текст не перестраивается
+   и не прыгает, когда строка становится текущей (17.11, просьба Николая). */
+.kp .lyr p.cur { color: var(--hi); text-shadow: 0 0 22px oklch(100% 0 0 / .55), 0 0 2px oklch(100% 0 0 / .4); filter: none; }
 .kp .mk { font: 700 16px "JetBrains Mono", ui-monospace, monospace; color: oklch(92% 0.06 50); margin: 0 4px; vertical-align: 4px; }
 .kp .lyr p > .mk:first-child { margin-left: 0; }
 html.dark .kp .mk { color: oklch(80% 0.08 50); }

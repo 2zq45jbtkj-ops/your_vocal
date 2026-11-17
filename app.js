@@ -5307,6 +5307,9 @@ var lastRenderedQuizIndex = null;
 
 function render() {
   applyDarkMode();
+  // Караоке: страница под плеером в его цвете — тогда верх под часами на iPhone
+  // становится матовым и прозрачным, как в кабинете, без серой полосы (17.11).
+  document.documentElement.classList.toggle("kp-open", state.screen === "karaoke-play");
   stopAllMedia();
   // Прокручиваем наверх только при переходе на другой шаг/вопрос — не при
   // мелких действиях на том же экране (ответ в тесте, метка в песне и

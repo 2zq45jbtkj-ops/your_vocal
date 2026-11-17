@@ -308,8 +308,11 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
    ученика для диагностики — вставляется первым элементом в #app (обычный
    поток документа, не fixed), поэтому весь остальной контент экрана
    автоматически сдвигается вниз, без правок padding на каждом экране. */
+/* Прилипает не под самые часы, а ниже них: верх экрана на iPhone всегда
+   остаётся прозрачным матовым переходом, без сплошной полосы цвета плашки
+   (правило Николая 17.11 для всего приложения). */
 .admin-banner {
-  position: sticky; top: 0; z-index: 900;
+  position: sticky; top: calc(var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px)); z-index: 900;
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   background: var(--terra); color: var(--white-text);
   padding: 10px 16px; font: 600 12.5px 'Inter', sans-serif;

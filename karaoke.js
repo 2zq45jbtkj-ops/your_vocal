@@ -554,10 +554,14 @@ function karPaintLyrics() {
   KP.root.querySelector(".khint").style.display = selMode ? "" : "none";
   var adm = karIsAdm() && !selMode && !KP.tap;
   lyr.classList.toggle("kadmlp", adm);
+  karFreeOff(true);
+  if (!lyr._swipe) { lyr._swipe = true; karWireSwipe(lyr, inner); }
   Array.prototype.forEach.call(inner.querySelectorAll("p[data-k]"), function (p) {
     var k = parseInt(p.getAttribute("data-k"), 10);
     p.addEventListener("click", function () {
       if (KP.lpDone) { KP.lpDone = false; return; } // после долгого нажатия обычный тап не срабатывает
+      if (KP.swiped) { KP.swiped = false; return; } // это был свайп по тексту, а не тап по строке
+      if (KP.free) karFreeOff(); // тап по строке после свайпа — петь с неё, текст снова идёт за музыкой
       if (KP.tap) return; // при разметке строки не трогаем — тапают только кнопку
       karLineTap(k);
     });
@@ -566,6 +570,67 @@ function karPaintLyrics() {
   KP.cur = -2;
   if (selMode) { inner.style.transform = "none"; inner.style.paddingTop = "0px"; inner.style.paddingBottom = "24px"; }
   karTick(true);
+}
+
+/* ---------- Свайп текста, как в Apple Music (17.11) ----------
+   Текст листается пальцем вверх и вниз, с инерцией. Пока листаешь, все строки
+   чёткие и экран не возвращается к текущей строке. Тап по строке — музыка с
+   этой строки. Если ничего не нажать, через пару секунд текст сам
+   возвращается к строке, которая сейчас звучит. */
+function karWireSwipe(lyr, inner) {
+  var drag = null, vel = 0, lastY = 0, lastT = 0, raf = 0;
+  function setY(y) {
+    // дальше последней строки не листается: она встаёт туда же, где стоит звучащая строка
+    var ps = inner.querySelectorAll("p[data-k]"), last = ps[ps.length - 1];
+    var max = last ? Math.max(0, last.offsetTop - lyr.clientHeight * 0.32) : 0;
+    KP.y = Math.max(0, Math.min(max, y));
+    inner.style.transform = "translateY(" + (-KP.y) + "px)";
+  }
+  lyr.addEventListener("pointerdown", function (ev) {
+    if (KP.sel || !KP.lines || !KP.lines.length) return;
+    cancelAnimationFrame(raf); clearTimeout(KP.freeT);
+    KP.swiped = false;
+    drag = { y0: ev.clientY, start: KP.y || 0, moved: false, id: ev.pointerId };
+    lastY = ev.clientY; lastT = performance.now(); vel = 0;
+  });
+  lyr.addEventListener("pointermove", function (ev) {
+    if (!drag) return;
+    var dy = ev.clientY - drag.y0;
+    if (!drag.moved) {
+      if (Math.abs(dy) < 8) return;
+      drag.moved = true; KP.swiped = true;
+      try { lyr.setPointerCapture(drag.id); } catch (e) {}
+      KP.free = true; lyr.classList.add("free"); inner.style.transition = "none";
+    }
+    var now = performance.now();
+    vel = (ev.clientY - lastY) / Math.max(1, now - lastT);
+    lastY = ev.clientY; lastT = now;
+    setY(drag.start - dy);
+  });
+  function up() {
+    if (!drag) return;
+    var moved = drag.moved; drag = null;
+    if (!moved) { if (KP.free) karFreeLater(); return; }
+    var v = -vel * 16;
+    (function fling() {
+      if (Math.abs(v) < 0.4 || !KP.free) { karFreeLater(); return; }
+      setY(KP.y + v); v *= 0.94;
+      raf = requestAnimationFrame(fling);
+    })();
+  }
+  lyr.addEventListener("pointerup", up);
+  lyr.addEventListener("pointercancel", up);
+}
+function karFreeLater() { clearTimeout(KP.freeT); KP.freeT = setTimeout(function () { karFreeOff(); }, 3000); }
+function karFreeOff(silent) {
+  clearTimeout(KP.freeT);
+  if (!KP.root) return;
+  var was = KP.free;
+  KP.free = false;
+  var lyr = KP.root.querySelector(".lyr"), inner = KP.root.querySelector(".lyr-in");
+  if (lyr) lyr.classList.remove("free");
+  if (inner) inner.style.transition = "";
+  if (was && !silent && KE) karSetCur(KP.cur);
 }
 
 function karLineTap(k) {
@@ -594,7 +659,9 @@ function karWireLongPress(p, k) {
     if (KP.sel) return;
     x0 = ev.clientX; y0 = ev.clientY; stop();
     tm = setTimeout(function () {
-      tm = 0; KP.lpDone = true;
+      tm = 0;
+      if (KP.swiped) return; // палец листал текст
+      KP.lpDone = true;
       try { window.Telegram.WebApp.HapticFeedback.impactOccurred("medium"); } catch (e) {}
       karOpenLineEditor(k);
     }, 500);
@@ -955,9 +1022,10 @@ function karSetCur(cur) {
   for (var k = 0; k < ps.length; k++) {
     var p = ps[k], d = cur < 0 ? k + 1 : Math.abs(k - cur);
     p.classList.toggle("cur", k === cur && !KP.sel);
-    p.classList.toggle("f1", !KP.sel && d === 1);
-    p.classList.toggle("f2", !KP.sel && d === 2);
-    p.classList.toggle("f3", !KP.sel && d >= 3);
+    // две строки рядом с текущей — чёткие, размытие начинается с третьей (17.11)
+    p.classList.toggle("f1", !KP.sel && d === 3);
+    p.classList.toggle("f2", !KP.sel && d === 4);
+    p.classList.toggle("f3", !KP.sel && d >= 5);
     p.style.opacity = (KP.loop && !KP.sel && (k < KP.loop.a || k > KP.loop.b)) ? ".5" : "";
   }
   if (!KP.sel && ps.length) {
@@ -968,7 +1036,8 @@ function karSetCur(cur) {
     var pad = Math.round(lyr.clientHeight * 0.32) + "px";
     if (inner.style.paddingTop !== pad) { inner.style.paddingTop = pad; inner.style.paddingBottom = Math.round(lyr.clientHeight * 0.6) + "px"; }
     var y = target.offsetTop - lyr.clientHeight * 0.32;
-    inner.style.transform = "translateY(" + (-Math.max(0, y)) + "px)";
+    // пока Николай листает текст пальцем, строка подсвечивается, но экран не дёргается
+    if (!KP.free) { KP.y = Math.max(0, y); inner.style.transform = "translateY(" + (-KP.y) + "px)"; }
   }
   var br = inner.querySelector(".bracket");
   if (br && KP.loop && ps[KP.loop.a] && ps[KP.loop.b]) {
