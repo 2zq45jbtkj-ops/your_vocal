@@ -273,7 +273,7 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 }
 .lesson-tile.locked { cursor: default; box-shadow: var(--inset-sm); }
 .lesson-tile .lesson-dot { width: 36px; height: 36px; }
-.lesson-tile-name { font: 600 11.5px 'Inter', sans-serif; color: var(--ink); line-height: 1.2; }
+.lesson-tile-name { font: 600 11.5px 'Inter', sans-serif; color: var(--ink); line-height: 1.2; min-height: 2.4em; }
 .lesson-tile.locked .lesson-tile-name { color: var(--locked); }
 .courses-empty { padding: 30px 18px; text-align: center; color: var(--gray); font-size: 13px; }
 
@@ -1163,6 +1163,39 @@ html.browser-mode {
 .cab-chev { margin-left: auto; color: var(--locked); font: 700 18px 'Inter', sans-serif; }
 .cab-term-val { font: 700 14px 'Manrope', sans-serif; color: var(--ink); white-space: nowrap; flex-shrink: 0; }
 .cab-term-val.extra { color: var(--terra); }
+/* История абонементов (Коля, 17.11): карточка на абонемент, сверху текущий */
+.cab-hsec { font: 700 15px 'Manrope', sans-serif; color: var(--ink); margin: 4px 0 10px; }
+.cab-hcard { background: var(--bg); border-radius: 22px; box-shadow: var(--raised); padding: 4px 16px; margin-bottom: 18px; }
+.cab-hrow2 { border-bottom: 1px solid var(--line); padding: 13px 0; }
+.cab-hrow2:last-child { border-bottom: none; }
+.cab-hrow { display: flex; align-items: center; gap: 12px; }
+.cab-hnum { width: 38px; height: 38px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font: 800 15px 'Manrope', sans-serif; flex-shrink: 0; }
+.cab-hnum.cur { background: var(--terra); color: var(--white-text); box-shadow: var(--raised-sm); }
+.cab-hnum.old { box-shadow: var(--inset-sm); color: var(--gray); }
+.cab-hname { font: 700 14px 'Manrope', sans-serif; color: var(--ink); display: block; }
+.cab-hs { font-size: 12px; color: var(--gray); line-height: 1.45; }
+.cab-hr { margin-left: auto; text-align: right; flex-shrink: 0; }
+.cab-hv { font: 700 13px 'Manrope', sans-serif; color: var(--ink); }
+.cab-htag { display: inline-block; font: 700 10.5px 'Inter', sans-serif; padding: 3px 9px; border-radius: 999px; margin-top: 3px; }
+.cab-htag.cur { background: var(--soft-terra); color: var(--ink-terra); }
+.cab-htag.old { background: var(--bgmuted); color: var(--gray); }
+.cab-hdots { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0 2px 50px; }
+.cab-hdots[data-hist-toggle] { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.cab-hdt { width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font: 800 9.5px 'Manrope', sans-serif; flex-shrink: 0; }
+.cab-hdt.ok, .cab-hst.ok { background: var(--soft-blue); color: oklch(38% 0.06 235); }
+.cab-hdt.rs, .cab-hst.rs { background: var(--soft-terra); color: var(--ink-terra); }
+.cab-hdt.cx, .cab-hst.cx { background: var(--bgmuted); color: var(--gray); }
+.cab-hdt.ns, .cab-hst.ns { background: color-mix(in oklch, var(--ink-red) 14%, var(--bg)); color: var(--ink-red); }
+.cab-hdt.fut { box-shadow: var(--inset-sm); }
+.cab-hst.fut { box-shadow: var(--inset-sm); color: var(--terra); }
+.cab-hleg { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 0 0 10px; font: 500 11.5px 'Inter', sans-serif; color: var(--gray); }
+.cab-hleg span { display: flex; align-items: center; gap: 5px; }
+.cab-hlist { display: none; padding: 8px 0 0 50px; }
+.cab-hrow2.open .cab-hlist { display: block; }
+.cab-hl { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); }
+.cab-hl-d { font: 600 13px 'Inter', sans-serif; color: var(--ink); }
+.cab-hl-s { font-size: 11.5px; color: var(--gray); margin-top: 1px; }
+.cab-hst { margin-left: auto; font: 700 10.5px 'Inter', sans-serif; padding: 3px 9px; border-radius: 999px; white-space: nowrap; flex-shrink: 0; }
 
 .cab-back {
   display: flex; align-items: center; gap: 12px; margin-bottom: 18px; border: none; background: none;

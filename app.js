@@ -687,6 +687,18 @@ function lessonStats() {
   return { completed: completed, inProgress: inProgress };
 }
 
+/* Коля (17.11): короткие названия тем вместо «Урок N» (плитки и дорожная карта).
+   Уроки 1–23 — по data/lesson-plans.json, 24–30 — по каталогу тем в базе. */
+var LESSON_SHORT = [
+  "Дыхание", "Сила голоса", "Регистры", "Атака звука", "Гортань",
+  "Интонация", "Переходные ноты", "Дикция", "Громко и тихо", "Гигиена голоса",
+  "Голосовые складки", "Ложные складки", "Щитовидный хрящ", "Перстневидный хрящ", "Черпаловидные хрящи",
+  "Яркость звука", "Бэлтинг", "Микст", "Вибрато", "Слух",
+  "Фразировка", "Мелизмы", "Без срывов", "Артикуляция", "Мягкое нёбо",
+  "Язык", "Челюсть", "Губы", "Анкеровка", "Сочетание приёмов"
+];
+function lessonShortName(n) { return LESSON_SHORT[n - 1] || "Урок " + n; }
+
 function roadmapCardHtml(mode, n) {
   var s = state;
   var isOpenLesson = LESSON && n === (LESSON.id || 1);
@@ -711,7 +723,7 @@ function roadmapCardHtml(mode, n) {
       '<span>' + st.label + "</span>" +
     "</div>";
   }).join("");
-  var title = isOpenLesson ? "Урок " + n + " · " + esc(LESSON.title) : "Урок " + n;
+  var title = n + " · " + esc(lessonShortName(n));
   var sub = steps.every(function (st) { return st.done; }) ? "Завершён" : (steps.some(function (st) { return st.done; }) ? "В процессе" : "Открыт");
   return (
     '<div class="roadmap-card" data-act="' + act + '"' + (isOpenLesson ? "" : ' data-lesson-num="' + n + '"') + '>' +
@@ -732,7 +744,7 @@ function lockedRoadmapCardHtml(n) {
   }).join("");
   return (
     '<div class="roadmap-card locked">' +
-      '<div class="roadmap-title" style="color:var(--locked);">Урок ' + n + "</div>" +
+      '<div class="roadmap-title" style="color:var(--locked);">' + n + " · " + esc(lessonShortName(n)) + "</div>" +
       '<div class="roadmap-sub">Откроется позже</div>' +
       stepsHtml +
     "</div>"
@@ -773,19 +785,19 @@ function lessonsGridHtml() {
       tiles +=
         '<div class="lesson-tile" data-act="open-lesson">' +
           '<div class="lesson-dot" style="background:oklch(56% 0.09 235);">' + n + "</div>" +
-          '<div class="lesson-tile-name">' + esc(LESSON.title) + "</div>" +
+          '<div class="lesson-tile-name">' + esc(lessonShortName(n)) + "</div>" +
         "</div>";
     } else if (lessonUnlocked(n)) {
       tiles +=
         '<div class="lesson-tile" data-act="open-lesson-num" data-lesson-num="' + n + '">' +
           '<div class="lesson-dot" style="background:oklch(56% 0.09 235);">' + n + "</div>" +
-          '<div class="lesson-tile-name">Урок ' + n + "</div>" +
+          '<div class="lesson-tile-name">' + esc(lessonShortName(n)) + "</div>" +
         "</div>";
     } else {
       tiles +=
         '<div class="lesson-tile locked">' +
-          '<div class="lesson-dot" style="background:var(--line);">' + SVG.lock + "</div>" +
-          '<div class="lesson-tile-name">Урок ' + n + "</div>" +
+          '<div class="lesson-dot" style="background:var(--line);color:var(--locked);">' + n + "</div>" +
+          '<div class="lesson-tile-name">' + esc(lessonShortName(n)) + "</div>" +
         "</div>";
     }
   }
@@ -1804,6 +1816,7 @@ function renderProfile() {
   wireActs();
   wireHwToggles(app);
   wireCabWheelDots(app);
+  wireCabHistory(app);
 }
 
 /* ---------- Кабинет: главная, «Мои уроки», «Домашние задания», «Колесо баланса» ----------
@@ -1954,7 +1967,81 @@ function renderCabLessons(data) {
         : "") +
       "</div>";
   }
-  return card + gold + term;
+  return card + gold + term + cabHistoryHtml(data);
+}
+
+/* История абонементов (Коля, 17.11, вариант B): карточка на каждый абонемент,
+   сверху свежий, внизу самый старый. Данные — subscriptionHistory из базы. */
+/* История абонементов (вариант A, Коля 17.11): строки в одной карточке, под
+   каждой — кружок на каждый урок; нажал на кружки — открылся список уроков
+   с датами и тем, что с уроком было. Статусы приходят из бота через базу. */
+var CAB_HL = { ok: "Проведён", mv: "Перенесён", cx: "Отменён", ns: "Не пришёл", up: "Впереди", wait: "Ждёт отметки" };
+var CAB_HSYM = { ok: "✓", mv: "↻", cx: "✕", ns: "!", up: "", wait: "" };
+var CAB_HCLS = { ok: "ok", mv: "rs", cx: "cx", ns: "ns", up: "fut", wait: "fut" };
+var CAB_DOW = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
+
+function cabDayFull(ymdStr) {
+  var p = String(ymdStr).slice(0, 10).split("-").map(Number);
+  return CAB_DOW[new Date(p[0], p[1] - 1, p[2]).getDay()] + ", " + dayMonth(ymdStr);
+}
+
+function cabHistLine(l) {
+  var sub = "";
+  if (l.s === "mv" && l.to) sub = "на " + cabDayFull(l.to);
+  else if (l.s === "cx") sub = l.paid ? "урок списан: отмена меньше чем за сутки"
+    : (l.teacher ? "отменил Николай, урок не списан" : "урок не списан");
+  else if (l.s === "ns") sub = "урок списан";
+  return '<div class="cab-hl"><div><div class="cab-hl-d">' + cabDayFull(l.day) + "</div>" +
+      (sub ? '<div class="cab-hl-s">' + sub + "</div>" : "") + "</div>" +
+    '<span class="cab-hst ' + CAB_HCLS[l.s] + '">' + CAB_HL[l.s] + "</span></div>";
+}
+
+function cabHistoryHtml(data) {
+  var hist = (data && data.subscriptionHistory) || [];
+  if (!hist.length) return "";
+  var open = state._histOpen || {};
+  var rows = hist.map(function (h, i) {
+    var total = h.lessonsTotal || 0, used = Math.min(h.lessonsUsed || 0, total);
+    var one = total === 1;
+    var name = one ? "Разовый урок" : "Абонемент на " + total + NB + plural(total, "урок", "урока", "уроков");
+    var lessons = (h.lessons || []).slice();
+    if (h.current) {
+      var upN = lessons.filter(function (l) { return l.s === "up"; }).length;
+      for (var k = Math.max(0, total - used - upN); k > 0; k--) lessons.push({ s: "up" });
+    }
+    var dots = lessons.map(function (l) {
+      return '<div class="cab-hdt ' + CAB_HCLS[l.s] + '">' + CAB_HSYM[l.s] + "</div>";
+    }).join("");
+    var dated = lessons.filter(function (l) { return l.day; });
+    var isOpen = !!open[i];
+    return '<div class="cab-hrow2' + (isOpen ? " open" : "") + '">' +
+      '<div class="cab-hrow"><div class="cab-hnum ' + (h.current ? "cur" : "old") + '">' + total + "</div>" +
+        '<div><b class="cab-hname">' + name + "</b>" +
+          '<div class="cab-hs">' + (h.format || 45) + NB + "минут · куплен " + dayMonth(h.bought) + "</div></div>" +
+        '<div class="cab-hr"><div class="cab-hv">пройдено ' + used + " из " + total + "</div>" +
+          '<span class="cab-htag ' + (h.current ? "cur" : "old") + '">' + (h.current ? "Сейчас" : "Завершён") + "</span></div></div>" +
+      (dots ? '<div class="cab-hdots"' + (dated.length ? ' data-hist-toggle="' + i + '" role="button" aria-expanded="' + isOpen + '"' : "") + ">" + dots + "</div>" : "") +
+      (dated.length ? '<div class="cab-hlist">' + dated.map(cabHistLine).join("") + "</div>" : "") +
+    "</div>";
+  }).join("");
+  var leg = '<div class="cab-hleg">' + ["ok", "mv", "cx", "ns", "up"].map(function (t) {
+    return '<span><div class="cab-hdt ' + CAB_HCLS[t] + '">' + CAB_HSYM[t] + "</div>" + CAB_HL[t] + "</span>";
+  }).join("") + "</div>";
+  return '<div class="cab-hsec">История абонементов</div>' + leg +
+    '<div class="cab-hcard">' + rows + "</div>";
+}
+
+function wireCabHistory(root) {
+  Array.prototype.forEach.call((root || document).querySelectorAll("[data-hist-toggle]"), function (el) {
+    el.addEventListener("click", function (e) {
+      e.stopPropagation();
+      var i = el.getAttribute("data-hist-toggle");
+      state._histOpen = state._histOpen || {};
+      state._histOpen[i] = !state._histOpen[i];
+      el.parentNode.classList.toggle("open", !!state._histOpen[i]);
+      el.setAttribute("aria-expanded", String(!!state._histOpen[i]));
+    });
+  });
 }
 
 function renderCabHw(data, homework) {
