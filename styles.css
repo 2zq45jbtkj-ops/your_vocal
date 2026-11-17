@@ -1303,5 +1303,5 @@ html.dark .cab-zone.on, body.dark .cab-zone.on { background: color-mix(in srgb, 
     background: linear-gradient(to bottom, var(--bg), transparent);
     opacity: 0; transition: opacity .2s ease;
   }
-  html.scrolled #top-edge::after { opacity: 1; }
+  html.scrolled body:not(:has(.kp)) #top-edge::after { opacity: 1; }
 }
