@@ -861,6 +861,7 @@ function renderAdminKaraokeEdit() {
       .catch(function () { if (KAE) KAE.marksLoaded = true; });
   }
   var hasMusic = !!(s.music && s.music.url);
+  var hasVoice = !!(s.voice && s.voice.url);
   var nLines = KAE.lines.length;
   app.innerHTML = karAdmTop("Разметка караоке", "Режим Николая · " + (KAR.adm.student ? KAR.adm.student.name : "")) +
     '<div class="kadm">' +
@@ -868,6 +869,8 @@ function renderAdminKaraokeEdit() {
       '<div class="kmeta"></div>' +
       '<div class="fld" data-ka="music"><span>Минус</span><b class="' + (hasMusic ? "ok" : "") + '">' + (hasMusic ? esc(s.music.name || "минус") + " ✓" : "Загрузить файл") + "</b></div>" +
       '<input type="file" accept="audio/*,.mp3,.m4a,.wav,.aac" style="display:none" data-ka="file">' +
+      '<div class="fld" data-ka="voice"><span>Плюс</span><b class="' + (hasVoice ? "ok" : "") + '">' + (hasVoice ? esc(s.voice.name || "плюс") + " ✓" : "Загрузить файл") + "</b></div>" +
+      '<input type="file" accept="audio/*,.mp3,.m4a,.wav,.aac" style="display:none" data-ka="vfile">' +
       '<div class="fld" data-ka="lyrics"><span>Текст</span><b class="' + (nLines ? "ok" : "") + '">' + (nLines ? nLines + " " + plural(nLines, "строка", "строки", "строк") + " ✓" : "Вставить текст") + "</b></div>" +
       '<div class="klyr"></div>' +
       (hasMusic ? '<div class="play-mini"><button class="pbtn" data-ka="play"></button><div class="bar" data-ka="bar"><i></i></div><div class="tm">0:00</div></div>' : "") +
@@ -1048,10 +1051,11 @@ function karAdmOpenLyrics() {
   };
 }
 
-function karAdmUpload(file) {
+function karAdmUpload(file, kind) {
   if (!file) return;
+  var isVoice = kind === "voice", word = isVoice ? "плюс" : "минус", Word = isVoice ? "Плюс" : "Минус";
   if (file.size > 80 * 1024 * 1024) { karAdmMsg("Файл больше 80 МБ — возьми файл поменьше.", true); return; }
-  karAdmMsg("Загружаю минус… 0%");
+  karAdmMsg("Загружаю " + word + "… 0%");
   var ext = (file.name.split(".").pop() || "mp3").toLowerCase().replace(/[^a-z0-9]/g, "") || "mp3";
   var name = "tracks/" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8) + "." + ext;
   function withClient() {
@@ -1075,23 +1079,30 @@ function karAdmUpload(file) {
       contentType: file.type || "audio/mpeg",
       handleUploadUrl: BAZA_API + "/api/player-upload",
       clientPayload: state._siteAuth || "",
-      onUploadProgress: function (p) { karAdmMsg("Загружаю минус… " + Math.round(p.percentage) + "%"); }
+      onUploadProgress: function (p) { karAdmMsg("Загружаю " + word + "… " + Math.round(p.percentage) + "%"); }
     });
   }).then(function (blob) {
     karAdmMsg("Сохраняю…");
     return karAdmPeaks(file).catch(function () { return null; }).then(function (pk) {
-      var f = { music: { url: blob.url, name: file.name, durationSec: Math.round(dur) } };
-      if (pk) { f.peaksMusic = pk; if (!(KAE.song.voice && KAE.song.voice.url)) f.peaks = pk; }
+      var f = {};
+      f[isVoice ? "voice" : "music"] = { url: blob.url, name: file.name, durationSec: Math.round(dur) };
+      // Как на сайте: основная волна песни — с плюса, если он есть.
+      if (pk) {
+        if (isVoice) { f.peaksVoice = pk; f.peaks = pk; }
+        else { f.peaksMusic = pk; if (!(KAE.song.voice && KAE.song.voice.url)) f.peaks = pk; }
+      }
       return karAdmPatch(f);
     });
   }).then(function () {
     URL.revokeObjectURL(probeUrl);
-    try { KAE.el.pause(); } catch (e) {}
-    KAE.el.src = KAE.song.music.url;
+    if (!isVoice) {
+      try { KAE.el.pause(); } catch (e) {}
+      KAE.el.src = KAE.song.music.url;
+    }
     render();
-    karAdmMsg("Минус загружен ✓");
+    karAdmMsg(Word + " загружен ✓");
   }).catch(function () {
-    karAdmMsg("Минус не загрузился. Если ты давно не входил, выйди из режима админа и войди по ключам заново.", true);
+    karAdmMsg(Word + " не загрузился. Если ты давно не входил, выйди из режима админа и войди по ключам заново.", true);
   });
 }
 
@@ -1120,7 +1131,10 @@ function karAdmWire() {
   q("lyrics").onclick = karAdmOpenLyrics;
   var file = q("file");
   q("music").onclick = function () { file.click(); };
-  file.onchange = function () { karAdmUpload(file.files && file.files[0]); file.value = ""; };
+  file.onchange = function () { karAdmUpload(file.files && file.files[0], "music"); file.value = ""; };
+  var vfile = q("vfile");
+  q("voice").onclick = function () { vfile.click(); };
+  vfile.onchange = function () { karAdmUpload(vfile.files && vfile.files[0], "voice"); vfile.value = ""; };
   ["V", "v"].forEach(function (m) {
     q("m" + m).onclick = function () {
       if (KAE.pick < 0) { KAE.pick = Math.max(0, KAE.cursor - 1); }
