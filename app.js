@@ -30,7 +30,9 @@ if (LINK_TOKEN) {
   try {
     var _saved = JSON.parse(localStorage.getItem("vocal-app") || "null");
     // на этом устройстве раньше был другой ученик — его прогресс не смешиваем
-    if (_saved && _saved.accessToken && _saved.accessToken !== LINK_TOKEN) localStorage.removeItem("vocal-app");
+    // вход Николая (админ) по личной ссылке не сбрасываем — иначе значок
+    // каждый раз выкидывал бы его из режима админа
+    if (_saved && !_saved.isAdmin && _saved.accessToken && _saved.accessToken !== LINK_TOKEN) localStorage.removeItem("vocal-app");
   } catch (e) {}
 }
 var app = document.getElementById("app");
