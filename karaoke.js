@@ -232,7 +232,7 @@ function renderKaraokeList() {
   // Николая) — там тоже есть «+ Новая песня»: один раз просит ключи админа и
   // возвращает сюда уже в режиме админа.
   var spName = String((state.studentPublicData && state.studentPublicData.student && state.studentPublicData.student.name) || (state.firstName || "") + " " + (state.lastName || "")).toLowerCase();
-  var ownCard = !state.isAdmin && spName.indexOf("септ") !== -1 && spName.indexOf("никола") !== -1;
+  var ownCard = !state.isAdmin && ((spName.indexOf("септ") !== -1 && spName.indexOf("никола") !== -1) || (spName.indexOf("sept") !== -1 && spName.indexOf("nikola") !== -1));
   var admAdd = (state.isAdmin || ownCard) ? '<button class="cta" data-kar-adm-add style="margin-top:14px;">+ Новая песня</button>' : "";
   app.innerHTML = '<div style="padding:var(--screen-top) 20px 130px;">' + cabBack() +
     '<div class="cab-screen-title">Караоке</div>' + body + admAdd + "</div>";

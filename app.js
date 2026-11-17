@@ -1174,6 +1174,7 @@ function findOwnStudentRecord() {
     var n = String(list[i].name || "").trim().toLowerCase().replace(/\s+/g, " ");
     if (n === ADMIN_SELF_NAME) return list[i];
     if (n.indexOf("септ") !== -1 && n.indexOf("никола") !== -1) return list[i];
+    if (n.indexOf("sept") !== -1 && n.indexOf("nikola") !== -1) return list[i];
   }
   return null;
 }
