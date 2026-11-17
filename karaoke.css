@@ -196,3 +196,50 @@ html.dark .kadm .gapb { background: oklch(36% 0.03 235); }
 .kadm .kprev .more { font: 600 13px/1.5 Inter, sans-serif; color: var(--gray); }
 .kadm .kstep-t .sub:has(.fn) { display: flex; white-space: nowrap; }
 .kadm .kstep-t .sub .fn { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+
+/* «Разметка караоке»: список «Подсказки и дыхание» (заменил список строк, 17.11) */
+.kadm .khl-hd { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin: 16px 4px 8px; }
+.kadm .khl-hd div { font: 700 11.5px Inter, sans-serif; letter-spacing: .06em; text-transform: uppercase; color: var(--gray); }
+.kadm .khl-hd b { font: 700 13px Manrope, sans-serif; color: var(--blue); cursor: pointer; white-space: nowrap; }
+.kadm .khl { background: var(--bg); box-shadow: var(--raised-sm); border-radius: 20px; padding: 2px 16px; }
+.kadm .khl-row { display: flex; gap: 10px; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+.kadm .khl-row:last-child { border-bottom: 0; }
+.kadm .khl-row .tm { font: 600 12px "JetBrains Mono", ui-monospace, monospace; color: var(--gray); width: 36px; flex-shrink: 0; padding-top: 2px; }
+.kadm .khl-row .tx { flex: 1; min-width: 0; }
+.kadm .khl-row .l { font: 600 14px/1.4 Inter, sans-serif; color: var(--ink); }
+.kadm .khl-row .l b { font: 700 13px "JetBrains Mono", ui-monospace, monospace; margin: 0 4px; }
+.kadm .khl-row .l b:first-child { margin-left: 0; }
+.kadm .khl-row .l b.V { color: var(--terra); } .kadm .khl-row .l b.v { color: var(--blue); }
+.kadm .khl-row .h { font: 500 12.5px/1.4 Inter, sans-serif; color: var(--gray); margin-top: 4px; display: flex; gap: 6px; align-items: center; }
+.kadm .khl-row .h:before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: oklch(70% 0.08 235); flex-shrink: 0; }
+.kadm .khl-row .cv { color: var(--gray); font: 700 16px Manrope, sans-serif; }
+.kadm .khl-empty { padding: 14px 0; font: 500 13.5px/1.45 Inter, sans-serif; color: var(--gray); }
+.kadm .khl-note { font: 500 12.5px/1.45 Inter, sans-serif; color: var(--gray); margin: 8px 4px 14px; }
+
+/* Караоке, режим Николая: долгое нажатие на строку → шторка редактора строки (вариант B) */
+.kp .lyr.kadmlp p { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.kp .kedit { position: absolute; left: 0; right: 0; bottom: 0; z-index: 20; padding: 18px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+  border-radius: 26px 26px 0 0; background: oklch(24% 0.02 250 / .94); color: #fff; box-shadow: 0 -10px 40px oklch(0% 0 0 / .35); }
+.kp .kedit .hdl { width: 40px; height: 4px; border-radius: 2px; background: oklch(100% 0 0 / .3); margin: 0 auto 14px; }
+.kp .kedit .cap { font: 600 12px Inter, sans-serif; color: oklch(100% 0 0 / .6); margin-bottom: 8px; }
+.kp .kedit .ln { font: 800 21px/1.6 Manrope, sans-serif; }
+.kp .kedit .kg, .kp .kedit .km { display: inline-flex; align-items: center; justify-content: center; margin: 0 6px; vertical-align: 3px; cursor: pointer; }
+.kp .kedit .kg { width: 22px; height: 22px; border-radius: 50%; background: oklch(100% 0 0 / .14); border: 1px solid oklch(100% 0 0 / .18); font: 700 14px Manrope, sans-serif; }
+.kp .kedit .km { min-width: 26px; height: 26px; border-radius: 9px; color: #fff; font: 700 14px "JetBrains Mono", ui-monospace, monospace; }
+.kp .kedit .kmV { background: var(--terra); } .kp .kedit .kmv { background: var(--blue); }
+.kp .kedit .chs { display: flex; gap: 8px; margin-top: 14px; }
+.kp .kedit .ch { padding: 8px 14px; border-radius: 12px; font: 700 14px Manrope, sans-serif; cursor: pointer;
+  background: oklch(100% 0 0 / .14); border: 1px solid oklch(100% 0 0 / .18); color: #fff; }
+.kp .kedit .ch.onV { background: var(--terra); border-color: var(--terra); } .kp .kedit .ch.onv { background: var(--blue); border-color: var(--blue); }
+.kp .kedit .hin { display: block; width: 100%; box-sizing: border-box; margin-top: 14px; padding: 12px 14px; border-radius: 14px; outline: none;
+  background: oklch(100% 0 0 / .14); border: 1px solid oklch(100% 0 0 / .18); color: #fff; font: 500 14px Inter, sans-serif; }
+.kp .kedit .hin::placeholder { color: oklch(100% 0 0 / .55); }
+.kp .kedit .sing { margin-top: 12px; font: 700 14px Manrope, sans-serif; color: oklch(85% 0.06 235); cursor: pointer; display: inline-block; }
+.kp .kedit .bts { display: flex; gap: 10px; margin-top: 14px; }
+.kp .kedit .bt2 { flex: 1; text-align: center; padding: 13px; border-radius: 14px; font: 700 14px Manrope, sans-serif; cursor: pointer;
+  background: oklch(100% 0 0 / .14); border: 1px solid oklch(100% 0 0 / .18); color: #fff; }
+.kp .kedit .bt2.main { background: var(--terra); border-color: var(--terra); }
+.kp .ktoast { position: absolute; left: 50%; top: calc(70px + env(safe-area-inset-top, 0px)); transform: translate(-50%, -8px); z-index: 25; opacity: 0; pointer-events: none;
+  padding: 8px 14px; border-radius: 12px; background: oklch(24% 0.02 250 / .9); color: #fff; font: 600 13px Inter, sans-serif; transition: opacity .25s, transform .25s; }
+.kp .ktoast.on { opacity: 1; transform: translate(-50%, 0); }
+.kp .ktoast.err { background: oklch(50% 0.15 25 / .92); }

@@ -224,6 +224,7 @@ function renderKaraokeList() {
   Array.prototype.forEach.call(app.querySelectorAll("[data-kar-song]"), function (el) {
     el.addEventListener("click", function () {
       KAR.song = KAR.songs[parseInt(el.getAttribute("data-kar-song"), 10)];
+      KAR.fromAdmEdit = false; KAR.startK = null;
       go("karaoke-play");
     });
   });
@@ -413,6 +414,11 @@ function renderKaraokePlay() {
   karPrepareEnvelope();
   cancelAnimationFrame(KP.raf);
   KP.raf = requestAnimationFrame(karLoop);
+  if (KAR.startK != null) {
+    var st = KP.lines[KAR.startK];
+    KAR.startK = null;
+    if (st && st.t != null) karSeek(st.t); // ровно на строку, чтобы она сразу подсветилась
+  }
 }
 
 function karPaintLyrics() {
@@ -437,8 +443,15 @@ function karPaintLyrics() {
   var lyr = KP.root.querySelector(".lyr");
   lyr.classList.toggle("selm", selMode);
   KP.root.querySelector(".khint").style.display = selMode ? "" : "none";
+  var adm = karIsAdm() && !selMode;
+  lyr.classList.toggle("kadmlp", adm);
   Array.prototype.forEach.call(inner.querySelectorAll("p[data-k]"), function (p) {
-    p.addEventListener("click", function () { karLineTap(parseInt(p.getAttribute("data-k"), 10)); });
+    var k = parseInt(p.getAttribute("data-k"), 10);
+    p.addEventListener("click", function () {
+      if (KP.lpDone) { KP.lpDone = false; return; } // после долгого нажатия обычный тап не срабатывает
+      karLineTap(k);
+    });
+    if (adm) karWireLongPress(p, k);
   });
   KP.cur = -2;
   if (selMode) { inner.style.transform = "none"; inner.style.paddingTop = "0px"; inner.style.paddingBottom = "24px"; }
@@ -457,6 +470,117 @@ function karLineTap(k) {
   if (KP.loop && (k < KP.loop.a || k > KP.loop.b)) karLoopOff();
   karSeek(Math.max(0, l.t - 0.05));
   hpGate("karaoke", karPlay);
+}
+
+/* ---------- Николай: долгое нажатие на строку → редактор строки (вариант B, 17.11) ----------
+   Шторка снизу: строка с «+» между словами для V / v, подсказка мелко под строкой,
+   «▶ Петь с этой строки», «Очистить» / «Готово». Ученик видит только результат. */
+function karIsAdm() { return !!(state.isAdmin && state._siteAuth); }
+
+function karWireLongPress(p, k) {
+  var tm = 0, x0 = 0, y0 = 0;
+  function stop() { clearTimeout(tm); tm = 0; }
+  p.addEventListener("pointerdown", function (ev) {
+    if (KP.sel) return;
+    x0 = ev.clientX; y0 = ev.clientY; stop();
+    tm = setTimeout(function () {
+      tm = 0; KP.lpDone = true;
+      try { window.Telegram.WebApp.HapticFeedback.impactOccurred("medium"); } catch (e) {}
+      karOpenLineEditor(k);
+    }, 500);
+  });
+  p.addEventListener("pointermove", function (ev) { if (tm && (Math.abs(ev.clientX - x0) > 10 || Math.abs(ev.clientY - y0) > 10)) stop(); });
+  p.addEventListener("pointerup", stop);
+  p.addEventListener("pointercancel", stop);
+  p.addEventListener("pointerleave", stop);
+  p.addEventListener("contextmenu", function (ev) { ev.preventDefault(); });
+}
+
+function karOpenLineEditor(k) {
+  var l = KP.lines[k];
+  if (!l || !KP.root) return;
+  if (KE && KE.playing) karPause();
+  var old = KP.root.querySelector(".kedit");
+  if (old) old.parentNode.removeChild(old);
+  var ed = { mk: {}, hint: l.hint || "", mode: "V" };
+  Object.keys(l.mk || {}).forEach(function (g) { ed.mk[g] = l.mk[g]; });
+  var words = l.text.split(/\s+/);
+  var d = document.createElement("div");
+  d.className = "kedit";
+  KP.root.appendChild(d);
+  function paint() {
+    var h = "";
+    for (var g = 0; g <= words.length; g++) {
+      h += ed.mk[g] ? '<span class="km ' + (ed.mk[g] === "V" ? "kmV" : "kmv") + '" data-g="' + g + '">' + ed.mk[g] + "</span>" : '<span class="kg" data-g="' + g + '">+</span>';
+      if (g < words.length) h += esc(words[g]);
+    }
+    d.innerHTML =
+      '<div class="hdl"></div>' +
+      '<div class="cap">Строка ' + (k + 1) + (l.t != null ? " · " + karFmt(l.t) : "") + " · тапни «+» между словами</div>" +
+      '<div class="ln">' + h + "</div>" +
+      '<div class="chs"><span class="ch' + (ed.mode === "V" ? " onV" : "") + '" data-e="V">V вдох</span><span class="ch' + (ed.mode === "v" ? " onv" : "") + '" data-e="v">v добор</span></div>' +
+      '<input type="text" class="hin" maxlength="200" placeholder="Подсказка к строке, мелко под ней" value="' + esc(ed.hint) + '">' +
+      (l.t != null ? '<div class="sing" data-e="sing">▶ Петь с этой строки</div>' : "") +
+      '<div class="bts"><span class="bt2" data-e="clear">Очистить</span><span class="bt2 main" data-e="ok">Готово</span></div>';
+    Array.prototype.forEach.call(d.querySelectorAll("[data-g]"), function (el) {
+      el.onclick = function () {
+        var g = el.getAttribute("data-g");
+        if (ed.mk[g]) delete ed.mk[g]; else ed.mk[g] = ed.mode;
+        paint();
+      };
+    });
+    d.querySelector('[data-e="V"]').onclick = function () { ed.mode = "V"; paint(); };
+    d.querySelector('[data-e="v"]').onclick = function () { ed.mode = "v"; paint(); };
+    var hin = d.querySelector(".hin");
+    hin.oninput = function () { ed.hint = hin.value; };
+    hin.onkeydown = function (e) { if (e.key === "Enter") hin.blur(); };
+    d.querySelector('[data-e="clear"]').onclick = function () { ed.mk = {}; ed.hint = ""; paint(); };
+    d.querySelector('[data-e="ok"]').onclick = function () { apply(); close(); };
+    var sing = d.querySelector('[data-e="sing"]');
+    if (sing) sing.onclick = function () { apply(); close(); karLineTap(k); };
+  }
+  function close() { if (d.parentNode) d.parentNode.removeChild(d); }
+  function apply() {
+    var changed = ed.hint.trim() !== (l.hint || "").trim() || JSON.stringify(ed.mk) !== JSON.stringify(l.mk || {});
+    if (!changed) return;
+    l.mk = ed.mk; l.hint = ed.hint.trim();
+    karPaintLyrics();
+    karMarksSave(KAR.song, KP.lines);
+  }
+  paint();
+}
+
+/* Сохранить пометки и подсказки песни (api/karaoke.js, токен Николая).
+   Обновляет и список в «Разметке караоке», если он открыт для этой песни. */
+function karMarksSave(song, lines) {
+  var marks = {};
+  lines.forEach(function (l) {
+    if (Object.keys(l.mk || {}).length || (l.hint || "").trim()) marks[l.i] = { text: l.text, mk: l.mk, hint: (l.hint || "").trim() };
+  });
+  KAR.marks[song.id] = { lines: marks };
+  if (KAE && KAE.song && KAE.song.id === song.id) {
+    KAE.lines.forEach(function (x) { var m = marks[x.i]; x.mk = m ? JSON.parse(JSON.stringify(m.mk || {})) : {}; x.hint = m ? m.hint : ""; });
+  }
+  var tries = 0;
+  (function send() {
+    fetch("/api/karaoke", {
+      method: "POST", headers: bazaAuthHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ songId: song.id, studentId: song.studentId, lines: marks })
+    }).then(function (r) { if (!r.ok) throw new Error(r.status); if (tries) karToast("Сохранено ✓"); })
+      .catch(function () {
+        if (++tries < 4) { karToast("Не сохранилось. Пробую ещё раз…", true); setTimeout(send, 4000); }
+        else karToast("Не сохранилось. Проверь интернет и поправь строку ещё раз.", true);
+      });
+  })();
+}
+
+function karToast(t, err) {
+  if (!KP.root || state.screen !== "karaoke-play") return;
+  var o = KP.root.querySelector(".ktoast");
+  if (!o) { o = document.createElement("div"); o.className = "ktoast"; KP.root.appendChild(o); }
+  o.textContent = t; o.classList.toggle("err", !!err); o.classList.add("on");
+  clearTimeout(KP.toastT);
+  KP.toastT = setTimeout(function () { o.classList.remove("on"); }, 2200);
 }
 
 function karSelRange() {
@@ -749,7 +873,7 @@ window.karaokeStopAll = function () {
    подсказки. Всё сохраняется само через пару секунд после изменения.
    ========================================================================== */
 
-var KAE = null; // { el, song, lines, cursor, pick, mode, dirty, saveT }
+var KAE = null; // { el, song, lines, cursor, dirty, saveT }
 
 function karAdmFetch(path, opts) {
   opts = opts || {};
@@ -890,16 +1014,13 @@ function renderAdminKaraokeEdit() {
             (nLines > 2 ? '<div class="more">… ещё ' + (nLines - 2) + " " + plural(nLines - 2, "строка", "строки", "строк") + "</div>" : "") + "</div>" : "") +
       "</div>" +
       '<div class="klyr"></div>' +
+      '<div class="khl-hd"><div>Подсказки и дыхание</div>' + (hasMusic && nLines ? '<b data-ka="openkar">Открыть в караоке ›</b>' : "") + "</div>" +
+      '<div class="khl"></div>' +
+      '<div class="khl-note">Ставятся в караоке: удерживай строку. Тап по подсказке здесь открывает караоке с этой строки.</div>' +
       (hasMusic ? '<div class="play-mini"><button class="pbtn" data-ka="play"></button><div class="bar" data-ka="bar"><i></i></div><div class="tm">0:00</div></div>' : "") +
-      '<div class="kcard"></div>' +
-      '<div class="chips">' +
-        '<button class="chip" data-ka="mV">+ <b style="color:var(--terra)">V</b> вдох</button>' +
-        '<button class="chip" data-ka="mv">+ <b style="color:var(--blue)">v</b> добор</button>' +
-        '<button class="chip" data-ka="hint">+ подсказка</button>' +
-      "</div>" +
       '<div class="tapbig' + (hasMusic && nLines ? "" : " off") + '" data-ka="tap">Тап: следующая строка</div>' +
       '<div class="row2"><button class="btn2" data-ka="undo">Отменить тап</button><button class="btn2" data-ka="restart">Разметить заново</button></div>' +
-      '<div class="note">Музыка играет — тапаешь в начале каждой строки. Тап по строке в списке выбирает её для V, v и подсказки.</div>' +
+      '<div class="note">Музыка играет — тапаешь в начале каждой строки.</div>' +
       '<div class="msg"></div>' +
     "</div>";
   wireActs();
@@ -931,67 +1052,61 @@ function karAdmMsg(t, err) {
   if (m) { m.textContent = t || ""; m.classList.toggle("err", !!err); }
 }
 
+/* Список «Подсказки и дыхание» (заменил список строк, 17.11): только строки, где есть
+   V, v или подсказка. Тап по строке — караоке с этой строки. Ставятся они в самом
+   караоке долгим нажатием на строку. */
 function karAdmPaintLines() {
-  var card = app.querySelector(".kadm .kcard");
+  var card = app.querySelector(".kadm .khl");
   if (!card || !KAE) return;
+  karAdmPaintNext();
   if (!KAE.lines.length) {
-    card.innerHTML = '<div class="ln next" style="border:none">Сначала вставь текст песни — каждая строка с новой строки, куплеты через пустую строку.</div>';
+    card.innerHTML = '<div class="khl-empty">Сначала вставь текст песни — каждая строка с новой строки, куплеты через пустую строку.</div>';
     return;
   }
-  card.innerHTML = KAE.lines.map(function (l, k) {
-    var cls = l.t == null ? "next" : "";
-    if (k === KAE.cursor - 1 && l.t != null) cls = "now";
-    if (k === KAE.pick) cls += " pick";
+  var rows = [];
+  KAE.lines.forEach(function (l, k) {
+    if (!Object.keys(l.mk).length && !(l.hint || "").trim()) return;
     var words = l.text.split(/\s+/), h = "";
-    var placing = k === KAE.pick && (KAE.mode === "V" || KAE.mode === "v");
     for (var g = 0; g <= words.length; g++) {
-      if (l.mk[g]) h += '<span class="' + l.mk[g] + '" data-gap="' + g + '">' + l.mk[g] + "</span>";
-      else if (placing) h += '<span class="gapb" data-gap="' + g + '">+</span>';
-      if (g < words.length) h += esc(words[g]) + " ";
+      if (l.mk[g]) h += '<b class="' + l.mk[g] + '">' + l.mk[g] + "</b>";
+      if (g < words.length) h += esc(words[g]) + (g < words.length - 1 ? " " : "");
     }
-    if (k === KAE.pick && KAE.mode === "hint") {
-      h += '<input type="text" class="khint-in" maxlength="200" placeholder="Подсказка к строке" value="' + esc(l.hint || "") + '" style="margin-top:8px">';
-    } else if (l.hint) h += '<span class="hint">' + esc(l.hint) + "</span>";
-    return '<div class="ln ' + cls + '" data-ln="' + k + '"><span class="tm">' + (l.t == null ? "—" : karFmtTenth(l.t)) + '</span><span class="txt">' + h + "</span></div>";
-  }).join("");
-  Array.prototype.forEach.call(card.querySelectorAll("[data-ln]"), function (el) {
-    el.addEventListener("click", function (ev) {
-      var k = parseInt(el.getAttribute("data-ln"), 10);
-      var gap = ev.target.getAttribute && ev.target.getAttribute("data-gap");
-      if (ev.target.classList && ev.target.classList.contains("khint-in")) return;
-      var l = KAE.lines[k];
-      if (gap != null) {
-        if (l.mk[gap]) delete l.mk[gap];
-        else if (KAE.mode === "V" || KAE.mode === "v") l.mk[gap] = KAE.mode;
-        KAE.mode = null; karAdmChips();
-        karAdmDirty(); karAdmPaintLines();
-        return;
-      }
-      if (KAE.pick === k && !KAE.mode) { KAE.pick = -1; }
-      else {
-        KAE.pick = k; KAE.mode = null;
-        // тап по строке — отсюда и продолжаем тапать, музыка встаёт чуть раньше
-        KAE.cursor = k;
-        var prev = null;
-        for (var j = k - 1; j >= 0 && prev == null; j--) if (KAE.lines[j].t != null) prev = KAE.lines[j].t;
-        if (KAE.el.src && prev != null) { try { KAE.el.currentTime = Math.max(0, prev - 1); } catch (e) {} }
-      }
-      karAdmChips(); karAdmPaintLines();
-    });
+    rows.push('<div class="khl-row" data-hl="' + k + '"><div class="tm">' + (l.t == null ? "—" : karFmt(l.t)) + "</div>" +
+      '<div class="tx"><div class="l">' + h + "</div>" + (l.hint ? '<div class="h">' + esc(l.hint) + "</div>" : "") + "</div>" +
+      '<div class="cv">›</div></div>');
   });
-  var hin = card.querySelector(".khint-in");
-  if (hin) {
-    hin.focus();
-    hin.addEventListener("input", function () { KAE.lines[KAE.pick].hint = hin.value; karAdmDirty(); });
-    hin.addEventListener("keydown", function (e) { if (e.key === "Enter") { KAE.mode = null; karAdmChips(); karAdmPaintLines(); } });
-  }
+  card.innerHTML = rows.length ? rows.join("") : '<div class="khl-empty">Пока пусто. Удерживай строку в караоке, чтобы поставить V, v или подсказку.</div>';
+  Array.prototype.forEach.call(card.querySelectorAll("[data-hl]"), function (el) {
+    el.onclick = function () { karAdmOpenKaraoke(parseInt(el.getAttribute("data-hl"), 10)); };
+  });
 }
 
-function karAdmChips() {
-  ["V", "v", "hint"].forEach(function (m) {
-    var b = app.querySelector('[data-ka="' + (m === "hint" ? "hint" : "m" + m) + '"]');
-    if (b) b.classList.toggle("on", KAE.mode === m);
+/* Под кнопкой тапа — какая строка следующая (раньше это было видно в списке строк). */
+function karAdmPaintNext() {
+  var n = app.querySelector(".kadm .note");
+  if (!n || !KAE) return;
+  if (KAE.el.paused || !KAE.lines.length) { n.textContent = "Музыка играет — тапаешь в начале каждой строки."; return; }
+  var l = KAE.lines[KAE.cursor];
+  n.textContent = l ? "Следующая (" + (KAE.cursor + 1) + " из " + KAE.lines.length + "): " + l.text : "Все строки размечены ✓";
+}
+
+/* Открыть караоке этой песни (с этой строки). Назад — обратно в «Разметку». */
+function karAdmOpenKaraoke(k) {
+  var s = KAE && KAE.song;
+  if (!s) return;
+  if (!(s.music && s.music.url)) { karAdmMsg("Сначала загрузи минус — без него караоке не откроется.", true); return; }
+  if (KAE.dirty) { clearTimeout(KAE.saveT); karAdmSave(); }
+  try { KAE.el.pause(); } catch (e) {}
+  s.lyricTimes = KAE.lines.filter(function (l) { return l.t != null; }).map(function (l) { return { i: l.i, t: Math.round(l.t * 100) / 100, text: l.text }; });
+  var marks = {};
+  KAE.lines.forEach(function (l) {
+    if (Object.keys(l.mk).length || (l.hint || "").trim()) marks[l.i] = { text: l.text, mk: JSON.parse(JSON.stringify(l.mk)), hint: (l.hint || "").trim() };
   });
+  KAR.marks[s.id] = { lines: marks };
+  KAR.song = s;
+  KAR.fromAdmEdit = true;
+  KAR.startK = k == null ? null : k;
+  go("karaoke-play");
 }
 
 function karAdmDirty() {
@@ -1165,19 +1280,8 @@ function karAdmWire() {
   var vfile = q("vfile");
   q("voice").onclick = function () { vfile.click(); };
   vfile.onchange = function () { karAdmUpload(vfile.files && vfile.files[0], "voice"); vfile.value = ""; };
-  ["V", "v"].forEach(function (m) {
-    q("m" + m).onclick = function () {
-      if (KAE.pick < 0) { KAE.pick = Math.max(0, KAE.cursor - 1); }
-      KAE.mode = KAE.mode === m ? null : m;
-      karAdmChips(); karAdmPaintLines();
-      karAdmMsg(KAE.mode ? "Тапни «+» там, где нужен " + (m === "V" ? "вдох" : "добор") + ". Тап по пометке убирает её." : "");
-    };
-  });
-  q("hint").onclick = function () {
-    if (KAE.pick < 0) KAE.pick = Math.max(0, KAE.cursor - 1);
-    KAE.mode = KAE.mode === "hint" ? null : "hint";
-    karAdmChips(); karAdmPaintLines();
-  };
+  var ok = q("openkar");
+  if (ok) ok.onclick = function () { karAdmOpenKaraoke(null); };
   var tap = q("tap");
   tap.addEventListener("pointerdown", function (ev) {
     ev.preventDefault();
@@ -1193,11 +1297,8 @@ function karAdmWire() {
     if (KAE.cursor >= KAE.lines.length) { karAdmMsg("Все строки размечены ✓"); return; }
     // −0,15 с на реакцию пальца: подсветка лучше чуть раньше, чем позже
     KAE.lines[KAE.cursor].t = Math.max(0, KAE.el.currentTime - 0.15);
-    KAE.pick = -1; KAE.mode = null;
     KAE.cursor++;
     karAdmPaintLines(); karAdmDirty();
-    var cur = app.querySelector('.kadm [data-ln="' + (KAE.cursor - 1) + '"]');
-    if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: "center", behavior: "smooth" });
   });
   q("undo").onclick = function () {
     if (KAE.cursor <= 0) return;
@@ -1212,7 +1313,7 @@ function karAdmWire() {
   q("restart").onclick = function () {
     if (!confirm("Стереть тайминг всех строк и разметить заново? Пометки V, v и подсказки останутся.")) return;
     KAE.lines.forEach(function (l) { l.t = null; });
-    KAE.cursor = 0; KAE.pick = -1;
+    KAE.cursor = 0;
     try { KAE.el.pause(); KAE.el.currentTime = 0; } catch (e) {}
     karAdmPaintLines(); karAdmPaintPlay(); karAdmDirty();
   };
@@ -1247,6 +1348,7 @@ function karAdmPaintPlay() {
     : '<svg width="14" height="14" viewBox="0 0 18 20"><rect x="2" y="1" width="5" height="18" rx="1.5" fill="var(--terra)"/><rect x="11" y="1" width="5" height="18" rx="1.5" fill="var(--terra)"/></svg>';
   var tap = app.querySelector('.kadm [data-ka="tap"]');
   if (tap && KAE) tap.textContent = KAE.el.paused ? "Тап: включить музыку и начать" : "Тап: следующая строка";
+  karAdmPaintNext();
 }
 
 /* ---------- подключение к навигации app.js ---------- */

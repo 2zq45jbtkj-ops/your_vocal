@@ -413,7 +413,7 @@ function backTarget() {
     case "admin-plans": return "admin-hub";
     case "admin-plan": return "admin-plans";
     case "karaoke": return "profile";
-    case "karaoke-play": return "karaoke";
+    case "karaoke-play": return (window.KAR && KAR.fromAdmEdit) ? "admin-karaoke-edit" : "karaoke";
     case "pitch": return "profile";
     case "bylo": return "profile";
     case "pitch-topic": return "pitch";
