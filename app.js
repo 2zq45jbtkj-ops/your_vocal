@@ -1761,6 +1761,10 @@ function renderProfile() {
     var voiceTypeStr = intake.voiceType || "";
     var goalsArr = Array.isArray(intake.goals) ? intake.goals : [];
     var artArr = Array.isArray(intake.articulatory) ? intake.articulatory : [];
+    // Репертуар (Коля 17.11): каждая песня с новой строки, по порядку.
+    // В базе он строкой через запятую, перенос строки или «;», или списком.
+    var repArr = (Array.isArray(intake.repertoire) ? intake.repertoire : String(intake.repertoire || "").split(/\s*(?:\r?\n|;|,\s+)\s*/))
+      .map(function (x) { return String(x || "").trim(); }).filter(Boolean);
 
     voiceHtml =
       '<div class="cabinet-inset">' +
@@ -1779,7 +1783,10 @@ function renderProfile() {
           : "") +
         (Array.isArray(intake.tensionAreas) && intake.tensionAreas.length ? '<div class="section-label">Зоны зажима</div><div class="chips-wrap" style="margin-bottom:12px;">' + chipsHtml(intake.tensionAreas) + "</div>" : "") +
         (artArr.length ? '<div class="section-label">Артикуляционные особенности</div><div class="chips-wrap" style="margin-bottom:12px;">' + artArr.map(function(e){ return '<span class="chip-tag">' + esc(e.letter || "") + (e.typeIdx !== undefined ? "" : "") + "</span>"; }).join("") + "</div>" : "") +
-        (intake.repertoire ? '<div class="section-label">Репертуар</div><div class="goal-box goal-primary" style="margin-bottom:0;">' + esc(intake.repertoire) + "</div>" : "") +
+        (repArr.length ? '<div class="section-label">Репертуар</div><div class="goal-box goal-primary rep-list" style="margin-bottom:0;">' +
+          repArr.map(function (song, k) {
+            return '<div class="rep-item"><span class="rep-n">' + (k + 1) + ".</span><span>" + esc(song) + "</span></div>";
+          }).join("") + "</div>" : "") +
       "</div>";
   }
 

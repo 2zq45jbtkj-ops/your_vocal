@@ -1247,6 +1247,15 @@ html.browser-mode {
 .cab-zone.on { background: var(--soft-terra); box-shadow: inset 0 0 0 2px var(--terra); }
 .cab-zone .srez-row-head { margin-bottom: 5px; }
 .cab-zone.on .srez-name { font-weight: 700; }
+/* Тёмная тема (Коля 17.11): светло-розовый фон съедал светлый текст зоны —
+   там подсветка тёмная с терракотовым оттенком, текст остаётся светлым. */
+html.dark .cab-zone.on, body.dark .cab-zone.on { background: color-mix(in srgb, var(--terra) 28%, var(--bg)); }
 .cab-zone-num { width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font: 800 11px 'Manrope', sans-serif; box-shadow: var(--inset-sm); color: var(--terra); }
 .cab-zone.on .cab-zone-num { background: var(--terra); color: var(--white-text); box-shadow: none; }
 .cab-zone-score { flex-shrink: 0; font: 600 12.5px 'Inter', sans-serif; color: var(--gray); }
+
+/* Репертуар в «Мой голос»: каждая песня с новой строки, номер слева */
+.rep-list { text-align: left; }
+.rep-item { display: flex; gap: 6px; }
+.rep-item + .rep-item { margin-top: 6px; }
+.rep-n { flex-shrink: 0; min-width: 1.3em; }
