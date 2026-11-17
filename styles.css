@@ -1280,28 +1280,10 @@ html.dark .cab-zone.on, body.dark .cab-zone.on { background: color-mix(in srgb, 
 .rep-n { flex-shrink: 0; min-width: 1.3em; }
 
 /* ---------- Верхний край на iPhone (значок на экране «Домой») ----------
-   iOS 26 кладёт размытие поверх верха веб-приложения. Убрать его можно
-   только так: у самого края должна стоять закреплённая (fixed) полоса на
-   всю ширину, выше 10px, с обычным сплошным фоном и без backdrop-filter.
-   Тогда iOS красит край её цветом, а не размывает. Полоса — цвета фона
-   (светлая/тёмная тема сами), закрывает только зону часов. В Telegram и
-   в обычной вкладке браузера её нет. */
-#top-edge { display: none; }
+   iOS 26 мягко размывает верх веб-приложения под часами. Николай выбрал
+   оставить это размытие (17.11), но опустить экраны, чтобы шапка в покое
+   была ниже размытия и читалась чётко. В Telegram и во вкладке браузера
+   отступ прежний. */
 @media (display-mode: standalone) {
-  #top-edge {
-    display: block;
-    position: fixed; top: 0; left: 0; right: 0;
-    height: max(12px, env(safe-area-inset-top, 0px));
-    background-color: var(--bg);
-    z-index: 2147483647;
-  }
-  /* Под полосой — мягкое растворение вместо резкого края (просьба Николая
-     17.11): содержимое, уходя вверх, тает. Пока страница не прокручена,
-     растворения нет совсем, чтобы оно не ложилось на шапку экрана. */
-  #top-edge::after {
-    content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 28px;
-    background: linear-gradient(to bottom, var(--bg), transparent);
-    opacity: 0; transition: opacity .2s ease;
-  }
-  html.scrolled body:not(:has(.kp)) #top-edge::after { opacity: 1; }
+  #app { padding-top: calc(var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px) + 24px); }
 }
