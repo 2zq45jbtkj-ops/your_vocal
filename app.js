@@ -17,6 +17,18 @@ var tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : 
 if (tg && !tg.initData) tg = null;
 var BROWSER_MODE = !tg;
 if (BROWSER_MODE) document.documentElement.classList.add("browser-mode");
+// Растворение под верхней полосой (#top-edge, только значок «на экране
+// Домой») включается, лишь когда страница прокручена — в покое шапку
+// экрана ничто не накрывает.
+(function () {
+  var on = false;
+  function upd() {
+    var y = window.scrollY || document.documentElement.scrollTop || 0;
+    if ((y > 2) !== on) { on = y > 2; document.documentElement.classList.toggle("scrolled", on); }
+  }
+  window.addEventListener("scroll", upd, { passive: true });
+  upd();
+})();
 
 // Личная ссылка из бота: ?k=<код доступа ученика>. Тот же код, что ученик
 // вводит вручную на экране входа, — новых секретов нет. Ссылка остаётся в
