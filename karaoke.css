@@ -44,9 +44,16 @@ html.dark .kp {
   -webkit-mask: linear-gradient(transparent, #000 12%, #000 78%, transparent); mask: linear-gradient(transparent, #000 12%, #000 78%, transparent); }
 .kp .lyr-in { position: relative; transition: transform .7s cubic-bezier(.22, .8, .25, 1); will-change: transform; }
 .kp .lyr p { font: 800 25px/1.25 Manrope, sans-serif; color: var(--dim); margin: 0 0 20px; position: relative;
-  transition: color .35s, font-size .35s, filter .35s, text-shadow .35s; cursor: pointer; }
+  transition: color .35s, font-size .35s, text-shadow .35s; cursor: pointer; }
 .kp .lyr p.gap { margin-top: 18px; }
-.kp .lyr p.f1 { filter: blur(.6px); } .kp .lyr p.f2 { filter: blur(1.4px); } .kp .lyr p.f3 { filter: blur(2.2px); }
+/* Размытие дальних строк — тенью текста, а не filter: blur. На iPhone filter
+   внутри маски с анимацией давал чёрные рамки и полосы по краям строк (17.11).
+   Радиус тени ≈ двойной радиус прежнего blur, вид тот же. */
+.kp .lyr p.f1, .kp .lyr p.f2, .kp .lyr p.f3 { color: transparent; }
+.kp .lyr p.f1 { text-shadow: 0 0 1.2px var(--dim); } .kp .lyr p.f2 { text-shadow: 0 0 2.8px var(--dim); } .kp .lyr p.f3 { text-shadow: 0 0 4.4px var(--dim); }
+.kp .lyr p.f1 .mk, .kp .lyr p.f2 .mk, .kp .lyr p.f3 .mk { color: transparent; text-shadow: 0 0 2.4px oklch(92% 0.06 50); }
+html.dark .kp .lyr p.f1 .mk, html.dark .kp .lyr p.f2 .mk, html.dark .kp .lyr p.f3 .mk { text-shadow: 0 0 2.4px oklch(80% 0.08 50); }
+.kp .lyr p.f2 .ktag, .kp .lyr p.f3 .ktag { opacity: .55; }
 .kp .lyr p.cur { color: var(--hi); font-size: 30px; text-shadow: 0 0 22px oklch(100% 0 0 / .55), 0 0 2px oklch(100% 0 0 / .4); filter: none; }
 .kp .mk { font: 700 16px "JetBrains Mono", ui-monospace, monospace; color: oklch(92% 0.06 50); margin: 0 4px; vertical-align: 4px; }
 .kp .lyr p > .mk:first-child { margin-left: 0; }

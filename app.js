@@ -5369,6 +5369,10 @@ function renderAdminBanner() {
   // задвоил бы обработчики уже привязанных на экране элементов.
   var btn = document.getElementById("admin-exit-btn");
   if (btn) btn.addEventListener("click", exitAdminMode);
+  // Караоке открыто поверх всего экрана — опускаем его под плашку, иначе
+  // плашка закрывает название песни.
+  var kp = app.querySelector(".kp"), bn = app.querySelector(".admin-banner");
+  if (kp && bn) kp.style.top = Math.round(bn.getBoundingClientRect().bottom) + "px";
 }
 
 /* ---------- запуск ---------- */
