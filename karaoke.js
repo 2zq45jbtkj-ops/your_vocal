@@ -269,7 +269,7 @@ function renderKaraokeList() {
   Array.prototype.forEach.call(app.querySelectorAll("[data-kar-song]"), function (el) {
     el.addEventListener("click", function () {
       KAR.song = KAR.songs[parseInt(el.getAttribute("data-kar-song"), 10)];
-      KAR.fromAdmEdit = false; KAR.startK = null;
+      KAR.fromAdmEdit = false; KAR.startK = null; KAR.tapMode = false;
       go("karaoke-play");
     });
   });
@@ -469,9 +469,13 @@ function renderKaraokePlay() {
   var s = KAR.song;
   if (!s) { go("karaoke"); return; }
   karEngineNew(s);
-  KP.lines = karBuildLines(s, KAR.marks[s.id]);
+  // Разметка строк (Николай, 17.11): тот же экран караоке, строки — общие с
+  // редактором, тап ставит время строке. Тон и темп родные, чтобы время было точным.
+  KP.tap = !!(KAR.tapMode && KAE && KAE.song === s);
+  if (KP.tap) { KE.pitch = 0; KE.tempo = 100; KE.el.playbackRate = 1; }
+  KP.lines = KP.tap ? KAE.lines : karBuildLines(s, KAR.marks[s.id]);
   KP.cur = -2; KP.sel = null; KP.loop = null; KP.sheet = null; KP.env = null;
-  var timed = KP.lines.some(function (l) { return l.t != null; });
+  var timed = KP.tap || KP.lines.some(function (l) { return l.t != null; });
   KP.timed = timed;
 
   app.innerHTML =
@@ -498,6 +502,10 @@ function renderKaraokePlay() {
     KAR.startK = null;
     if (st && st.t != null) karSeek(st.t); // ровно на строку, чтобы она сразу подсветилась
   }
+  if (KP.tap && KAR.tapStart != null) {
+    var t0 = KAR.tapStart; KAR.tapStart = null;
+    karSeek(t0); karPlay();
+  }
 }
 
 function karPaintLyrics() {
@@ -522,12 +530,13 @@ function karPaintLyrics() {
   var lyr = KP.root.querySelector(".lyr");
   lyr.classList.toggle("selm", selMode);
   KP.root.querySelector(".khint").style.display = selMode ? "" : "none";
-  var adm = karIsAdm() && !selMode;
+  var adm = karIsAdm() && !selMode && !KP.tap;
   lyr.classList.toggle("kadmlp", adm);
   Array.prototype.forEach.call(inner.querySelectorAll("p[data-k]"), function (p) {
     var k = parseInt(p.getAttribute("data-k"), 10);
     p.addEventListener("click", function () {
       if (KP.lpDone) { KP.lpDone = false; return; } // после долгого нажатия обычный тап не срабатывает
+      if (KP.tap) return; // при разметке строки не трогаем — тапают только кнопку
       karLineTap(k);
     });
     if (adm) karWireLongPress(p, k);
@@ -708,14 +717,15 @@ function karPaintBottom() {
         '<div class="sk" data-kp="m10">−10</div>' +
         '<div class="pl" data-kp="play">' + KAR_ICO.play + "</div>" +
         '<div class="sk" data-kp="p10">+10</div>' +
-        (KP.timed ? '<div class="lp' + (KP.loop ? " on" : "") + '" data-kp="loop">' + KAR_ICO.loop(KP.loop ? "oklch(45% 0.1 40)" : "var(--gtx)") + "</div>" : "") +
+        (KP.timed && !KP.tap ? '<div class="lp' + (KP.loop ? " on" : "") + '" data-kp="loop">' + KAR_ICO.loop(KP.loop ? "oklch(45% 0.1 40)" : "var(--gtx)") + "</div>" : "") +
       "</div>" +
-      '<div class="chs"></div>' +
+      (KP.tap ? '<div class="ktap" data-kp="tap">ТАП</div><div class="bt kundo" data-kp="undo">← Назад на строку</div>' : '<div class="chs"></div>') +
     "</div>";
   karPaintWaveShape();
   karPaintChips();
   karPaintPlay();
-  box.querySelector('[data-kp="play"]').onclick = function () { if (KE.playing) karPause(); else hpGate("karaoke", karPlay); };
+  box.querySelector('[data-kp="play"]').onclick = function () { if (KE.playing) karPause(); else if (KP.tap) karPlay(); else hpGate("karaoke", karPlay); };
+  if (KP.tap) karWireTap(box);
   box.querySelector('[data-kp="m10"]').onclick = function () { karSeek(karTime() - 10); };
   box.querySelector('[data-kp="p10"]').onclick = function () { karSeek(karTime() + 10); };
   var lp = box.querySelector('[data-kp="loop"]');
@@ -796,6 +806,30 @@ function karOpenSheet(kind) {
     d.querySelector(".v").textContent = val();
   };
   d.querySelector('[data-s="ok"]').onclick = function () { d.parentNode.removeChild(d); };
+}
+
+/* Разметка: ТАП ставит начало следующей строки, «Назад на строку» снимает
+   последний тап и отматывает музыку на 2 секунды перед этой строкой. */
+function karWireTap(box) {
+  box.querySelector('[data-kp="tap"]').addEventListener("pointerdown", function (ev) {
+    ev.preventDefault();
+    if (!KAE || !KP.lines.length) return;
+    if (!KE.playing) { karPlay(); return; }
+    if (KAE.cursor >= KAE.lines.length) { karToast("Все строки размечены ✓"); return; }
+    // −0,15 с на реакцию пальца: подсветка лучше чуть раньше, чем позже
+    KAE.lines[KAE.cursor].t = Math.max(0, karTime() - 0.15);
+    KAE.cursor++;
+    karAdmDirty(); karTick(true);
+    if (KAE.cursor >= KAE.lines.length) karToast("Все строки размечены ✓");
+  });
+  box.querySelector('[data-kp="undo"]').onclick = function () {
+    if (!KAE || KAE.cursor <= 0) return;
+    KAE.cursor--;
+    var l = KAE.lines[KAE.cursor], was = l.t;
+    l.t = null;
+    if (was != null) karSeek(Math.max(0, was - 2));
+    karAdmDirty(); karTick(true);
+  };
 }
 
 function karPaintPlay() {
@@ -1120,7 +1154,7 @@ function renderAdminKaraokeEdit() {
       '<div class="khl"></div>' +
       '<div class="khl-note">Ставятся в караоке: удерживай строку. Тап по подсказке здесь открывает караоке с этой строки.</div>' +
       (hasMusic ? '<div class="play-mini"><button class="pbtn" data-ka="play"></button><div class="bar" data-ka="bar"><i></i></div><div class="tm">0:00</div></div>' : "") +
-      '<div class="tapbig' + (hasMusic && nLines ? "" : " off") + '" data-ka="tap">Тап: следующая строка</div>' +
+      '<div class="tapbig' + (hasMusic && nLines ? "" : " off") + '" data-ka="tap">Тап: включить музыку и начать</div>' +
       '<div class="row2"><button class="btn2" data-ka="undo">Отменить тап</button><button class="btn2" data-ka="restart">Разметить заново</button></div>' +
       '<div class="note">Музыка играет — тапаешь в начале каждой строки.</div>' +
       '<div class="msg"></div>' +
@@ -1207,7 +1241,22 @@ function karAdmOpenKaraoke(k) {
   KAR.marks[s.id] = { lines: marks };
   KAR.song = s;
   KAR.fromAdmEdit = true;
+  KAR.tapMode = false;
   KAR.startK = k == null ? null : k;
+  go("karaoke-play");
+}
+
+/* Большая кнопка в «Разметке»: открывает караоке в режиме разметки и сразу
+   включает музыку — с начала или чуть раньше последней размеченной строки. */
+function karAdmOpenTap() {
+  var s = KAE && KAE.song;
+  if (!s || !KAE.lines.length) return;
+  if (!(s.music && s.music.url)) { karAdmMsg("Сначала загрузи минус — без него караоке не откроется.", true); return; }
+  try { KAE.el.pause(); } catch (e) {}
+  if (KAE.cursor >= KAE.lines.length) KAE.cursor = karAdmFirstUnmarked();
+  var prev = KAE.lines[KAE.cursor - 1];
+  KAR.tapStart = prev && prev.t != null ? Math.max(0, prev.t - 1) : 0;
+  KAR.song = s; KAR.fromAdmEdit = true; KAR.tapMode = true; KAR.startK = null;
   go("karaoke-play");
 }
 
@@ -1385,23 +1434,8 @@ function karAdmWire() {
   var ok = q("openkar");
   if (ok) ok.onclick = function () { karAdmOpenKaraoke(null); };
   var tap = q("tap");
-  tap.addEventListener("pointerdown", function (ev) {
-    ev.preventDefault();
-    if (!KAE.lines.length || !KAE.el.src) return;
-    if (KAE.el.paused) {
-      // первый тап запускает музыку; строки отмечаем следующими тапами
-      if (KAE.cursor >= KAE.lines.length) KAE.cursor = karAdmFirstUnmarked();
-      var p = KAE.el.play(); if (p && p.catch) p.catch(function () {});
-      tap.textContent = "Тап: следующая строка";
-      karAdmPaintPlay();
-      return;
-    }
-    if (KAE.cursor >= KAE.lines.length) { karAdmMsg("Все строки размечены ✓"); return; }
-    // −0,15 с на реакцию пальца: подсветка лучше чуть раньше, чем позже
-    KAE.lines[KAE.cursor].t = Math.max(0, KAE.el.currentTime - 0.15);
-    KAE.cursor++;
-    karAdmPaintLines(); karAdmDirty();
-  });
+  // Тапы ставятся в караоке (текст перед глазами) — см. karAdmOpenTap.
+  tap.addEventListener("click", function () { karAdmOpenTap(); });
   q("undo").onclick = function () {
     if (KAE.cursor <= 0) return;
     KAE.cursor--;
@@ -1449,7 +1483,7 @@ function karAdmPaintPlay() {
     ? '<svg width="14" height="16" viewBox="0 0 12 14"><path d="M1.5 1l10 6-10 6V1z" fill="var(--terra)"/></svg>'
     : '<svg width="14" height="14" viewBox="0 0 18 20"><rect x="2" y="1" width="5" height="18" rx="1.5" fill="var(--terra)"/><rect x="11" y="1" width="5" height="18" rx="1.5" fill="var(--terra)"/></svg>';
   var tap = app.querySelector('.kadm [data-ka="tap"]');
-  if (tap && KAE) tap.textContent = KAE.el.paused ? "Тап: включить музыку и начать" : "Тап: следующая строка";
+  if (tap && KAE) tap.textContent = "Тап: включить музыку и начать";
   karAdmPaintNext();
 }
 

@@ -96,6 +96,12 @@ html.dark .kp .mk { color: oklch(80% 0.08 50); }
   background: var(--glass); border: 1px solid var(--glass-b); color: var(--gtx); cursor: pointer; }
 .kp .bt.main { background: var(--hi); border-color: var(--hi); color: oklch(35% 0.08 40); }
 .kp .bt.off { opacity: .45; pointer-events: none; }
+/* разметка строк: «ТАП» того же размера, что большая кнопка в «Разметке» */
+.kp .ktap { height: 76px; border-radius: 22px; background: var(--terra); color: var(--white-text); font: 800 17px Manrope, sans-serif;
+  display: flex; align-items: center; justify-content: center; cursor: pointer; user-select: none; -webkit-user-select: none; touch-action: manipulation;
+  box-shadow: 0 8px 24px oklch(20% 0.02 40 / .3); }
+.kp .ktap:active { transform: scale(.98); }
+.kp .kundo { flex: none; margin-top: 10px; }
 
 /* окно «Тональность» / «Темп» — стеклянное, поверх плеера */
 .kp .ksheet { position: absolute; left: 16px; right: 16px; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); z-index: 3; border-radius: 26px;
