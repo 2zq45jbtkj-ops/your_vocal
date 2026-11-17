@@ -424,7 +424,7 @@ function backTarget() {
     case "pitch-topic": return "pitch";
     case "pitch-sing": case "pitch-score": return "pitch-topic";
     case "admin-karaoke": return "admin-hub";
-    case "admin-karaoke-songs": return "admin-karaoke";
+    case "admin-karaoke-songs": return (window.KAR && KAR.adm && KAR.adm.fromKar) ? "karaoke" : "admin-karaoke";
     case "admin-karaoke-edit": return "admin-karaoke-songs";
     case "lecture": case "warmups": case "song": case "quiz-result": return "lesson-home";
     case "feedback": return "song";

@@ -195,7 +195,7 @@ function renderKaraokeList() {
   } else if (KAR.songsErr) {
     body = '<div class="instruction-note">Не получилось загрузить песни. Проверь интернет и открой экран ещё раз.</div>';
   } else if (!KAR.songs.length) {
-    body = '<div class="instruction-note">Здесь появятся песни, над которыми вы работаете с Николаем, когда он добавит к ним минус.</div>';
+    body = '<div class="instruction-note">Здесь появятся песни, над которыми ты работаешь с Николаем, когда он добавит к ним минус.</div>';
   } else {
     body = '<div class="kar-list">' + KAR.songs.map(function (s, k) {
       var timed = (s.lyricTimes || []).length > 0;
@@ -205,9 +205,22 @@ function renderKaraokeList() {
         '<div class="cab-chev">›</div></div>';
     }).join("") + "</div>";
   }
+  // Николай смотрит кабинет ученика (или свой) — отсюда же добавляет песни
+  // этому ученику, без захода в «Ещё → Разметка караоке».
+  var admAdd = state.isAdmin ? '<button class="cta" data-kar-adm-add style="margin-top:14px;">+ Новая песня</button>' : "";
   app.innerHTML = '<div style="padding:var(--screen-top) 20px 130px;">' + cabBack() +
-    '<div class="cab-screen-title">Караоке</div>' + body + "</div>";
+    '<div class="cab-screen-title">Караоке</div>' + body + admAdd + "</div>";
   wireActs();
+  var addBtn = app.querySelector("[data-kar-adm-add]");
+  if (addBtn) addBtn.addEventListener("click", function () {
+    var tok = state.accessToken;
+    var st = (state.adminStudentsList || []).filter(function (x) { return x && x.telegramToken && x.telegramToken === tok; })[0];
+    KAR.songs = null; // после разметки список ученика перечитается
+    if (!st) { go("admin-karaoke"); return; }
+    KAR.adm.student = { id: st.id, name: st.name };
+    KAR.adm.songs = null; KAR.adm.fromKar = true;
+    go("admin-karaoke-songs");
+  });
   Array.prototype.forEach.call(app.querySelectorAll("[data-kar-song]"), function (el) {
     el.addEventListener("click", function () {
       KAR.song = KAR.songs[parseInt(el.getAttribute("data-kar-song"), 10)];
@@ -768,7 +781,7 @@ function renderAdminKaraoke() {
     el.onclick = function () {
       var st = state.adminStudentsList[parseInt(el.getAttribute("data-kadm-st"), 10)];
       KAR.adm.student = { id: st.id, name: st.name };
-      KAR.adm.songs = null;
+      KAR.adm.songs = null; KAR.adm.fromKar = false;
       go("admin-karaoke-songs");
     };
   });
