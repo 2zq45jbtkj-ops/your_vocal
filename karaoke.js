@@ -159,6 +159,7 @@ function karLoadSongs(force) {
     });
     KAR.songs = songs; KAR.songsFor = tok; KAR.loadedAt = Date.now();
     KAR.marks = (res[1] && res[1].marks) || {};
+    KAR.meta = (res[1] && res[1].meta) || {};
     if (state.screen === "karaoke" && karSongsKey(songs) !== before) { KAR.justLoaded = true; render(); }
   }).catch(function () {
     KAR.loading = false;
@@ -167,6 +168,52 @@ function karLoadSongs(force) {
     KAR.songs = null; KAR.songsErr = true;
     if (state.screen === "karaoke") { KAR.justLoaded = true; render(); }
   });
+}
+
+/* Изменить уже загруженную песню — вариант C (выбран Николаем 17.11): удерживаешь
+   песню в списке Караоке, снизу «Петь» или «Изменить песню». Только Николаю.
+   «Изменить песню» открывает экран песни (название, плюс, минус, текст, разметка). */
+function karWireSongMenu(el) {
+  var t = 0, x = 0, y = 0;
+  function cancel() { clearTimeout(t); t = 0; }
+  el.addEventListener("pointerdown", function (e) {
+    x = e.clientX; y = e.clientY; el._lp = false;
+    cancel();
+    t = setTimeout(function () { t = 0; el._lp = true; karSongMenu(el); }, 500);
+  });
+  el.addEventListener("pointermove", function (e) { if (t && Math.hypot(e.clientX - x, e.clientY - y) > 8) cancel(); });
+  el.addEventListener("pointerup", cancel);
+  el.addEventListener("pointercancel", cancel);
+  el.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+}
+
+function karSongMenu(el) {
+  var song = KAR.songs[parseInt(el.getAttribute("data-kar-song"), 10)];
+  if (!song) return;
+  try { if (navigator.vibrate) navigator.vibrate(10); } catch (e) {}
+  var shade = document.createElement("div"); shade.className = "kshade";
+  var menu = document.createElement("div"); menu.className = "kmenu";
+  menu.innerHTML = '<div data-km="sing">▶︎&nbsp; Петь</div><div data-km="edit">✎&nbsp; Изменить песню</div>';
+  el.classList.add("kup");
+  document.body.appendChild(shade); document.body.appendChild(menu);
+  function close() {
+    el.classList.remove("kup");
+    [shade, menu].forEach(function (n) { if (n.parentNode) n.parentNode.removeChild(n); });
+  }
+  shade.addEventListener("click", close);
+  menu.querySelector('[data-km="sing"]').onclick = function () {
+    close();
+    KAR.song = song; KAR.fromAdmEdit = false; KAR.startK = null; KAR.tapMode = false;
+    go("karaoke-play");
+  };
+  menu.querySelector('[data-km="edit"]').onclick = function () {
+    close();
+    var tok = state.accessToken;
+    var st = (state.adminStudentsList || []).filter(function (x) { return x && x.telegramToken && x.telegramToken === tok; })[0];
+    KAR.adm.student = { id: song.studentId || (st && st.id), name: st ? st.name : (state.studentPublicData && state.studentPublicData.student && state.studentPublicData.student.name) || "" };
+    KAR.adm.songs = null; KAR.adm.fromKar = true; KAR.adm.song = song; KAR.songs = null;
+    go("admin-karaoke-edit");
+  };
 }
 
 function karSongsKey(list) {
@@ -289,7 +336,9 @@ function renderKaraokeList() {
     });
   });
   Array.prototype.forEach.call(app.querySelectorAll("[data-kar-song]"), function (el) {
+    if (state.isAdmin) karWireSongMenu(el);
     el.addEventListener("click", function () {
+      if (el._lp) { el._lp = false; return; }
       KAR.song = KAR.songs[parseInt(el.getAttribute("data-kar-song"), 10)];
       KAR.fromAdmEdit = false; KAR.startK = null; KAR.tapMode = false;
       go("karaoke-play");
@@ -315,10 +364,11 @@ function karEngineNew(song) {
   KE = {
     el: el, song: song, playing: false, busy: false,
     pitch: Math.max(-6, Math.min(6, Math.round(Number(song.pitchSemitones) || 0))),
-    tempo: Math.max(70, Math.min(120, Math.round((Number(song.tempoPct) || 100) / 5) * 5)),
+    tempo: Math.max(70, Math.min(120, Number(song.tempoPct) || 100)),
     dur: Number(song.music.durationSec) || 0,
     shifter: null, buf: null, bufP: null, pos: 0, posAt: 0, gen: 0,
-    voice: false   // «С голосом»: играет плюс (голос Николая) вместо минуса
+    voice: false,  // «С голосом»: играет плюс (голос Николая) вместо минуса
+    meta: karMetaFor(song)  // темп (BPM) и тональность минуса, если уже определены
   };
   el.playbackRate = KE.tempo / 100;
   el.addEventListener("loadedmetadata", function () { if (KE && KE.el === el && el.duration && isFinite(el.duration)) KE.dur = el.duration; });
@@ -861,41 +911,227 @@ function karPaintChips() {
   var hasVoice = !!(KE.song.voice && KE.song.voice.url);
   chs.innerHTML =
     (hasVoice ? '<span class="gch' + (KE.voice ? " on" : "") + '" data-kp="voice">С голосом <b>' + (KE.voice ? "вкл" : "выкл") + "</b></span>" : "") +
-    '<span class="gch" data-kp="pitch">Тональность <b>' + karSign(KE.pitch) + "</b></span>" +
-    '<span class="gch" data-kp="tempo">Темп <b>' + KE.tempo + "%</b></span>" +
+    '<span class="gch" data-kp="pitch">Тональность <b>' + karKeyLabel(KE.pitch) + "</b></span>" +
+    '<span class="gch" data-kp="tempo">Темп <b>' + karTempoLabel(KE.tempo) + "</b></span>" +
     '<span class="gch" data-kp="marks">Пометки <b>' + (KAR.showMarks ? "вкл" : "выкл") + "</b></span>";
   var vc = chs.querySelector('[data-kp="voice"]');
   if (vc) vc.onclick = function () { karSetVoice(!KE.voice); };
-  chs.querySelector('[data-kp="pitch"]').onclick = function () { karOpenSheet("pitch"); };
-  chs.querySelector('[data-kp="tempo"]').onclick = function () { karOpenSheet("tempo"); };
+  chs.querySelector('[data-kp="pitch"]').onclick = function () { karOpenSheet(); };
+  chs.querySelector('[data-kp="tempo"]').onclick = function () { karOpenSheet(); };
   chs.querySelector('[data-kp="marks"]').onclick = function () { KAR.showMarks = !KAR.showMarks; karPaintLyrics(); karPaintChips(); };
 }
 
-function karOpenSheet(kind) {
+/* Тональность и темп — вариант A (выбран Николаем 17.11): одна панель, два
+   колёсика по горизонтали, как будильник в iPhone. Тональность буквами (Em),
+   темп в BPM — их приложение определяет по минусу само (karDetect). Пока не
+   определены или не получилось — полутоны и проценты, как было. */
+function karOpenSheet() {
   var old = KP.root.querySelector(".ksheet");
   if (old) old.parentNode.removeChild(old);
   var d = document.createElement("div");
   d.className = "ksheet";
   KP.root.appendChild(d);
-  function val() { return kind === "pitch" ? karSign(KE.pitch) : KE.tempo + "%"; }
-  d.innerHTML =
-    '<div class="t">' + (kind === "pitch" ? "Тональность" : "Темп") + "</div>" +
-    '<div class="s">' + (kind === "pitch" ? "Музыка звучит выше или ниже, по полутону" : "Музыка быстрее или медленнее, высота та же") + "</div>" +
-    '<div class="stp"><div class="sk" data-s="-">−</div><div class="v">' + val() + '</div><div class="sk" data-s="+">+</div></div>' +
-    '<div class="row" style="display:flex;gap:10px;margin-top:12px"><div class="bt" data-s="reset">Сбросить</div><div class="bt main" data-s="ok">Готово</div></div>';
-  function step(dir) {
-    if (kind === "pitch") { var n = Math.max(-6, Math.min(6, KE.pitch + dir)); if (n !== KE.pitch) karSetPitch(n); }
-    else { var p = Math.max(70, Math.min(120, KE.tempo + dir * 5)); if (p !== KE.tempo) karSetTempo(p); }
-    d.querySelector(".v").textContent = val();
-  }
-  d.querySelector('[data-s="-"]').onclick = function () { step(-1); };
-  d.querySelector('[data-s="+"]').onclick = function () { step(1); };
-  d.querySelector('[data-s="reset"]').onclick = function () {
-    if (kind === "pitch") { if (KE.pitch !== 0) karSetPitch(0); } else karSetTempo(100);
-    d.querySelector(".v").textContent = val();
-  };
-  d.querySelector('[data-s="ok"]').onclick = function () { d.parentNode.removeChild(d); };
+  KP.sheet = d;
+  karPaintSheet();
 }
+
+function karPaintSheet() {
+  var d = KP.sheet;
+  if (!d || !d.parentNode || !KE) return;
+  var m = KE.meta;
+  d.innerHTML =
+    '<div class="t">Тональность и темп</div>' +
+    '<div class="wl">Тональность<span>в песне ' + (m ? karKeyName(m.root, m.minor) : "0") + "</span></div>" +
+    '<div class="wh" data-w="pitch"></div>' +
+    '<div class="wl">' + (m ? "Темп, BPM" : "Темп, %") + "<span>в песне " + (m ? Math.round(m.bpm) : "100") + "</span></div>" +
+    '<div class="wh" data-w="tempo"></div>' +
+    '<div class="row" style="display:flex;gap:10px;margin-top:14px"><div class="bt" data-s="reset">Как в песне</div><div class="bt main" data-s="ok">Готово</div></div>';
+  var pl = [], pv = [];
+  for (var n = -6; n <= 6; n++) { pv.push(n); pl.push(karKeyLabel(n)); }
+  var tl = [], tv = [];
+  if (m) {
+    var b0 = Math.round(m.bpm);
+    for (var x = Math.ceil(b0 * 0.7); x <= Math.floor(b0 * 1.2); x++) { tv.push(x / b0 * 100); tl.push(String(x)); }
+  } else {
+    for (var q = 70; q <= 120; q += 5) { tv.push(q); tl.push(String(q)); }
+  }
+  function nearest(vals, v) {
+    var bi = 0;
+    vals.forEach(function (z, i) { if (Math.abs(z - v) < Math.abs(vals[bi] - v)) bi = i; });
+    return bi;
+  }
+  var wp = karWheel(d.querySelector('[data-w="pitch"]'), pl, pv.indexOf(KE.pitch), function (i) {
+    if (KE && pv[i] !== KE.pitch) karSetPitch(pv[i]);
+  });
+  var wt = karWheel(d.querySelector('[data-w="tempo"]'), tl, nearest(tv, KE.tempo), function (i) {
+    if (KE && Math.abs(tv[i] - KE.tempo) > 0.01) karSetTempo(tv[i]);
+  });
+  d.querySelector('[data-s="reset"]').onclick = function () {
+    if (KE.pitch !== 0) karSetPitch(0);
+    if (KE.tempo !== 100) karSetTempo(100);
+    wp.to(pv.indexOf(0)); wt.to(nearest(tv, 100));
+  };
+  d.querySelector('[data-s="ok"]').onclick = function () { d.parentNode.removeChild(d); KP.sheet = null; };
+}
+
+/* Колёсико по горизонтали: тянешь пальцем, отпускаешь — докатывается и
+   встаёт на ближайшее значение; тап по значению — встаёт на него. Звук
+   меняется, когда колёсико остановилось. */
+function karWheel(box, labels, idx, onPick) {
+  var GAP = 68, pos = Math.max(0, idx), its = [], anim = 0, picked = pos;
+  box.innerHTML = '<div class="cap"></div>';
+  labels.forEach(function (t, i) {
+    var it = document.createElement("div");
+    it.className = "it"; it.textContent = t;
+    box.appendChild(it); its.push(it);
+  });
+  function paint() {
+    its.forEach(function (it, i) {
+      var o = i - pos, a = Math.abs(o);
+      if (a > 3.6) { it.style.visibility = "hidden"; return; }
+      it.style.visibility = "";
+      var sc = a <= 1 ? 1 - 0.18 * a : a <= 3 ? 0.82 - 0.09 * (a - 1) : 0.64;
+      var op = a <= 1 ? 1 - 0.15 * a : a <= 2 ? 0.85 - 0.3 * (a - 1) : Math.max(0, 0.55 - 0.2 * (a - 2));
+      it.style.transform = "translateX(" + (o * GAP).toFixed(1) + "px) scale(" + sc.toFixed(3) + ")";
+      it.style.opacity = op.toFixed(2);
+      it.classList.toggle("c", a < 0.5);
+    });
+  }
+  function clamp(i) { return Math.max(0, Math.min(labels.length - 1, i)); }
+  function to(i, fire) {
+    i = clamp(Math.round(i));
+    cancelAnimationFrame(anim);
+    var from = pos, t0 = 0, dur = Math.min(420, 160 + Math.abs(i - from) * 40);
+    function step(ts) {
+      if (!t0) t0 = ts;
+      var k = Math.min(1, (ts - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+      pos = from + (i - from) * e; paint();
+      if (k < 1) { anim = requestAnimationFrame(step); return; }
+      pos = i; paint();
+      if (fire !== false && i !== picked) { picked = i; onPick(i); }
+      else picked = i;
+    }
+    anim = requestAnimationFrame(step);
+  }
+  var drag = null, moved = false;
+  box.addEventListener("pointerdown", function (e) {
+    cancelAnimationFrame(anim);
+    drag = { x: e.clientX, p: pos, lx: e.clientX, lt: e.timeStamp, v: 0 };
+    moved = false;
+    try { box.setPointerCapture(e.pointerId); } catch (er) {}
+  });
+  box.addEventListener("pointermove", function (e) {
+    if (!drag) return;
+    var dx = e.clientX - drag.x;
+    if (Math.abs(dx) > 4) moved = true;
+    var p = drag.p - dx / GAP;
+    if (p < 0) p = p * 0.35; else if (p > labels.length - 1) p = labels.length - 1 + (p - labels.length + 1) * 0.35;
+    pos = p; paint();
+    var dt = e.timeStamp - drag.lt;
+    if (dt > 0) { drag.v = 0.8 * ((e.clientX - drag.lx) / dt) + 0.2 * drag.v; drag.lx = e.clientX; drag.lt = e.timeStamp; }
+  });
+  function end(ev) {
+    if (!drag) return;
+    var v = drag.v; drag = null;
+    if (!moved) {
+      // тап по значению: встаёт на него (захват касания уводит click с самого значения)
+      var r = box.getBoundingClientRect();
+      to(pos + (ev.clientX - (r.left + r.width / 2)) / GAP, true);
+      return;
+    }
+    to(pos - v * 180 / GAP, true);
+  }
+  box.addEventListener("pointerup", end);
+  box.addEventListener("pointercancel", end);
+  paint();
+  return { to: function (i) { to(i, false); } };
+}
+
+var KAR_KEYS_MAJ = ["C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
+var KAR_KEYS_MIN = ["Cm", "C#m", "Dm", "Ebm", "Em", "Fm", "F#m", "Gm", "G#m", "Am", "Bbm", "Bm"];
+function karKeyName(root, minor) { return (minor ? KAR_KEYS_MIN : KAR_KEYS_MAJ)[((root % 12) + 12) % 12]; }
+function karKeyLabel(shift) {
+  var m = KE && KE.meta;
+  return m ? karKeyName(m.root + shift, m.minor) : karSign(shift);
+}
+function karTempoLabel(pct) {
+  var m = KE && KE.meta;
+  return m ? Math.round(m.bpm * pct / 100) + " BPM" : Math.round(pct) + "%";
+}
+
+/* Темп и тональность минуса: берём сохранённые (api/karaoke.js), иначе из
+   памяти телефона, иначе определяем сами по звуку один раз и сохраняем. */
+function karMetaFor(song) {
+  var url = song && song.music && song.music.url;
+  if (!url) return null;
+  var m = KAR.meta && KAR.meta[song.id];
+  if (m && m.url === url) return m;
+  try {
+    var j = JSON.parse(localStorage.getItem("karMeta:" + url) || "null");
+    if (j && j.bpm && j.root != null) return j;
+  } catch (e) {}
+  return null;
+}
+
+function karDetect(buf, song) {
+  if (KAR.detecting === song.music.url) return;
+  KAR.detecting = song.music.url;
+  var url = song.music.url, sr = buf.sampleRate;
+  var c0 = buf.getChannelData(0), c1 = buf.numberOfChannels > 1 ? buf.getChannelData(1) : null;
+  var step = sr > 30000 ? 2 : 1, max = Math.min(c0.length, Math.round(sr * 200));
+  var x = new Float32Array(Math.floor(max / step));
+  for (var i = 0, j = 0; j < x.length; i += step, j++) x[j] = c1 ? (c0[i] + c1[i]) * 0.5 : c0[i];
+  var w;
+  try { w = new Worker(URL.createObjectURL(new Blob([KAR_DETECT_SRC], { type: "text/javascript" }))); }
+  catch (e) { KAR.detecting = null; return; }
+  w.onmessage = function (ev) {
+    w.terminate(); KAR.detecting = null;
+    var r = ev.data || {};
+    if (!(r.bpm > 0) || r.root == null) return;
+    var m = { url: url, bpm: Math.round(r.bpm), root: r.root, minor: !!r.minor };
+    try { localStorage.setItem("karMeta:" + url, JSON.stringify(m)); } catch (e) {}
+    KAR.meta = KAR.meta || {}; KAR.meta[song.id] = m;
+    if (KE && KE.song === song && !KE.meta) { KE.meta = m; karPaintChips(); karPaintSheet(); }
+    karSaveMeta(song, m);
+  };
+  w.onerror = function () { w.terminate(); KAR.detecting = null; };
+  w.postMessage({ x: x, sr: sr / step }, [x.buffer]);
+}
+
+function karSaveMeta(song, m) {
+  karSession().then(function (sess) {
+    var h = { "Content-Type": "application/json", "X-Player-Session": sess };
+    if (karIsAdm()) { var a = bazaAuthHeaders(); Object.keys(a).forEach(function (k) { h[k] = a[k]; }); }
+    return fetch("/api/karaoke", { method: "POST", headers: h, body: JSON.stringify({ songId: song.id, meta: m }) });
+  }).catch(function () {});
+}
+
+/* Разбор звука в отдельном потоке, чтобы плеер не подтормаживал.
+   Темп: всплески громкости по частотам (spectral flux) → автокорреляция,
+   уточнение по 8 долям, предпочтение 60–180 BPM. Тональность: хрома по
+   спектральным пикам 80–2000 Гц → корреляция с профилями Крумхансла. */
+var KAR_DETECT_SRC = [
+  "function fft(re,im){var n=re.length,i,j=0,k,t;for(i=1;i<n;i++){var b=n>>1;for(;j&b;b>>=1)j^=b;j^=b;if(i<j){t=re[i];re[i]=re[j];re[j]=t;t=im[i];im[i]=im[j];im[j]=t;}}",
+  "for(var len=2;len<=n;len<<=1){var a=-2*Math.PI/len,wr=Math.cos(a),wi=Math.sin(a);for(i=0;i<n;i+=len){var cr=1,ci=0;for(k=0;k<len/2;k++){var p=i+k,q=p+len/2,xr=re[q]*cr-im[q]*ci,xi=re[q]*ci+im[q]*cr;",
+  "re[q]=re[p]-xr;im[q]=im[p]-xi;re[p]+=xr;im[p]+=xi;t=cr*wr-ci*wi;ci=cr*wi+ci*wr;cr=t;}}}}",
+  "function hann(n){var w=new Float32Array(n);for(var i=0;i<n;i++)w[i]=0.5-0.5*Math.cos(2*Math.PI*i/n);return w;}",
+  "function tempo(x,sr){var N=1024,H=128,w=hann(N),re=new Float32Array(N),im=new Float32Array(N),prev=new Float32Array(N/2),F=Math.floor((x.length-N)/H);if(F<200)return 0;var o=new Float32Array(F);",
+  "for(var f=0;f<F;f++){for(var i=0;i<N;i++){re[i]=x[f*H+i]*w[i];im[i]=0;}fft(re,im);var s=0;for(i=1;i<N/2;i++){var m=Math.log(1+100*Math.sqrt(re[i]*re[i]+im[i]*im[i]));var d=m-prev[i];if(d>0)s+=d;prev[i]=m;}o[f]=s;}",
+  "var W=Math.round(0.4*sr/H),c=new Float32Array(F),acc=0;for(f=0;f<F;f++){acc+=o[f];if(f>=W)acc-=o[f-W];c[f]=Math.max(0,o[f]-acc/Math.min(f+1,W));}",
+  "var fr=sr/H,maxL=Math.ceil(fr*60/40*8)+2;if(maxL>F-1)maxL=F-1;var ac=new Float32Array(maxL+1);for(var L=1;L<=maxL;L++){var z=0;for(f=0;f+L<F;f++)z+=c[f]*c[f+L];ac[L]=z/(F-L);}",
+  "function at(l){var a=Math.floor(l),b=l-a;if(a+1>maxL)return 0;return ac[a]*(1-b)+ac[a+1]*b;}",
+  "var best=0,bs=-1;for(var bpm=50;bpm<=200;bpm+=0.1){var L0=fr*60/bpm,sc=0,cnt=0;for(var k=1;k<=8;k++){if(k*L0>maxL)break;sc+=at(k*L0);cnt++;}if(!cnt)continue;sc/=cnt;var lg=Math.log(bpm/110)/Math.LN2;sc*=Math.exp(-0.5*lg*lg/0.64);if(sc>bs){bs=sc;best=bpm;}}",
+  "return best;}",
+  "var MAJ=[6.35,2.23,3.48,2.33,4.38,4.09,2.52,5.19,2.39,3.66,2.29,2.88],MIN=[6.33,2.68,3.52,5.38,2.60,3.53,2.54,4.75,3.98,2.69,3.34,3.17];",
+  "function corr(a,b){var ma=0,mb=0,i;for(i=0;i<12;i++){ma+=a[i];mb+=b[i];}ma/=12;mb/=12;var s=0,sa=0,sb=0;for(i=0;i<12;i++){var p=a[i]-ma,q=b[i]-mb;s+=p*q;sa+=p*p;sb+=q*q;}return s/Math.sqrt(sa*sb||1);}",
+  "function key(x,sr){var N=8192;while(N*2<=sr*0.75)N*=2;var H=N/2,w=hann(N),re=new Float32Array(N),im=new Float32Array(N),ch=new Float64Array(12),F=Math.floor((x.length-N)/H),i,f;",
+  "var lo=Math.ceil(80*N/sr),hi=Math.floor(2000*N/sr),pc=new Int8Array(hi+2),mag=new Float32Array(hi+2);for(i=lo;i<=hi;i++){var mid=69+12*Math.log(i*sr/N/440)/Math.LN2;pc[i]=((Math.round(mid)%12)+12)%12;}",
+  "for(f=0;f<F;f++){for(i=0;i<N;i++){re[i]=x[f*H+i]*w[i];im[i]=0;}fft(re,im);for(i=lo-1;i<=hi+1;i++)mag[i]=Math.sqrt(re[i]*re[i]+im[i]*im[i]);var fc=new Float64Array(12),mx=0;",
+  "for(i=lo;i<=hi;i++){if(mag[i]>mag[i-1]&&mag[i]>=mag[i+1]){fc[pc[i]]+=Math.sqrt(mag[i]);}}for(i=0;i<12;i++)if(fc[i]>mx)mx=fc[i];if(mx>0)for(i=0;i<12;i++)ch[i]+=fc[i]/mx;}",
+  "var bs=-2,root=0,minor=false;for(var r=0;r<12;r++){var rot=[];for(i=0;i<12;i++)rot.push(ch[(i+r)%12]);var a=corr(rot,MAJ),b=corr(rot,MIN);if(a>bs){bs=a;root=r;minor=false;}if(b>bs){bs=b;root=r;minor=true;}}",
+  "return {root:root,minor:minor};}",
+  "onmessage=function(e){var x=e.data.x,sr=e.data.sr,out={};try{out.bpm=tempo(x,sr);var k=key(x,sr);out.root=k.root;out.minor=k.minor;}catch(er){}postMessage(out);};"
+].join("\n");
 
 /* Разметка: ТАП ставит начало следующей строки, «Назад на строку» снимает
    последний тап и отматывает музыку на 2 секунды перед этой строкой. */
@@ -978,6 +1214,7 @@ function karPrepareEnvelope() {
     KP.env = env;
     if (!KE.dur) KE.dur = buf.duration;
     karPaintWaveShape();
+    if (KE && KE.song === song && !KE.meta) karDetect(buf, song);
   }).catch(function () { /* без огибающей огоньки просто медленно плывут */ });
 }
 

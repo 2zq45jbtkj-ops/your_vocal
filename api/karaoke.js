@@ -41,6 +41,29 @@ async function isTeacher(siteAuth) {
   }
 }
 
+// Темп (BPM) и тональность минуса: приложение определяет их само по звуку
+// (karaoke.js, karDetect) и сохраняет сюда, чтобы не считать на каждом телефоне.
+// Ключ — id песни; url — какой минус разбирали (сменился минус — считаем заново).
+async function ensureMeta(sql) {
+  await sql`CREATE TABLE IF NOT EXISTS karaoke_meta (
+    song_id TEXT PRIMARY KEY,
+    music_url TEXT NOT NULL,
+    bpm REAL NOT NULL,
+    key_root SMALLINT NOT NULL,
+    key_minor BOOLEAN NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`;
+}
+
+function cleanMeta(m) {
+  if (!m || typeof m !== "object") return null;
+  var url = String(m.url || "").slice(0, 600);
+  var bpm = Math.round(Number(m.bpm) * 10) / 10;
+  var root = Math.round(Number(m.root));
+  if (!/^https:\/\//.test(url) || !(bpm >= 40 && bpm <= 240) || !(root >= 0 && root <= 11)) return null;
+  return { url: url, bpm: bpm, root: root, minor: !!m.minor };
+}
+
 function cleanLines(src) {
   var out = {};
   if (!src || typeof src !== "object") return out;
@@ -85,16 +108,25 @@ export default async function handler(req) {
     if (songsRes.status !== 200) return json({ ok: false, error: "Сессия не принята" }, 401);
     var songs = ((await songsRes.json()) || {}).songs || [];
     var ids = songs.map(function (s) { return s.id; });
-    if (!ids.length) return json({ ok: true, marks: {} });
+    if (!ids.length) return json({ ok: true, marks: {}, meta: {} });
     var rows = await sql`SELECT song_id, lines FROM karaoke_marks WHERE song_id = ANY(${ids})`;
     var marks = {};
     rows.forEach(function (row) { marks[row.song_id] = { lines: row.lines || {} }; });
-    return json({ ok: true, marks: marks });
+    var meta = {};
+    try {
+      await ensureMeta(sql);
+      var mrows = await sql`SELECT song_id, music_url, bpm, key_root, key_minor FROM karaoke_meta WHERE song_id = ANY(${ids})`;
+      mrows.forEach(function (row) {
+        meta[row.song_id] = { url: row.music_url, bpm: Number(row.bpm), root: Number(row.key_root), minor: !!row.key_minor };
+      });
+    } catch (e) { /* без темпа и тональности караоке работает как раньше */ }
+    return json({ ok: true, marks: marks, meta: meta });
   }
 
   if (req.method === "POST") {
     var body;
     try { body = await req.json(); } catch (e) { return json({ ok: false, error: "Bad JSON" }, 400); }
+    if (body.meta) return saveMeta(sql, body, siteAuth, session);
     if (!(await isTeacher(siteAuth))) return json({ ok: false, error: "Только преподаватель" }, 403);
     var songId = String(body.songId || "").slice(0, 80);
     if (!songId) return json({ ok: false, error: "songId required" }, 400);
@@ -108,4 +140,31 @@ export default async function handler(req) {
   }
 
   return json({ ok: false, error: "Method not allowed" }, 405);
+}
+
+/* Сохранить темп и тональность минуса. Пишет преподаватель или ученик, чья это
+   песня и чей это минус (проверяет baza-dannih по его сессии). */
+async function saveMeta(sql, body, siteAuth, session) {
+  var songId = String(body.songId || "").slice(0, 80);
+  var m = cleanMeta(body.meta);
+  if (!songId || !m) return json({ ok: false, error: "Неверные данные" }, 400);
+  var ok = false;
+  if (session) {
+    try {
+      var r = await fetch(BAZA + "/api/player-tracks", { headers: { "X-Player-Session": session } });
+      if (r.status === 200) {
+        var songs = ((await r.json()) || {}).songs || [];
+        ok = songs.some(function (s) { return s.id === songId && s.music && s.music.url === m.url; });
+      }
+    } catch (e) {}
+  }
+  if (!ok) ok = await isTeacher(siteAuth);
+  if (!ok) return json({ ok: false, error: "Не твоя песня" }, 403);
+  await ensureMeta(sql);
+  await sql`
+    INSERT INTO karaoke_meta (song_id, music_url, bpm, key_root, key_minor, updated_at)
+    VALUES (${songId}, ${m.url}, ${m.bpm}, ${m.root}, ${m.minor}, now())
+    ON CONFLICT (song_id) DO UPDATE SET music_url = EXCLUDED.music_url, bpm = EXCLUDED.bpm,
+      key_root = EXCLUDED.key_root, key_minor = EXCLUDED.key_minor, updated_at = now()`;
+  return json({ ok: true, meta: m });
 }

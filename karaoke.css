@@ -274,3 +274,21 @@ html.dark .kadm .gapb { background: oklch(36% 0.03 235); }
 .kp .ktoast.on { opacity: 1; transform: translate(-50%, 0); }
 .kp .ktoast.err { background: oklch(50% 0.15 25 / .92); }
 .kp .gch[data-kp="voice"].on b { margin-left: 0; } /* «С голосом вкл» — как на картинке B */
+
+/* Тональность и темп — колёсики по горизонтали (вариант A, 17.11) */
+.kp .ksheet .wl { display: flex; justify-content: space-between; align-items: baseline; font: 800 14px Manrope, sans-serif; margin: 14px 4px 2px; }
+.kp .ksheet .wl span { font: 500 12px Inter, sans-serif; color: var(--dim); }
+.kp .wh { position: relative; height: 52px; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 22%, #000 78%, transparent); mask-image: linear-gradient(90deg, transparent, #000 22%, #000 78%, transparent); }
+.kp .wh .cap { position: absolute; left: 50%; top: 6px; width: 76px; height: 40px; margin-left: -38px; border-radius: 20px; background: var(--glass); border: 1px solid var(--glass-b); pointer-events: none; }
+.kp .wh .it { position: absolute; left: 50%; top: 0; height: 52px; width: 64px; margin-left: -32px; display: flex; align-items: center; justify-content: center;
+  font: 700 22px Manrope, sans-serif; color: var(--dim); white-space: nowrap; will-change: transform; }
+.kp .wh .it.c { font-weight: 800; color: #fff; }
+
+/* Долгое нажатие на песню в Караоке (Николай, вариант C, 17.11) */
+.kar-song { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.kar-song.kup { position: relative; z-index: 50; }
+.kshade { position: fixed; inset: 0; background: rgba(0, 0, 0, .25); z-index: 49; }
+.kmenu { position: fixed; left: 16px; right: 16px; bottom: 110px; border-radius: 22px; padding: 6px; background: var(--bg); box-shadow: var(--raised); z-index: 50; }
+.kmenu div { padding: 15px 16px; font: 700 15px Manrope, sans-serif; color: var(--ink); border-radius: 16px; cursor: pointer; }
+.kmenu div + div { border-top: 1px solid var(--line, rgba(0, 0, 0, .06)); }
