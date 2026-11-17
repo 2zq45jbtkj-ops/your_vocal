@@ -880,11 +880,15 @@ function renderAdminKaraokeEdit() {
     '<div class="kadm">' +
       '<div class="fld" data-ka="meta"><span>Песня</span><b>' + esc(s.title || "Песня") + (s.artist ? " · " + esc(s.artist) : "") + " ▾</b></div>" +
       '<div class="kmeta"></div>' +
-      '<div class="fld" data-ka="music"><span>Минус</span><b class="' + (hasMusic ? "ok" : "") + '">' + (hasMusic ? esc(s.music.name || "минус") + " ✓" : "Загрузить файл") + "</b></div>" +
-      '<input type="file" accept="audio/*,.mp3,.m4a,.wav,.aac" style="display:none" data-ka="file">' +
-      '<div class="fld" data-ka="voice"><span>Плюс</span><b class="' + (hasVoice ? "ok" : "") + '">' + (hasVoice ? esc(s.voice.name || "плюс") + " ✓" : "Загрузить файл") + "</b></div>" +
-      '<input type="file" accept="audio/*,.mp3,.m4a,.wav,.aac" style="display:none" data-ka="vfile">' +
-      '<div class="fld" data-ka="lyrics"><span>Текст</span><b class="' + (nLines ? "ok" : "") + '">' + (nLines ? nLines + " " + plural(nLines, "строка", "строки", "строк") + " ✓" : "Вставить текст") + "</b></div>" +
+      '<div class="ksteps">' +
+        karAdmStep("voice", 1, hasVoice, "Плюс с голосом", hasVoice ? karAdmFileSub(s.voice) : "Ещё не загружен", hasVoice ? "Заменить" : "Загрузить", "") +
+        '<input type="file" accept="audio/*,.mp3,.m4a,.wav,.aac" style="display:none" data-ka="vfile">' +
+        karAdmStep("music", 2, hasMusic, "Минус", hasMusic ? karAdmFileSub(s.music) : "Без голоса, под него поёт ученик", hasMusic ? "Заменить" : "Загрузить", "") +
+        '<input type="file" accept="audio/*,.mp3,.m4a,.wav,.aac" style="display:none" data-ka="file">' +
+        karAdmStep("lyrics", 3, nLines > 0, "Текст", nLines ? nLines + " " + plural(nLines, "строка", "строки", "строк") : "Ещё не добавлен", nLines ? "Изменить" : "Вставить",
+          nLines ? '<div class="kprev">' + KAE.lines.slice(0, 2).map(function (l) { return "<div>" + esc(l.text) + "</div>"; }).join("") +
+            (nLines > 2 ? '<div class="more">… ещё ' + (nLines - 2) + " " + plural(nLines - 2, "строка", "строки", "строк") + "</div>" : "") + "</div>" : "") +
+      "</div>" +
       '<div class="klyr"></div>' +
       (hasMusic ? '<div class="play-mini"><button class="pbtn" data-ka="play"></button><div class="bar" data-ka="bar"><i></i></div><div class="tm">0:00</div></div>' : "") +
       '<div class="kcard"></div>' +
@@ -907,6 +911,19 @@ function renderAdminKaraokeEdit() {
 function karAdmFirstUnmarked() {
   for (var k = 0; k < KAE.lines.length; k++) if (KAE.lines[k].t == null) return k;
   return KAE.lines.length;
+}
+
+/* «Разметка караоке», вариант C (выбран Николаем 17.11): три шага —
+   1 плюс с голосом, 2 минус, 3 текст. Готовый шаг — зелёная галочка. */
+function karAdmFileSub(t) {
+  // имя файла — в одну строку, длинное обрезается многоточием, длительность видна всегда
+  return '<span class="fn">' + esc(t.name || "файл") + "</span>" + (t.durationSec ? "<span>&nbsp;· " + karFmt(t.durationSec) + "</span>" : "");
+}
+function karAdmStep(key, n, done, title, sub, act, extra) {
+  return '<div class="kstep" data-ka="' + key + '"><div class="kstep-top">' +
+    (done ? '<div class="kstep-n done">✓</div>' : '<div class="kstep-n">' + n + "</div>") +
+    '<div class="kstep-t"><b>' + title + '</b><div class="sub">' + sub + "</div></div>" +
+    '<b class="kstep-a' + (done ? " ok" : "") + '">' + act + "</b></div>" + extra + "</div>";
 }
 
 function karAdmMsg(t, err) {

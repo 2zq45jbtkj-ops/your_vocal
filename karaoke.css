@@ -180,3 +180,19 @@ html.dark .kadm .gapb { background: oklch(36% 0.03 235); }
 .kadm .play-mini .tm { font: 600 12px Inter, sans-serif; color: var(--gray); font-variant-numeric: tabular-nums; min-width: 72px; text-align: right; }
 .kadm .msg { font: 600 13px Inter, sans-serif; color: var(--blue); text-align: center; margin-top: 10px; min-height: 18px; }
 .kadm .msg.err { color: var(--ink-red); }
+
+/* «Разметка караоке», вариант C: три шага с номерами и галочками */
+.kadm .ksteps { margin-top: 12px; }
+.kadm .kstep { background: var(--bg); box-shadow: var(--raised-sm); border-radius: 20px; padding: 14px 16px; margin-bottom: 10px; cursor: pointer; }
+.kadm .kstep-top { display: flex; align-items: center; gap: 12px; }
+.kadm .kstep-n { width: 30px; height: 30px; border-radius: 50%; box-shadow: var(--inset-sm); color: var(--terra); display: flex; align-items: center; justify-content: center; font: 800 14px Manrope, sans-serif; flex-shrink: 0; }
+.kadm .kstep-n.done { box-shadow: none; background: oklch(62% 0.12 150); color: #fff; }
+.kadm .kstep-t { flex: 1; min-width: 0; }
+.kadm .kstep-t b { display: block; font: 700 15px Manrope, sans-serif; color: var(--ink); }
+.kadm .kstep-t .sub { font: 500 12.5px Inter, sans-serif; color: var(--gray); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; }
+.kadm .kstep-a { font: 700 13px Manrope, sans-serif; color: var(--terra); flex-shrink: 0; }
+.kadm .kstep-a.ok { color: var(--blue); }
+.kadm .kprev { border-radius: 14px; box-shadow: var(--inset-sm); padding: 12px 14px; margin-top: 12px; font: 600 14px/1.5 Inter, sans-serif; color: var(--ink); }
+.kadm .kprev .more { font: 600 13px/1.5 Inter, sans-serif; color: var(--gray); }
+.kadm .kstep-t .sub:has(.fn) { display: flex; white-space: nowrap; }
+.kadm .kstep-t .sub .fn { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
