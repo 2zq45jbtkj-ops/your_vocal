@@ -150,7 +150,13 @@ function karLoadSongs(force) {
   }).then(function (res) {
     KAR.loading = false;
     if (state.accessToken !== tok) return;
-    var songs = ((res[0] && res[0].songs) || []).filter(function (s) { return s.music && s.music.url; });
+    var all = (res[0] && res[0].songs) || [];
+    var songs = all.filter(function (s) { return s.music && s.music.url; });
+    // Николаю видны и песни, где ещё нет минуса (ученику — нет): иначе
+    // песня с текстом и плюсом «пропадала» из Караоке, хотя в базе была (17.11).
+    KAR.drafts = all.filter(function (s) {
+      return !(s.music && s.music.url) && ((s.lyrics || "").trim() || (s.voice && s.voice.url) || (s.title && s.title !== "Новая песня"));
+    });
     KAR.songs = songs; KAR.songsFor = tok; KAR.loadedAt = Date.now();
     KAR.marks = (res[1] && res[1].marks) || {};
     if (state.screen === "karaoke" && karSongsKey(songs) !== before) { KAR.justLoaded = true; render(); }
@@ -164,7 +170,7 @@ function karLoadSongs(force) {
 }
 
 function karSongsKey(list) {
-  return JSON.stringify((list || []).map(function (s) { return [s.id, s.title, s.artist, s.music && s.music.url, (s.lyrics || "").length, (s.lyricTimes || []).length]; }));
+  return JSON.stringify((KAR.drafts || []).map(function (s) { return [s.id, s.title, (s.lyrics || "").length, s.voice && s.voice.url]; })) + JSON.stringify((list || []).map(function (s) { return [s.id, s.title, s.artist, s.music && s.music.url, (s.lyrics || "").length, (s.lyricTimes || []).length]; }));
 }
 
 /* Строки песни: пустые строки текста — граница куплета, в списке их нет,
@@ -215,7 +221,7 @@ function renderKaraokeList() {
     body = '<div class="instruction-note">Загружаю песни…</div>';
   } else if (KAR.songsErr) {
     body = '<div class="instruction-note">Не получилось загрузить песни. Проверь интернет и открой экран ещё раз.</div>';
-  } else if (!KAR.songs.length) {
+  } else if (!KAR.songs.length && !(state.isAdmin && (KAR.drafts || []).length)) {
     body = '<div class="instruction-note">Здесь появятся песни, над которыми ты работаешь с Николаем, когда он добавит к ним минус.</div>';
   } else {
     body = '<div class="kar-list">' + KAR.songs.map(function (s, k) {
@@ -224,7 +230,13 @@ function renderKaraokeList() {
       return '<div class="kar-song" data-kar-song="' + k + '"><div class="kar-ic">' + KAR_ICO.note + "</div>" +
         '<div style="flex:1;min-width:0;"><b>' + esc(s.title || "Песня") + "</b>" + (sub ? '<div class="kar-sub">' + esc(sub) + "</div>" : "") + "</div>" +
         '<div class="cab-chev">›</div></div>';
-    }).join("") + "</div>";
+    }).join("") + (state.isAdmin ? (KAR.drafts || []).map(function (s, k) {
+      var n = String(s.lyrics || "").split("\n").filter(function (x) { return x.trim(); }).length;
+      var sub = ["нет минуса — ученик её пока не видит", s.voice && s.voice.url ? "плюс ✓" : "", n ? "текст ✓" : ""].filter(Boolean).join(" · ");
+      return '<div class="kar-song" data-kar-draft="' + k + '"><div class="kar-ic">' + KAR_ICO.note + "</div>" +
+        '<div style="flex:1;min-width:0;"><b>' + esc(s.title || "Песня") + "</b>" + '<div class="kar-sub">' + esc(sub) + "</div></div>" +
+        '<div class="cab-chev">›</div></div>';
+    }).join("") : "") + "</div>";
   }
   // Николай смотрит кабинет ученика (или свой) — отсюда же добавляет песни
   // этому ученику, без захода в «Ещё → Разметка караоке».
@@ -265,6 +277,16 @@ function renderKaraokeList() {
     KAR.songs = null; // после разметки список ученика перечитается
     if (!st) { go("admin-karaoke"); return; }
     karNewSong(st, addBtn);
+  });
+  Array.prototype.forEach.call(app.querySelectorAll("[data-kar-draft]"), function (el) {
+    el.addEventListener("click", function () {
+      var d = KAR.drafts[parseInt(el.getAttribute("data-kar-draft"), 10)];
+      var tok = state.accessToken;
+      var st = (state.adminStudentsList || []).filter(function (x) { return x && x.telegramToken && x.telegramToken === tok; })[0];
+      KAR.adm.student = { id: d.studentId || (st && st.id), name: st ? st.name : "" };
+      KAR.adm.songs = null; KAR.adm.fromKar = true; KAR.adm.song = d; KAR.songs = null;
+      go("admin-karaoke-edit");
+    });
   });
   Array.prototype.forEach.call(app.querySelectorAll("[data-kar-song]"), function (el) {
     el.addEventListener("click", function () {
@@ -981,7 +1003,7 @@ function karGlow(t, ts) {
 
 window.karaokeStopAll = function () {
   if (KE && state.screen !== "karaoke-play") { karEngineStop(); }
-  if (KAE && state.screen !== "admin-karaoke-edit") { try { KAE.el.pause(); } catch (e) {} }
+  if (KAE && state.screen !== "admin-karaoke-edit") { try { KAE.el.pause(); } catch (e) {} karAdmFlush(); }
 };
 
 /* ==========================================================================
@@ -1185,7 +1207,11 @@ function karAdmStep(key, n, done, title, sub, act, extra) {
 
 function karAdmMsg(t, err) {
   var m = app.querySelector(".kadm .msg");
-  if (m) { m.textContent = t || ""; m.classList.toggle("err", !!err); }
+  if (m) {
+    m.textContent = t || ""; m.classList.toggle("err", !!err);
+    // ошибку видно сразу, даже если строка сообщения ниже экрана
+    if (err && m.scrollIntoView) { try { m.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (e) {} }
+  }
 }
 
 /* Список «Подсказки и дыхание» (заменил список строк, 17.11): только строки, где есть
@@ -1304,13 +1330,25 @@ function karAdmOpenMeta() {
       '<input type="text" data-km="artist" placeholder="Исполнитель" value="' + esc(s.artist || "") + '">' +
       '<div class="row2" style="margin-top:2px"><button class="btn2" data-km="other">Другая песня</button><button class="btn2 main" data-km="save">Сохранить</button></div>' +
     "</div>";
+  // Название и исполнитель сохраняются сами, пока печатаешь: раньше без
+  // кнопки «Сохранить» они терялись, стоило нажать на «Текст» или «Назад» (17.11).
+  Array.prototype.forEach.call(box.querySelectorAll("input"), function (inp) {
+    inp.addEventListener("input", function () {
+      KAE.pendMeta = function () {
+        return { title: box.querySelector('[data-km="title"]').value.trim() || "Без названия", artist: box.querySelector('[data-km="artist"]').value.trim() };
+      }();
+      karAdmMsg("Сохраняю…");
+      clearTimeout(KAE.metaT); KAE.metaT = setTimeout(karAdmSaveMeta, 900);
+    });
+  });
   box.querySelector('[data-km="other"]').onclick = function () { handleBack(); };
   box.querySelector('[data-km="save"]').onclick = function () {
     var title = box.querySelector('[data-km="title"]').value.trim() || "Без названия";
     var artist = box.querySelector('[data-km="artist"]').value.trim();
     karAdmMsg("Сохраняю…");
+    clearTimeout(KAE.metaT); KAE.pendMeta = null;
     karAdmPatch({ title: title, artist: artist }).then(function () { render(); karAdmMsg("Сохранено ✓"); })
-      .catch(function () { karAdmMsg("Не сохранилось. Попробуй ещё раз.", true); });
+      .catch(function () { KAE.pendMeta = { title: title, artist: artist }; karAdmMsg("Название не сохранилось. Проверь интернет — попробую ещё раз через несколько секунд.", true); KAE.metaT = setTimeout(karAdmSaveMeta, 5000); });
   };
 }
 
@@ -1323,6 +1361,13 @@ function karAdmOpenLyrics() {
       '<textarea rows="10" placeholder="Вставь текст песни. Каждая строка с новой строки, куплеты разделяй пустой строкой.">' + esc(KAE.song.lyrics || "") + "</textarea>" +
       '<div class="row2"><button class="btn2" data-kl="cancel">Отмена</button><button class="btn2 main" data-kl="save">Сохранить текст</button></div>' +
     "</div>";
+  // Текст тоже сохраняется сам через пару секунд после вставки: если уйти
+  // с экрана, не нажав «Сохранить текст», он раньше пропадал (17.11).
+  box.querySelector("textarea").addEventListener("input", function (e) {
+    KAE.pendLyrics = e.target.value.replace(/\r/g, "");
+    karAdmMsg("Сохраняю текст…");
+    clearTimeout(KAE.lyrT); KAE.lyrT = setTimeout(karAdmSaveLyricsDraft, 1500);
+  });
   box.querySelector('[data-kl="cancel"]').onclick = function () { box.innerHTML = ""; };
   box.querySelector('[data-kl="save"]').onclick = function () {
     var txt = box.querySelector("textarea").value.replace(/\r/g, "");
@@ -1336,6 +1381,7 @@ function karAdmOpenLyrics() {
       if (tt && keepT[tt] != null) times.push({ i: i, t: keepT[tt], text: tt });
     });
     karAdmMsg("Сохраняю…");
+    clearTimeout(KAE.lyrT); KAE.pendLyrics = null;
     karAdmPatch({ lyrics: txt, lyricTimes: times }).then(function () {
       var marks = {};
       KAE.lines = karBuildLines(KAE.song, null);
@@ -1343,8 +1389,58 @@ function karAdmOpenLyrics() {
       KAE.cursor = karAdmFirstUnmarked();
       render();
       karAdmDirty();
-    }).catch(function () { karAdmMsg("Текст не сохранился. Попробуй ещё раз.", true); });
+    }).catch(function () { KAE.pendLyrics = txt; karAdmMsg("Текст не сохранился. Проверь интернет — попробую ещё раз через несколько секунд.", true); KAE.lyrT = setTimeout(karAdmSaveLyricsDraft, 5000); });
   };
+}
+
+function karAdmSaveMeta() {
+  if (!KAE || !KAE.pendMeta) return Promise.resolve();
+  var my = KAE, f = KAE.pendMeta;
+  clearTimeout(my.metaT);
+  return karAdmPatch(f).then(function () {
+    if (my.pendMeta === f) my.pendMeta = null;
+    if (KAE === my && state.screen === "admin-karaoke-edit") {
+      var b = app.querySelector('.kadm [data-ka="meta"] b');
+      if (b) b.textContent = (my.song.title || "Песня") + (my.song.artist ? " · " + my.song.artist : "") + " ▾";
+      karAdmMsg("Сохранено ✓");
+    }
+  }).catch(function () {
+    karAdmMsg("Название не сохранилось. Проверь интернет — попробую ещё раз через несколько секунд.", true);
+    my.metaT = setTimeout(function () { if (KAE === my) karAdmSaveMeta(); }, 5000);
+  });
+}
+
+// Черновик текста: сохраняем как есть, тайминг оставляем у строк, текст которых не изменился.
+function karAdmSaveLyricsDraft() {
+  if (!KAE || KAE.pendLyrics == null) return Promise.resolve();
+  var my = KAE, txt = KAE.pendLyrics;
+  clearTimeout(my.lyrT);
+  var keepT = {};
+  my.lines.forEach(function (l) { if (l.t != null) keepT[l.text] = keepT[l.text] || l.t; });
+  var times = [];
+  txt.split("\n").forEach(function (line, i) { var tt = line.trim(); if (tt && keepT[tt] != null) times.push({ i: i, t: keepT[tt], text: tt }); });
+  return karAdmPatch({ lyrics: txt, lyricTimes: times }).then(function () {
+    if (my.pendLyrics === txt) my.pendLyrics = null;
+    var keepM = {};
+    my.lines.forEach(function (l) { if (Object.keys(l.mk).length || l.hint) keepM[l.text] = keepM[l.text] || l; });
+    my.lines = karBuildLines(my.song, null);
+    my.lines.forEach(function (l) { var m = keepM[l.text]; if (m) { l.mk = m.mk; l.hint = m.hint; } });
+    my.cursor = karAdmFirstUnmarked();
+    if (Object.keys(keepM).length && KAE === my) karAdmDirty();
+    if (KAE === my && state.screen === "admin-karaoke-edit") { karAdmPaintLines(); karAdmMsg("Текст сохранён ✓"); }
+  }).catch(function () {
+    karAdmMsg("Текст не сохранился. Проверь интернет — попробую ещё раз через несколько секунд.", true);
+    my.lyrT = setTimeout(function () { if (KAE === my) karAdmSaveLyricsDraft(); }, 5000);
+  });
+}
+
+// Ушёл с экрана, не дождавшись автосохранения, — сохраняем сразу.
+function karAdmFlush() {
+  if (!KAE) return;
+  if (KAE.pendMeta) karAdmSaveMeta();
+  if (KAE.pendLyrics != null) {
+    karAdmSaveLyricsDraft();
+  }
 }
 
 function karAdmUpload(file, kind) {
