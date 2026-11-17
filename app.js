@@ -1501,7 +1501,9 @@ function paintHwSheet() {
     ? "Задание «" + (nearest.title || "") + "» просрочено на"
     : "До срока по заданию «" + (nearest.title || "") + "» осталось";
   sheet.querySelector("[data-hw-cd]").innerHTML = hwCountdownHtml(deadline);
-  sheet.querySelector("[data-hw-items]").innerHTML = all.map(function (hw) {
+  // Сверху — то, что ещё ждёт; выполненные свёрнуты в одну строку
+  // «Выполнено N заданий», нажал — раскрылся список (просьба Николая 17.11).
+  function itemHtml(hw) {
     var i = all.indexOf(hw);
     var left = hwDeadlineMs(hw.due);
     var isOver = left !== null && left - Date.now() < 0 && !hw.done;
@@ -1516,7 +1518,27 @@ function paintHwSheet() {
         (state._hwBusy[hwKey(hw)] ? " disabled" : "") +
         ' aria-label="Отметить выполненным">' + SVG_HW_CHECK + "</button>" +
     "</div>";
-  }).join("");
+  }
+  var open = all.filter(function (hw) { return !hw.done; });
+  var done = all.filter(function (hw) { return hw.done; });
+  var html = open.length ? '<div class="hw-open-list">' + open.map(itemHtml).join("") + "</div>" : "";
+  if (done.length) {
+    var exp = !!state._hwDoneOpen;
+    html += '<button class="hw-done-sum' + (exp ? " open" : "") + '" data-hw-done-toggle>' +
+        '<span class="hw-check done">' + SVG_HW_CHECK + "</span>" +
+        '<span class="hw-done-sum-t">Выполнено ' + done.length + " " +
+          plural(done.length, "задание", "задания", "заданий") + "</span>" +
+        '<span class="hw-done-sum-ar">›</span>' +
+      "</button>" +
+      '<div class="hw-done-hint">' + (exp ? "нажми, чтобы свернуть" : "нажми, чтобы увидеть список") + "</div>" +
+      (exp ? '<div class="hw-done-list">' + done.map(itemHtml).join("") + "</div>" : "");
+  }
+  sheet.querySelector("[data-hw-items]").innerHTML = html;
+  var sum = sheet.querySelector("[data-hw-done-toggle]");
+  if (sum) sum.addEventListener("click", function () {
+    state._hwDoneOpen = !state._hwDoneOpen;
+    paintHwSheet();
+  });
   wireHwToggles(sheet);
 }
 
@@ -1533,6 +1555,7 @@ function openHwReminder() {
   el.innerHTML =
     '<div class="hw-sheet">' +
       '<div class="hw-grip"></div>' +
+      '<div class="hw-swipe-hint">потяни вниз, чтобы закрыть</div>' +
       '<div class="hw-sheet-title">Домашнее задание ждёт</div>' +
       '<div class="hw-sheet-sub" data-hw-sub></div>' +
       '<div class="hw-countdown" data-hw-cd></div>' +
@@ -1552,6 +1575,7 @@ function openHwReminder() {
     go("profile");
   });
 
+  wireHwSwipe(el);
   paintHwSheet();
   // Только цифры отсчёта, раз в секунду: перерисовывать всю шторку целиком
   // нельзя — это сбрасывало бы нажатие на галочке посреди клика.
@@ -1565,6 +1589,48 @@ function openHwReminder() {
     })[0];
     cd.innerHTML = hwCountdownHtml(hwDeadlineMs(nearest.due));
   }, 1000);
+}
+
+/* Свайп вниз закрывает шторку (просьба Николая 17.11). Тянуть можно, только
+   когда список внутри шторки прокручен до самого верха — иначе жест вниз
+   просто листает список. Шторка едет за пальцем; отпустил дальше 90px или
+   резко смахнул — закрылась, иначе вернулась на место. */
+function wireHwSwipe(overlay) {
+  var sheet = overlay.querySelector(".hw-sheet");
+  var y0 = null, t0 = 0, dy = 0, dragging = false;
+  sheet.addEventListener("touchstart", function (e) {
+    if (sheet.scrollTop > 0 || e.touches.length !== 1) { y0 = null; return; }
+    y0 = e.touches[0].clientY; t0 = Date.now(); dy = 0; dragging = false;
+  }, { passive: true });
+  sheet.addEventListener("touchmove", function (e) {
+    if (y0 === null) return;
+    dy = e.touches[0].clientY - y0;
+    if (!dragging) {
+      if (dy < 6) { if (dy < -6) y0 = null; return; }
+      dragging = true;
+      sheet.style.transition = "none";
+    }
+    if (e.cancelable) e.preventDefault();
+    sheet.style.transform = "translateY(" + Math.max(0, dy) + "px)";
+  }, { passive: false });
+  function end() {
+    if (y0 === null) return;
+    y0 = null;
+    if (!dragging) return;
+    dragging = false;
+    var fast = dy > 30 && dy / Math.max(1, Date.now() - t0) > 0.6;
+    sheet.style.transition = "transform .22s ease";
+    if (dy > 90 || fast) {
+      sheet.style.transform = "translateY(110%)";
+      overlay.style.transition = "opacity .22s ease";
+      overlay.style.opacity = "0";
+      setTimeout(closeHwReminder, 220);
+    } else {
+      sheet.style.transform = "";
+    }
+  }
+  sheet.addEventListener("touchend", end);
+  sheet.addEventListener("touchcancel", end);
 }
 
 function maybeShowHwReminder() {
@@ -2124,14 +2190,38 @@ function renderCabWheel(data) {
         (pv === null || pv === undefined ? "—" : pv) + "</span>";
     }).join("");
     var pct = score === null ? 0 : Math.max(0, Math.min(10, score)) * 10;
+    // Сравнение срезов (вариант A «Ступени», выбор Николая 17.11): линия
+    // разбита на куски цветами срезов. Сзади — текущая оценка терракотой,
+    // поверх — оценки сравниваемых срезов, от большей к меньшей, чтобы
+    // каждый кусок был виден: сколько выросло с каждого среза.
+    var steps = "";
+    if (picked.length) {
+      picked.map(function (z, k) {
+        var pv = null;
+        (z.topics || []).forEach(function (x) { if (x.name === t.name) pv = x.score; });
+        return { v: (pv === null || pv === undefined) ? null : Math.max(0, Math.min(10, Number(pv))), k: k };
+      }).filter(function (o) { return o.v !== null && !isNaN(o.v); })
+        .sort(function (a, b) { return b.v - a.v; })
+        .forEach(function (o) {
+          steps += '<div class="srez-bar-step" style="width:' + (o.v * 10) + '%;background:' +
+            SREZ_COMPARE_COLORS[o.k % SREZ_COMPARE_COLORS.length] + ';"></div>';
+        });
+    }
     return '<div class="cab-zone' + (sel === i ? " on" : "") + '" id="cab-zone-' + i + '">' +
       '<div class="cab-zone-num">' + (i + 1) + "</div>" +
       '<div style="flex:1;min-width:0;"><div class="srez-row-head">' +
         '<span class="srez-name">' + esc(t.name) + "</span>" + cmp +
         '<span class="cab-zone-score">' + (score === null ? "—" : score + " из 10") + "</span></div>" +
-        '<div class="srez-bar"><div class="srez-bar-fill" style="width:' + pct + '%;"></div></div>' +
+        '<div class="srez-bar' + (picked.length ? " steps" : "") + '"><div class="srez-bar-fill" style="width:' + pct + '%;"></div>' + steps + "</div>" +
       "</div></div>";
   }).join("");
+  // Над зонами — даты сравниваемых срезов их цветами, чтобы куски линии
+  // читались без поиска по списку срезов ниже.
+  var legend = picked.length
+    ? '<div class="srez-legend">' + picked.map(function (z, k) {
+        return '<span style="color:' + SREZ_COMPARE_COLORS[k % SREZ_COMPARE_COLORS.length] + ';">● ' + esc(z.date || "") + "</span>";
+      }).join("") + '<span style="color:var(--terra);">● сейчас</span></div>'
+    : "";
 
   var recent = list.slice().reverse().slice(0, 5);
   var hist = "";
@@ -2154,7 +2244,7 @@ function renderCabWheel(data) {
     '<div class="cabinet-inset">' +
       cabWheelSvg(order, series, sel) +
       '<div class="cab-wheel-hint">Нажми на точку — покажу, что это за зона</div>' +
-      '<div class="srez-hist-title">Зоны колеса</div>' + rows + hist +
+      '<div class="srez-hist-title">Зоны колеса</div>' + legend + rows + hist +
     "</div>";
 }
 

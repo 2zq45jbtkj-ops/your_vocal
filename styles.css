@@ -923,6 +923,11 @@ html.dark .chip.sel-v, body.dark .chip.sel-v { background: var(--blue); color: v
 .srez-flag.same { background: var(--bgmuted); color: var(--gray); }
 .srez-bar { height: 6px; border-radius: 4px; background: var(--bgmuted); overflow: hidden; }
 .srez-bar-fill { height: 100%; border-radius: 4px; background: var(--terra); }
+/* Сравнение срезов «Ступени»: куски линии цветами срезов поверх текущей */
+.srez-bar.steps { position: relative; height: 8px; }
+.srez-bar.steps .srez-bar-fill { position: absolute; left: 0; top: 0; border-radius: 0; }
+.srez-bar-step { position: absolute; left: 0; top: 0; bottom: 0; }
+.srez-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; font: 600 11.5px 'Inter', sans-serif; margin: 2px 0 6px; }
 .srez-dates { margin-top: 14px; font-size: 11.5px; color: var(--gray); line-height: 1.5; }
 
 /* одно общее колесо, подписи тем — списком ниже, не вокруг фигуры */
@@ -1051,8 +1056,22 @@ html.dark .chip.sel-v, body.dark .chip.sel-v { background: var(--blue); color: v
 @keyframes hwUp { from { transform: translateY(100%) } to { transform: translateY(0) } }
 .hw-grip {
   width: 38px; height: 4px; border-radius: 2px; background: var(--line);
-  margin: 0 auto 16px;
+  margin: 0 auto 6px;
 }
+.hw-swipe-hint { text-align: center; font-size: 11px; color: var(--gray); margin-bottom: 10px; }
+/* Выполненные задания — одной строкой, по нажатию раскрываются */
+.hw-done-sum {
+  display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 12px;
+  padding: 12px 14px; border: none; border-radius: 14px; cursor: pointer;
+  background: var(--bg); box-shadow: var(--raised-sm); text-align: left;
+}
+.hw-done-sum .hw-check { margin-top: 0; cursor: inherit; }
+.hw-done-sum-t { flex: 1; font: 600 13.5px 'Inter', sans-serif; color: var(--ink); }
+.hw-done-sum-ar { font-size: 18px; line-height: 1; color: var(--gray); transition: transform .2s ease; }
+.hw-done-sum.open .hw-done-sum-ar { transform: rotate(90deg); }
+.hw-done-hint { font-size: 11.5px; color: var(--gray); margin: 6px 0 0 4px; }
+.hw-done-list { margin-top: 6px; }
+.hw-open-list .hw-sheet-item:last-child { border-bottom: none; }
 .hw-sheet-title { font: 800 19px 'Manrope', sans-serif; color: var(--ink); margin-bottom: 4px; }
 .hw-sheet-sub { font-size: 12.5px; color: var(--gray); line-height: 1.5; margin-bottom: 16px; }
 /* Обратный отсчёт: моноширинные цифры, иначе блок дёргается каждую секунду,
