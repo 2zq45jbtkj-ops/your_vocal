@@ -240,18 +240,31 @@ function renderKaraokeList() {
   var addBtn = app.querySelector("[data-kar-adm-add]");
   if (addBtn) addBtn.addEventListener("click", function () {
     if (!state.isAdmin) {
-      state._afterAdminLogin = "karaoke";
-      state._tokenInput = ""; state._adminKey2 = ""; state._tokenError = "";
-      go("token-entry");
+      // Своя карточка Николая: входим админом по его личной ссылке, без ключей.
+      // Ключи спрашиваем, только если сервер ссылку не признал.
+      var askKeys = function () {
+        state._afterAdminLogin = "karaoke";
+        state._tokenInput = ""; state._adminKey2 = ""; state._tokenError = "";
+        go("token-entry");
+      };
+      addBtn.disabled = true; addBtn.textContent = "Открываю…";
+      fetch(BAZA_API + "/api/admin-auth", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ linkToken: state.accessToken || "" })
+      }).then(function (r) { return r.json(); }).then(function (d) {
+        if (!(d && d.ok && d.token)) { askKeys(); return; }
+        state.isAdmin = true; state._siteAuth = d.token;
+        saveAdminKey(d.token); saveState();
+        state._goKaraoke = "new";
+        openOwnCabinet();
+      }).catch(askKeys);
       return;
     }
     var tok = state.accessToken;
     var st = (state.adminStudentsList || []).filter(function (x) { return x && x.telegramToken && x.telegramToken === tok; })[0];
     KAR.songs = null; // после разметки список ученика перечитается
     if (!st) { go("admin-karaoke"); return; }
-    KAR.adm.student = { id: st.id, name: st.name };
-    KAR.adm.songs = null; KAR.adm.fromKar = true;
-    go("admin-karaoke-songs");
+    karNewSong(st, addBtn);
   });
   Array.prototype.forEach.call(app.querySelectorAll("[data-kar-song]"), function (el) {
     el.addEventListener("click", function () {
@@ -1032,6 +1045,25 @@ function renderAdminKaraokeSongs() {
       })
       .catch(function () { nb.disabled = false; nb.textContent = "Не получилось. Нажми ещё раз"; });
   };
+}
+
+/* «+ Новая песня» из Караоке карточки: сразу новая песня и экран, где вводится
+   название, текст и загружаются минус и плюс. Назад — список песен ученика,
+   оттуда — обратно в Караоке. */
+function karNewSong(st, btn) {
+  KAR.adm.student = { id: st.id, name: st.name };
+  KAR.adm.songs = null; KAR.adm.fromKar = true; KAR.songs = null;
+  if (btn) { btn.disabled = true; btn.textContent = "Создаю…"; }
+  karAdmFetch("/api/player-tracks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ studentId: st.id }) })
+    .then(function (d) {
+      KAR.adm.song = d.song;
+      KAR.adm.editMeta = true;
+      go("admin-karaoke-edit");
+    })
+    .catch(function () {
+      if (btn && document.body.contains(btn)) { btn.disabled = false; btn.textContent = "Не получилось. Нажми ещё раз"; }
+      else go("karaoke");
+    });
 }
 
 function karAdmPatch(fields) {

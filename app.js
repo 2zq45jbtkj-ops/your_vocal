@@ -32,7 +32,7 @@ if (LINK_TOKEN) {
     // на этом устройстве раньше был другой ученик — его прогресс не смешиваем
     // вход Николая (админ) по личной ссылке не сбрасываем — иначе значок
     // каждый раз выкидывал бы его из режима админа
-    if (_saved && !_saved.isAdmin && _saved.accessToken && _saved.accessToken !== LINK_TOKEN) localStorage.removeItem("vocal-app");
+    if (_saved && !_saved.isAdmin && !localStorage.getItem("vocal-admin") && _saved.accessToken && _saved.accessToken !== LINK_TOKEN) localStorage.removeItem("vocal-app");
   } catch (e) {}
 }
 var app = document.getElementById("app");
@@ -164,7 +164,26 @@ function toggleDarkMode() {
   render();
 }
 
+/* Ключи Николая запоминаются отдельно от прогресса ученика (свой ключ
+   localStorage): их не стирают ни смена личной ссылки, ни «Сбросить прогресс»,
+   ни обновление приложения. Спросим заново, только если сайт отзовёт токен
+   (смена пароля сайта → 401). */
+var ADMIN_KEY = "vocal-admin";
+function saveAdminKey(t) { try { if (t) localStorage.setItem(ADMIN_KEY, JSON.stringify({ t: t })); } catch (e) {} }
+function readAdminKey() { try { var a = JSON.parse(localStorage.getItem(ADMIN_KEY) || "null"); return (a && a.t) || ""; } catch (e) { return ""; } }
+function forgetAdminKey() { try { localStorage.removeItem(ADMIN_KEY); } catch (e) {} }
+
 function loadState() {
+  loadStateRaw();
+  var t = readAdminKey();
+  if (t) {
+    if (!state.isAdmin || !state._siteAuth) { state.isAdmin = true; state._siteAuth = t; state.screen = "admin-hub"; }
+  } else if (state.isAdmin && state._siteAuth) {
+    saveAdminKey(state._siteAuth); // вход, сохранённый до отдельного ключа
+  }
+}
+
+function loadStateRaw() {
   try {
     var raw = localStorage.getItem("vocal-app");
     if (!raw) return;
@@ -521,13 +540,14 @@ function renderTokenEntry() {
             // него отвечает 401 (api/_auth.js). Тот же токен выдаёт пароль
             // от сайта — обе пары подтверждают, что это Николай.
             state._siteAuth = data.token || "";
+            saveAdminKey(state._siteAuth);
             state._tokenInput = "";
             state._adminKey2 = "";
             state._tokenError = "";
             saveState();
             // пришёл из «Караоке» своей карточки — сразу туда же, уже админом
             if (state._afterAdminLogin === "karaoke") {
-              state._afterAdminLogin = null; state._goKaraoke = true;
+              state._afterAdminLogin = null; state._goKaraoke = "new";
               openOwnCabinet();
               return;
             }
@@ -1094,7 +1114,23 @@ function bazaAuthHeaders(extra) {
 function loadAdminStudentsList() {
   if (state.adminStudentsList) return;
   fetch(BAZA_API + "/api/students", { headers: bazaAuthHeaders() })
-    .then(function (r) { return r.json(); })
+    .then(function (r) {
+      if (r.status === 401 && state.isAdmin) {
+        // пароль сайта сменили — старые ключи больше не действуют
+        forgetAdminKey();
+        if (state.adminMode && state.adminSnapshot) {
+          state.accessToken = state.adminSnapshot.accessToken;
+          state.firstName = state.adminSnapshot.firstName; state.lastName = state.adminSnapshot.lastName;
+          state.studentPublicData = null; state.adminSnapshot = null;
+        }
+        state.isAdmin = false; state._siteAuth = ""; state.adminMode = false;
+        saveState();
+        state._tokenError = "Ключи сменились на сайте — введи их один раз заново.";
+        go("token-entry");
+        throw new Error("401");
+      }
+      return r.json();
+    })
     .then(function (data) {
       var students = (data && data.students) || [];
       state._adminStudentsErr = false;
@@ -1103,7 +1139,8 @@ function loadAdminStudentsList() {
       });
       if (state.screen === "admin-students" || state.screen === "admin-karaoke") render();
     })
-    .catch(function () {
+    .catch(function (err) {
+      if (err && err.message === "401") { state.adminStudentsList = null; return; }
       // Отличаем «запрос не прошёл» от «учеников правда нет»: раньше обе
       // ситуации выглядели как пустой список, и сетевая ошибка читалась как
       // «база пуста».
@@ -1143,6 +1180,7 @@ function enterAdminMode(student) {
         state.studentPublicData = data;
         state.firstName = data.student.name.split(" ")[0] || data.student.name;
         state.lastName = data.student.name.split(" ").slice(1).join(" ") || "";
+        if (state._goKaraoke === "new") { state._goKaraoke = false; KAR.songs = null; go("karaoke"); karNewSong({ id: student.id, name: student.name }); return; }
         if (state._goKaraoke) { state._goKaraoke = false; KAR.songs = null; go("karaoke"); return; }
         go("profile");
       } else {
