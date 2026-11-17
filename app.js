@@ -132,7 +132,11 @@ function saveState() {
       songTempoMap: state.songTempoMap, songPitchMap: state.songPitchMap,
       songLoopMap: state.songLoopMap, songAutoplayNext: state.songAutoplayNext,
       favorites: state.favorites, notifOn: state.notifOn,
-      isAdmin: state.isAdmin
+      isAdmin: state.isAdmin,
+      // Токен преподавателя для базы: без него после перезапуска приложения
+      // Николай оставался «админом», но загрузка дорожек и списки песен
+      // получали отказ 401.
+      _siteAuth: state.isAdmin ? (state._siteAuth || "") : ""
     }));
   } catch (e) {}
 }
@@ -164,6 +168,9 @@ function loadState() {
     if (!raw) return;
     var s = JSON.parse(raw);
     for (var k in s) { if (Object.prototype.hasOwnProperty.call(s, k)) state[k] = s[k]; }
+    // Вход админа, сохранённый до того, как начали хранить токен: без токена
+    // база ничего не даёт загрузить — один раз просим ключи заново.
+    if (state.isAdmin && !state._siteAuth) { state.isAdmin = false; state.screen = "token-entry"; return; }
     if (state.isAdmin) state.screen = "admin-hub";
     else if (state.accessToken) state.screen = "courses";
     else if (state.tgId && state.firstName && state.lastName) state.screen = "courses";
