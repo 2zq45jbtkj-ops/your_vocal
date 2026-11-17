@@ -1,0 +1,1221 @@
+/* ==========================================================================
+   КАРАОКЕ (вариант A, выбран Николаем 17.11) + окно «Наушники».
+
+   Песни не заводятся здесь второй раз: это песни из «Репертуара» ученика на
+   сайте baza-dannih (минус, текст, тайминг строк lyricTimes, тональность и
+   темп по умолчанию). Ученик получает их по своему коду доступа
+   (player-tracks?action=auth → сессия на 12 часов), Николай — по своему
+   токену преподавателя (X-Site-Auth). Пометки V / v и подсказки лежат у нас,
+   в api/karaoke.js.
+
+   Экраны (state.screen):
+     karaoke              — список песен (из Кабинета)
+     karaoke-play         — плеер на весь экран: свечение под матовым стеклом,
+                            текущая строка целиком белая, повтор строк
+     admin-karaoke        — Николай: выбор ученика
+     admin-karaoke-songs  — Николай: выбор песни
+     admin-karaoke-edit   — Николай: «Разметка караоке»
+   ========================================================================== */
+
+var KAR = {
+  session: null, sessFor: null, sessAt: 0,
+  songs: null, songsErr: null, marks: {},
+  song: null,
+  showMarks: true,
+  hp: null,          // ответ про наушники в этом сеансе: "yes" | "no"
+  adm: { student: null, songs: null, songsErr: null, song: null }
+};
+
+/* ---------- общие мелочи ---------- */
+
+function karFmt(sec) {
+  sec = Math.max(0, Math.floor(sec || 0));
+  return Math.floor(sec / 60) + ":" + ("0" + (sec % 60)).slice(-2);
+}
+function karFmtTenth(sec) {
+  if (sec == null || !isFinite(sec)) return "—";
+  var m = Math.floor(sec / 60), s = sec - m * 60;
+  return m + ":" + (s < 10 ? "0" : "") + s.toFixed(1);
+}
+function karSign(n) { return n > 0 ? "+" + n : n < 0 ? "−" + Math.abs(n) : "0"; }
+
+var KAR_ICO = {
+  play: '<svg width="22" height="24" viewBox="0 0 12 14"><path d="M1.5 1l10 6-10 6V1z" fill="oklch(30% 0.02 50)"/></svg>',
+  pause: '<svg width="18" height="20" viewBox="0 0 18 20"><rect x="2" y="1" width="5" height="18" rx="1.5" fill="oklch(30% 0.02 50)"/><rect x="11" y="1" width="5" height="18" rx="1.5" fill="oklch(30% 0.02 50)"/></svg>',
+  loop: function (c) {
+    return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M17 2l3 3-3 3" stroke="' + c + '" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 11V9a4 4 0 0 1 4-4h12M7 22l-3-3 3-3" stroke="' + c + '" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 13v2a4 4 0 0 1-4 4H4" stroke="' + c + '" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  },
+  back: '<svg width="11" height="18" viewBox="0 0 11 18" fill="none"><path d="M9 1L2 9l7 8" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  note: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M9 18V5l11-2v13" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="18" r="3" stroke="currentColor" stroke-width="1.9"/><circle cx="17" cy="16" r="3" stroke="currentColor" stroke-width="1.9"/></svg>',
+  hp: function (c) {
+    return '<svg width="58" height="58" viewBox="0 0 24 24" fill="none"><path d="M4 14v-2a8 8 0 0 1 16 0v2" stroke="' + c + '" stroke-width="1.7" stroke-linecap="round"/><rect x="3" y="13.5" width="4.5" height="7" rx="2" stroke="' + c + '" stroke-width="1.7"/><rect x="16.5" y="13.5" width="4.5" height="7" rx="2" stroke="' + c + '" stroke-width="1.7"/></svg>';
+  },
+  speaker: function (c) {
+    return '<svg width="58" height="58" viewBox="0 0 24 24" fill="none"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" stroke="' + c + '" stroke-width="1.7" stroke-linejoin="round"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" stroke="' + c + '" stroke-width="1.7" stroke-linecap="round"/></svg>';
+  }
+};
+
+/* ==========================================================================
+   НАУШНИКИ — общее окно для караоке и питча (решение Николая 17.11:
+   ученик сам отмечает; без наушников — только с галочкой согласия).
+   Ответ помним до закрытия приложения.
+   ========================================================================== */
+
+function hpGate(kind, onGo) {
+  if (KAR.hp) { onGo(); return; }
+  var why = kind === "pitch"
+    ? "Так микрофон слышит только твой голос, без музыки, и проверка получится точной."
+    : "В наушниках музыка не заглушает твой голос, и петь получается точнее.";
+  var wrap = document.createElement("div");
+  wrap.className = "hp-dim";
+  document.body.appendChild(wrap);
+  function close() { if (wrap.parentNode) wrap.parentNode.removeChild(wrap); }
+  wrap.addEventListener("click", function (e) { if (e.target === wrap) close(); });
+
+  function step1() {
+    wrap.innerHTML =
+      '<div class="hp-sheet"><div class="hp-grab"></div>' +
+        '<div class="hp-ill">' + KAR_ICO.hp("var(--terra)") + "</div>" +
+        "<h3>Надень наушники</h3><p>" + why + "</p>" +
+        '<button class="hp-b1" data-hp="yes">Наушники подключены</button>' +
+        '<button class="hp-b2" data-hp="no">Пою без наушников</button>' +
+      "</div>";
+    wrap.querySelector('[data-hp="yes"]').onclick = function () { KAR.hp = "yes"; close(); onGo(); };
+    wrap.querySelector('[data-hp="no"]').onclick = step2;
+  }
+  function step2() {
+    var ticked = false;
+    wrap.innerHTML =
+      '<div class="hp-sheet"><div class="hp-grab"></div>' +
+        '<div class="hp-ill">' + KAR_ICO.speaker("var(--terra)") + "</div>" +
+        "<h3>Без наушников</h3>" +
+        "<p>Петь можно, но музыка из динамика будет мешать, и результат получится хуже.</p>" +
+        '<div class="hp-chk" data-hp="tick"><div class="bx"></div><p>Понимаю, что без наушников результат будет хуже по качеству</p></div>' +
+        '<button class="hp-b1 off" data-hp="go">Петь без наушников</button>' +
+        '<button class="hp-b2" data-hp="back">Подключу наушники</button>' +
+      "</div>";
+    var chk = wrap.querySelector('[data-hp="tick"]');
+    var go = wrap.querySelector('[data-hp="go"]');
+    chk.onclick = function () {
+      ticked = !ticked;
+      chk.classList.toggle("on", ticked);
+      chk.querySelector(".bx").textContent = ticked ? "✓" : "";
+      go.classList.toggle("off", !ticked);
+    };
+    go.onclick = function () { if (!ticked) return; KAR.hp = "no"; close(); onGo(); };
+    wrap.querySelector('[data-hp="back"]').onclick = step1;
+  }
+  step1();
+}
+window.hpGate = hpGate;
+
+/* ==========================================================================
+   ДАННЫЕ УЧЕНИКА
+   ========================================================================== */
+
+function karSession() {
+  var tok = state.accessToken;
+  if (!tok) return Promise.reject(new Error("no-token"));
+  if (KAR.session && KAR.sessFor === tok && Date.now() - KAR.sessAt < 11 * 3600 * 1000) return Promise.resolve(KAR.session);
+  return fetch(BAZA_API + "/api/player-tracks?action=auth", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code: tok })
+  }).then(function (r) {
+    if (!r.ok) throw new Error("auth " + r.status);
+    return r.json();
+  }).then(function (d) {
+    KAR.session = d.session; KAR.sessFor = tok; KAR.sessAt = Date.now();
+    return d.session;
+  });
+}
+
+function karLoadSongs(force) {
+  if (KAR.songs === "loading") return;
+  if (KAR.songs && !force && KAR.songsFor === state.accessToken) return;
+  KAR.songs = "loading"; KAR.songsErr = null; KAR.songsFor = state.accessToken;
+  karSession().then(function (sess) {
+    var h = { "X-Player-Session": sess };
+    return Promise.all([
+      fetch(BAZA_API + "/api/player-tracks", { headers: h }).then(function (r) { if (!r.ok) throw new Error("songs " + r.status); return r.json(); }),
+      fetch("/api/karaoke", { headers: h }).then(function (r) { return r.ok ? r.json() : {}; }).catch(function () { return {}; })
+    ]);
+  }).then(function (res) {
+    KAR.songs = ((res[0] && res[0].songs) || []).filter(function (s) { return s.music && s.music.url; });
+    KAR.marks = (res[1] && res[1].marks) || {};
+    if (state.screen === "karaoke") render();
+  }).catch(function () {
+    KAR.songs = null; KAR.songsErr = true;
+    if (state.screen === "karaoke") render();
+  });
+}
+
+/* Строки песни: пустые строки текста — граница куплета, в списке их нет,
+   но индекс i у каждой строки — её номер в исходном тексте (как в lyricTimes). */
+function karBuildLines(song, marks) {
+  var raw = String(song.lyrics || "").replace(/\r/g, "").split("\n");
+  var times = {};
+  (song.lyricTimes || []).forEach(function (m) {
+    var line = raw[m.i];
+    if (line == null) return;
+    if (m.text && m.text.trim() && m.text.trim() !== line.trim()) return; // текст поменяли — тайминг этой строки устарел
+    times[m.i] = Number(m.t);
+  });
+  var ml = (marks && marks.lines) || {};
+  var out = [], blank = false;
+  raw.forEach(function (txt, i) {
+    if (!txt.trim()) { blank = out.length > 0; return; }
+    var m = ml[i];
+    if (m && m.text && m.text.trim() !== txt.trim()) m = null;
+    out.push({ i: i, text: txt.trim(), t: times[i], mk: (m && m.mk) || {}, hint: (m && m.hint) || "", gap: blank });
+    blank = false;
+  });
+  return out;
+}
+
+function karLineHtml(l, withMarks) {
+  var words = l.text.split(/\s+/);
+  var h = "";
+  for (var k = 0; k <= words.length; k++) {
+    if (withMarks && l.mk[k]) h += '<span class="mk">' + l.mk[k] + "</span>";
+    if (k < words.length) h += esc(words[k]) + (k < words.length - 1 ? " " : "");
+  }
+  if (withMarks && l.hint) h += '<br><span class="ktag">' + esc(l.hint) + "</span>";
+  return h;
+}
+
+/* ==========================================================================
+   ЭКРАН «КАРАОКЕ» — список песен
+   ========================================================================== */
+
+function renderKaraokeList() {
+  karLoadSongs(false);
+  var body;
+  if (KAR.songs === "loading" || (KAR.songs == null && !KAR.songsErr)) {
+    body = '<div class="instruction-note">Загружаю песни…</div>';
+  } else if (KAR.songsErr) {
+    body = '<div class="instruction-note">Не получилось загрузить песни. Проверь интернет и открой экран ещё раз.</div>';
+  } else if (!KAR.songs.length) {
+    body = '<div class="instruction-note">Здесь появятся песни, над которыми вы работаете с Николаем, когда он добавит к ним минус.</div>';
+  } else {
+    body = '<div class="kar-list">' + KAR.songs.map(function (s, k) {
+      var timed = (s.lyricTimes || []).length > 0;
+      var sub = [s.artist, !s.lyrics ? "без текста" : timed ? "" : "текст без подсветки строк"].filter(Boolean).join(" · ");
+      return '<div class="kar-song" data-kar-song="' + k + '"><div class="kar-ic">' + KAR_ICO.note + "</div>" +
+        '<div style="flex:1;min-width:0;"><b>' + esc(s.title || "Песня") + "</b>" + (sub ? '<div class="kar-sub">' + esc(sub) + "</div>" : "") + "</div>" +
+        '<div class="cab-chev">›</div></div>';
+    }).join("") + "</div>";
+  }
+  app.innerHTML = '<div style="padding:var(--screen-top) 20px 130px;">' + cabBack() +
+    '<div class="cab-screen-title">Караоке</div>' + body + "</div>";
+  wireActs();
+  Array.prototype.forEach.call(app.querySelectorAll("[data-kar-song]"), function (el) {
+    el.addEventListener("click", function () {
+      KAR.song = KAR.songs[parseInt(el.getAttribute("data-kar-song"), 10)];
+      go("karaoke-play");
+    });
+  });
+}
+
+/* ==========================================================================
+   ДВИЖОК ВОСПРОИЗВЕДЕНИЯ
+   Тональность 0 — обычный <audio> (темп через playbackRate без смены высоты).
+   Тональность ≠ 0 — SoundTouch, как в распевках (loadSoundTouch из app.js).
+   ========================================================================== */
+
+var KE = null;
+
+function karEngineNew(song) {
+  karEngineStop();
+  var el = new Audio();
+  el.preload = "auto";
+  el.setAttribute("playsinline", "");
+  el.src = song.music.url;
+  try { el.preservesPitch = true; el.webkitPreservesPitch = true; } catch (e) {}
+  KE = {
+    el: el, song: song, playing: false, busy: false,
+    pitch: Math.max(-6, Math.min(6, Math.round(Number(song.pitchSemitones) || 0))),
+    tempo: Math.max(70, Math.min(120, Math.round((Number(song.tempoPct) || 100) / 5) * 5)),
+    dur: Number(song.music.durationSec) || 0,
+    shifter: null, buf: null, bufP: null, pos: 0, posAt: 0, gen: 0
+  };
+  el.playbackRate = KE.tempo / 100;
+  el.addEventListener("loadedmetadata", function () { if (KE && KE.el === el && el.duration && isFinite(el.duration)) KE.dur = el.duration; });
+  el.addEventListener("ended", function () { if (KE && KE.el === el) karOnEnded(); });
+  try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) {}
+  return KE;
+}
+
+function karEngineStop() {
+  if (!KE) return;
+  try { KE.el.pause(); } catch (e) {}
+  karKillShifter();
+  KE.playing = false;
+}
+
+function karKillShifter() {
+  if (KE && KE.shifter) { try { KE.shifter.disconnect(); } catch (e) {} KE.shifter = null; }
+}
+
+function karTime() {
+  if (!KE) return 0;
+  if (KE.pitch === 0) return KE.el.currentTime || 0;
+  if (KE.playing && KE.shifter) {
+    var ctx = getAudioCtx();
+    return Math.min(KE.dur || 1e9, KE.pos + Math.max(0, ctx.currentTime - KE.posAt) * KE.tempo / 100);
+  }
+  return KE.pos;
+}
+
+function karDecode() {
+  if (KE.buf) return Promise.resolve(KE.buf);
+  if (!KE.bufP) {
+    var url = KE.song.music.url;
+    KE.bufP = fetch(url).then(function (r) { return r.arrayBuffer(); })
+      .then(function (ab) { return getAudioCtx().decodeAudioData(ab); })
+      .then(function (b) { if (KE) KE.buf = b; return b; })
+      .catch(function (e) { if (KE) KE.bufP = null; throw e; });
+  }
+  return KE.bufP;
+}
+
+function karStartShifted(t) {
+  var gen = ++KE.gen;
+  KE.busy = true; karPaintPlay();
+  return karDecode().then(function (buf) {
+    return loadSoundTouch().then(function (mod) {
+      if (!KE || KE.gen !== gen) return;
+      karKillShifter();
+      var ctx = getAudioCtx();
+      var sh = new mod.PitchShifter(ctx, buf, 4096, function () { if (KE && KE.gen === gen) karOnEnded(); });
+      sh.tempo = KE.tempo / 100;
+      sh.pitchSemitones = KE.pitch;
+      KE.dur = buf.duration;
+      sh.percentagePlayed = Math.max(0, Math.min(0.999, t / buf.duration));
+      KE.pos = t; KE.posAt = ctx.currentTime;
+      sh.on("play", function (d) { if (KE && KE.gen === gen) { KE.pos = d.timePlayed; KE.posAt = ctx.currentTime; } });
+      sh.connect(ctx.destination);
+      KE.shifter = sh;
+      KE.busy = false; KE.playing = true; karPaintPlay();
+    });
+  }).catch(function () {
+    if (!KE || KE.gen !== gen) return;
+    // минус не удалось разобрать на этом телефоне — играем без сдвига тональности
+    KE.busy = false; KE.pitch = 0; karPaintChips();
+    KE.el.currentTime = t; karNativePlay();
+  });
+}
+
+function karNativePlay() {
+  var p = KE.el.play();
+  KE.playing = true; karPaintPlay();
+  if (p && p.catch) p.catch(function () { KE.playing = false; karPaintPlay(); });
+}
+
+function karPlay() {
+  if (!KE || KE.playing || KE.busy) return;
+  var t = karTime();
+  if (KE.dur && t >= KE.dur - 0.2) t = 0;
+  if (KE.pitch === 0) { if (Math.abs(KE.el.currentTime - t) > 0.05) KE.el.currentTime = t; karNativePlay(); }
+  else karStartShifted(t);
+}
+
+function karPause() {
+  if (!KE) return;
+  var t = karTime();
+  KE.gen++;
+  if (KE.pitch === 0) KE.el.pause();
+  else { karKillShifter(); KE.pos = t; }
+  KE.playing = false; KE.busy = false; karPaintPlay();
+}
+
+function karSeek(t) {
+  if (!KE) return;
+  t = Math.max(0, Math.min((KE.dur || t + 1) - 0.05, t));
+  if (KE.pitch === 0) { KE.el.currentTime = t; }
+  else {
+    KE.pos = t;
+    if (KE.playing) { KE.playing = false; karKillShifter(); karStartShifted(t); }
+  }
+  karTick(true);
+}
+
+function karSetPitch(n) {
+  var t = karTime(), was = KE.playing;
+  if (was) karPause();
+  KE.pitch = n;
+  if (n === 0) { karKillShifter(); KE.el.currentTime = t; }
+  else { KE.pos = t; KE.el.pause(); }
+  karPaintChips();
+  if (was) karPlay();
+}
+
+function karSetTempo(p) {
+  KE.tempo = p;
+  KE.el.playbackRate = p / 100;
+  if (KE.shifter) { KE.pos = karTime(); KE.posAt = getAudioCtx().currentTime; KE.shifter.tempo = p / 100; }
+  karPaintChips();
+}
+
+function karOnEnded() {
+  if (!KE) return;
+  if (KP.loop) { karSeek(KP.loop.s); KP.loop.lap++; karPaintLoopChip(); if (!KE.playing) karPlay(); return; }
+  karKillShifter();
+  KE.playing = false; KE.pos = 0;
+  try { KE.el.pause(); KE.el.currentTime = 0; } catch (e) {}
+  karPaintPlay(); karTick(true);
+}
+
+/* ==========================================================================
+   ЭКРАН ПЛЕЕРА
+   ========================================================================== */
+
+var KP = { root: null, lines: [], cur: -2, sel: null, loop: null, raf: 0, env: null, envStep: 0.05, glow: 0, pulse: 0, lastE: 0, sheet: null };
+var KAR_BARS = 58;
+
+function renderKaraokePlay() {
+  var s = KAR.song;
+  if (!s) { go("karaoke"); return; }
+  karEngineNew(s);
+  KP.lines = karBuildLines(s, KAR.marks[s.id]);
+  KP.cur = -2; KP.sel = null; KP.loop = null; KP.sheet = null; KP.env = null;
+  var timed = KP.lines.some(function (l) { return l.t != null; });
+  KP.timed = timed;
+
+  app.innerHTML =
+    '<div class="kp">' +
+      '<div class="amb"><i class="b1"></i><i class="b2"></i><i class="b3"></i></div><div class="frost"></div>' +
+      '<div class="hd">' +
+        (BROWSER_MODE ? '<div class="kback" data-kp="back">' + KAR_ICO.back + "</div>" : "") +
+        '<div style="min-width:0"><div class="tt">' + esc(s.title || "Песня") + '</div><div class="ts">' + esc((s.artist ? s.artist + " · " : "") + "караоке") + "</div></div>" +
+      "</div>" +
+      '<div class="khint" style="display:none">Отметь строки, которые хочешь повторять</div>' +
+      '<div class="lyr"><div class="lyr-in"></div></div>' +
+      '<div class="kbottom"></div>' +
+    "</div>";
+  KP.root = app.querySelector(".kp");
+  karPaintLyrics();
+  karPaintBottom();
+  var back = KP.root.querySelector('[data-kp="back"]');
+  if (back) back.onclick = function () { handleBack(); };
+  karPrepareEnvelope();
+  cancelAnimationFrame(KP.raf);
+  KP.raf = requestAnimationFrame(karLoop);
+}
+
+function karPaintLyrics() {
+  var inner = KP.root.querySelector(".lyr-in");
+  var selMode = !!KP.sel;
+  var h = "";
+  if (!KP.lines.length) {
+    h = '<div class="knote">У этой песни пока нет текста. Музыку можно слушать и петь по памяти.</div>';
+  } else {
+    if (!KP.timed && !selMode) h += '<div class="knote">Николай ещё не разметил строки, поэтому они пока не подсвечиваются под музыку.</div>';
+    KP.lines.forEach(function (l, k) {
+      var ck = "";
+      if (selMode) {
+        var on = karSelHas(k);
+        ck = '<span class="ck' + (on ? " on" : "") + '"></span>';
+      }
+      h += '<p data-k="' + k + '" class="' + (l.gap ? "gap" : "") + '">' + ck + karLineHtml(l, KAR.showMarks) + "</p>";
+    });
+  }
+  if (KP.loop) h += '<div class="bracket"></div>';
+  inner.innerHTML = h;
+  var lyr = KP.root.querySelector(".lyr");
+  lyr.classList.toggle("selm", selMode);
+  KP.root.querySelector(".khint").style.display = selMode ? "" : "none";
+  Array.prototype.forEach.call(inner.querySelectorAll("p[data-k]"), function (p) {
+    p.addEventListener("click", function () { karLineTap(parseInt(p.getAttribute("data-k"), 10)); });
+  });
+  KP.cur = -2;
+  if (selMode) { inner.style.transform = "none"; inner.style.paddingTop = "0px"; inner.style.paddingBottom = "24px"; }
+  karTick(true);
+}
+
+function karLineTap(k) {
+  if (KP.sel) {
+    var at = KP.sel.indexOf(k);
+    if (at > -1) KP.sel.splice(at, 1); else KP.sel.push(k);
+    karPaintLyrics(); karPaintBottom();
+    return;
+  }
+  var l = KP.lines[k];
+  if (l.t == null) return;
+  if (KP.loop && (k < KP.loop.a || k > KP.loop.b)) karLoopOff();
+  karSeek(Math.max(0, l.t - 0.05));
+  hpGate("karaoke", karPlay);
+}
+
+function karSelRange() {
+  if (!KP.sel || !KP.sel.length) return null;
+  return { a: Math.min.apply(null, KP.sel), b: Math.max.apply(null, KP.sel) };
+}
+function karSelHas(k) { var r = karSelRange(); return !!r && k >= r.a && k <= r.b; }
+
+// Начало и конец куска по таймингу строк: от начала первой отмеченной строки
+// до начала строки, идущей за последней отмеченной (или до конца песни).
+function karRangeTimes(a, b) {
+  var s = null, e = null, k;
+  for (k = a; k >= 0 && s == null; k--) if (KP.lines[k].t != null) s = KP.lines[k].t;
+  for (k = b + 1; k < KP.lines.length && e == null; k++) if (KP.lines[k].t != null) e = KP.lines[k].t;
+  if (e == null) e = KE.dur || null;
+  if (s == null || e == null || e <= s) return null;
+  return { s: s, e: e };
+}
+
+function karPaintBottom() {
+  var box = KP.root.querySelector(".kbottom");
+  if (KP.sel) {
+    var r = karSelRange(), tm = r && karRangeTimes(r.a, r.b);
+    var title = !r ? "Отметь строки" : (r.a === r.b ? "Строка " + (r.a + 1) : "Строки " + (r.a + 1) + "–" + (r.b + 1)) + (tm ? " · " + karFmt(tm.e - tm.s) : "");
+    box.innerHTML = '<div class="selbar"><div class="t">' + title + '</div><div class="s">Музыка будет крутить этот кусок по кругу</div>' +
+      '<div class="row"><div class="bt" data-kp="sel-cancel">Отмена</div><div class="bt main' + (tm ? "" : " off") + '" data-kp="sel-go">Повторять</div></div></div>';
+    box.querySelector('[data-kp="sel-cancel"]').onclick = function () { KP.sel = null; karPaintLyrics(); karPaintBottom(); };
+    box.querySelector('[data-kp="sel-go"]').onclick = function () {
+      var rr = karSelRange(), t2 = rr && karRangeTimes(rr.a, rr.b);
+      if (!t2) return;
+      KP.loop = { a: rr.a, b: rr.b, s: t2.s, e: t2.e, lap: 1 };
+      KP.sel = null;
+      karPaintLyrics(); karPaintBottom();
+      karSeek(t2.s);
+      hpGate("karaoke", karPlay);
+    };
+    return;
+  }
+  var bars = "";
+  for (var i = 0; i < KAR_BARS; i++) bars += "<i></i>";
+  box.innerHTML =
+    '<div class="tr">' +
+      '<div class="wave">' + bars + "</div>" +
+      '<div class="tms"><span class="t1">0:00</span><span class="t2">−' + karFmt(KE.dur) + "</span></div>" +
+      '<div class="ctl">' +
+        '<div class="sk" data-kp="m10">−10</div>' +
+        '<div class="pl" data-kp="play">' + KAR_ICO.play + "</div>" +
+        '<div class="sk" data-kp="p10">+10</div>' +
+        (KP.timed ? '<div class="lp' + (KP.loop ? " on" : "") + '" data-kp="loop">' + KAR_ICO.loop(KP.loop ? "oklch(45% 0.1 40)" : "var(--gtx)") + "</div>" : "") +
+      "</div>" +
+      '<div class="chs"></div>' +
+    "</div>";
+  karPaintWaveShape();
+  karPaintChips();
+  karPaintPlay();
+  box.querySelector('[data-kp="play"]').onclick = function () { if (KE.playing) karPause(); else hpGate("karaoke", karPlay); };
+  box.querySelector('[data-kp="m10"]').onclick = function () { karSeek(karTime() - 10); };
+  box.querySelector('[data-kp="p10"]').onclick = function () { karSeek(karTime() + 10); };
+  var lp = box.querySelector('[data-kp="loop"]');
+  if (lp) lp.onclick = function () {
+    if (KP.loop) { karLoopOff(); return; }
+    KP.sel = [];
+    if (KP.cur >= 0) KP.sel.push(KP.cur);
+    karPaintLyrics(); karPaintBottom();
+  };
+  var wave = box.querySelector(".wave");
+  function seekAt(ev) {
+    var r = wave.getBoundingClientRect();
+    var x = (ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left;
+    if (KE.dur) karSeek(Math.max(0, Math.min(1, x / r.width)) * KE.dur);
+  }
+  var dragging = false;
+  wave.addEventListener("pointerdown", function (ev) { dragging = true; try { wave.setPointerCapture(ev.pointerId); } catch (e) {} seekAt(ev); });
+  wave.addEventListener("pointermove", function (ev) { if (dragging) seekAt(ev); });
+  wave.addEventListener("pointerup", function () { dragging = false; });
+  wave.addEventListener("pointercancel", function () { dragging = false; });
+}
+
+function karLoopOff() {
+  KP.loop = null;
+  karPaintLyrics(); karPaintBottom();
+}
+
+function karPaintLoopChip() {
+  var c = KP.root && KP.root.querySelector(".gch.on .lap");
+  if (c && KP.loop) c.textContent = KP.loop.lap + "-й круг";
+}
+
+function karPaintChips() {
+  if (!KP.root) return;
+  var chs = KP.root.querySelector(".chs");
+  if (!chs) return;
+  if (KP.loop) {
+    var L = KP.loop;
+    chs.innerHTML = '<span class="gch on" data-kp="loop-off">Повтор: ' + (L.a === L.b ? "строка " + (L.a + 1) : "строки " + (L.a + 1) + "–" + (L.b + 1)) +
+      ' · <span class="lap">' + L.lap + '-й круг</span> <b>✕</b></span>';
+    chs.querySelector('[data-kp="loop-off"]').onclick = karLoopOff;
+    return;
+  }
+  chs.innerHTML =
+    '<span class="gch" data-kp="pitch">Тональность <b>' + karSign(KE.pitch) + "</b></span>" +
+    '<span class="gch" data-kp="tempo">Темп <b>' + KE.tempo + "%</b></span>" +
+    '<span class="gch" data-kp="marks">Пометки <b>' + (KAR.showMarks ? "вкл" : "выкл") + "</b></span>";
+  chs.querySelector('[data-kp="pitch"]').onclick = function () { karOpenSheet("pitch"); };
+  chs.querySelector('[data-kp="tempo"]').onclick = function () { karOpenSheet("tempo"); };
+  chs.querySelector('[data-kp="marks"]').onclick = function () { KAR.showMarks = !KAR.showMarks; karPaintLyrics(); karPaintChips(); };
+}
+
+function karOpenSheet(kind) {
+  var old = KP.root.querySelector(".ksheet");
+  if (old) old.parentNode.removeChild(old);
+  var d = document.createElement("div");
+  d.className = "ksheet";
+  KP.root.appendChild(d);
+  function val() { return kind === "pitch" ? karSign(KE.pitch) : KE.tempo + "%"; }
+  d.innerHTML =
+    '<div class="t">' + (kind === "pitch" ? "Тональность" : "Темп") + "</div>" +
+    '<div class="s">' + (kind === "pitch" ? "Музыка звучит выше или ниже, по полутону" : "Музыка быстрее или медленнее, высота та же") + "</div>" +
+    '<div class="stp"><div class="sk" data-s="-">−</div><div class="v">' + val() + '</div><div class="sk" data-s="+">+</div></div>' +
+    '<div class="row" style="display:flex;gap:10px;margin-top:12px"><div class="bt" data-s="reset">Сбросить</div><div class="bt main" data-s="ok">Готово</div></div>';
+  function step(dir) {
+    if (kind === "pitch") { var n = Math.max(-6, Math.min(6, KE.pitch + dir)); if (n !== KE.pitch) karSetPitch(n); }
+    else { var p = Math.max(70, Math.min(120, KE.tempo + dir * 5)); if (p !== KE.tempo) karSetTempo(p); }
+    d.querySelector(".v").textContent = val();
+  }
+  d.querySelector('[data-s="-"]').onclick = function () { step(-1); };
+  d.querySelector('[data-s="+"]').onclick = function () { step(1); };
+  d.querySelector('[data-s="reset"]').onclick = function () {
+    if (kind === "pitch") { if (KE.pitch !== 0) karSetPitch(0); } else karSetTempo(100);
+    d.querySelector(".v").textContent = val();
+  };
+  d.querySelector('[data-s="ok"]').onclick = function () { d.parentNode.removeChild(d); };
+}
+
+function karPaintPlay() {
+  if (!KP.root || !KE) return;
+  var b = KP.root.querySelector('[data-kp="play"]');
+  if (!b) return;
+  b.innerHTML = KE.playing ? KAR_ICO.pause : KAR_ICO.play;
+  b.classList.toggle("busy", !!KE.busy);
+}
+
+/* Волна: из готовых чисел baza-dannih (peaksMusic), а пока их нет —
+   из огибающей громкости, которую считаем для свечения. */
+function karPaintWaveShape() {
+  var wave = KP.root && KP.root.querySelector(".wave");
+  if (!wave) return;
+  var src = (KAR.song.peaksMusic && KAR.song.peaksMusic.length) ? KAR.song.peaksMusic : (KP.env ? KP.env : null);
+  var bars = wave.children;
+  for (var i = 0; i < bars.length; i++) {
+    var v = 0.35;
+    if (src) {
+      var a = Math.floor(i / bars.length * src.length), b = Math.max(a + 1, Math.floor((i + 1) / bars.length * src.length));
+      v = 0; for (var j = a; j < b && j < src.length; j++) v = Math.max(v, src[j]);
+      if (src === KP.env) v = Math.min(1, v * 1.6);
+    }
+    bars[i].style.height = (6 + Math.round(20 * Math.max(0.05, Math.min(1, v)))) + "px";
+  }
+}
+
+/* Огибающая громкости минуса (шаг 50 мс) — по ней огоньки «дышат» в такт.
+   Декодируем с низкой частотой, чтобы не держать в памяти весь файл. */
+function karPrepareEnvelope() {
+  var song = KAR.song;
+  var url = song.music.url;
+  fetch(url).then(function (r) { return r.arrayBuffer(); }).then(function (ab) {
+    var Off = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    var ctx;
+    try { ctx = new Off(1, 1, 22050); } catch (e) { ctx = getAudioCtx(); }
+    return new Promise(function (res, rej) {
+      var p = ctx.decodeAudioData(ab, res, rej);
+      if (p && p.then) p.then(res, rej);
+    });
+  }).then(function (buf) {
+    if (KAR.song !== song) return;
+    var ch = buf.getChannelData(0), ch2 = buf.numberOfChannels > 1 ? buf.getChannelData(1) : null;
+    var win = Math.max(1, Math.round(buf.sampleRate * KP.envStep));
+    var n = Math.ceil(ch.length / win), env = new Array(n), mx = 1e-6;
+    for (var w = 0; w < n; w++) {
+      var sum = 0, cnt = 0;
+      for (var j = w * win; j < (w + 1) * win && j < ch.length; j += 4) {
+        var v = ch2 ? (ch[j] + ch2[j]) * 0.5 : ch[j];
+        sum += v * v; cnt++;
+      }
+      env[w] = Math.sqrt(sum / (cnt || 1));
+      if (env[w] > mx) mx = env[w];
+    }
+    for (w = 0; w < n; w++) env[w] /= mx;
+    KP.env = env;
+    if (!KE.dur) KE.dur = buf.duration;
+    karPaintWaveShape();
+  }).catch(function () { /* без огибающей огоньки просто медленно плывут */ });
+}
+
+function karEnergy(t) {
+  if (!KP.env) return 0.35;
+  var i = Math.floor(t / KP.envStep);
+  return KP.env[Math.max(0, Math.min(KP.env.length - 1, i))] || 0;
+}
+
+function karLoop(ts) {
+  if (!KP.root || !document.body.contains(KP.root)) { karEngineStop(); KP.root = null; return; }
+  karTick(false, ts);
+  KP.raf = requestAnimationFrame(karLoop);
+}
+
+function karTick(force, ts) {
+  if (!KP.root || !KE) return;
+  var t = karTime();
+  // повтор куска
+  if (KP.loop && KE.playing && !KE.busy && t >= KP.loop.e - 0.03) {
+    KP.loop.lap++; karPaintLoopChip(); karSeek(KP.loop.s); t = KP.loop.s;
+  }
+  // текущая строка
+  var cur = -1;
+  if (KP.timed) for (var k = 0; k < KP.lines.length; k++) if (KP.lines[k].t != null && KP.lines[k].t <= t + 0.02) cur = k;
+  if (cur !== KP.cur || force) karSetCur(cur);
+  // волна и время
+  var tr = KP.root.querySelector(".tr");
+  if (tr && KE.dur) {
+    var bars = tr.querySelector(".wave").children, on = Math.round(t / KE.dur * bars.length);
+    for (var i = 0; i < bars.length; i++) bars[i].classList.toggle("on", i < on);
+    tr.querySelector(".t1").textContent = karFmt(t);
+    tr.querySelector(".t2").textContent = "−" + karFmt(KE.dur - t);
+  }
+  karGlow(t, ts || performance.now());
+}
+
+function karSetCur(cur) {
+  KP.cur = cur;
+  var inner = KP.root.querySelector(".lyr-in");
+  var ps = inner.querySelectorAll("p[data-k]");
+  for (var k = 0; k < ps.length; k++) {
+    var p = ps[k], d = cur < 0 ? k + 1 : Math.abs(k - cur);
+    p.classList.toggle("cur", k === cur && !KP.sel);
+    p.classList.toggle("f1", !KP.sel && d === 1);
+    p.classList.toggle("f2", !KP.sel && d === 2);
+    p.classList.toggle("f3", !KP.sel && d >= 3);
+    p.style.opacity = (KP.loop && !KP.sel && (k < KP.loop.a || k > KP.loop.b)) ? ".5" : "";
+  }
+  if (!KP.sel && ps.length) {
+    var target = ps[Math.max(0, cur)];
+    var lyr = KP.root.querySelector(".lyr");
+    // сверху и снизу у текста запас, чтобы и первая, и последняя строка
+    // вставали на одно и то же место, на треть высоты экрана
+    var pad = Math.round(lyr.clientHeight * 0.32) + "px";
+    if (inner.style.paddingTop !== pad) { inner.style.paddingTop = pad; inner.style.paddingBottom = Math.round(lyr.clientHeight * 0.6) + "px"; }
+    var y = target.offsetTop - lyr.clientHeight * 0.32;
+    inner.style.transform = "translateY(" + (-Math.max(0, y)) + "px)";
+  }
+  var br = inner.querySelector(".bracket");
+  if (br && KP.loop && ps[KP.loop.a] && ps[KP.loop.b]) {
+    var top = ps[KP.loop.a].offsetTop - 4;
+    br.style.top = top + "px";
+    br.style.height = (ps[KP.loop.b].offsetTop + ps[KP.loop.b].offsetHeight - 16 - top) + "px";
+  }
+}
+
+/* Огоньки: медленно плывут по своим траекториям всегда, а под музыку
+   разгораются и «дышат» — на громких местах и на ударах (рост громкости). */
+function karGlow(t, ts) {
+  var amb = KP.root.querySelector(".amb");
+  if (!amb) return;
+  var playing = KE && KE.playing;
+  var e = playing ? karEnergy(t) : 0.25;
+  var rise = Math.max(0, e - KP.lastE);
+  KP.lastE = e;
+  KP.glow += (e - KP.glow) * 0.08;
+  KP.pulse = Math.max(KP.pulse * 0.9, Math.min(1, rise * 4));
+  var s = ts / 1000, sp = playing ? 1 : 0.45;
+  var g = KP.glow, pu = KP.pulse;
+  var bl = amb.children;
+  if (bl.length < 3) return;
+  bl[0].style.transform = "translate(" + (Math.sin(s * 0.23 * sp) * 9) + "%," + (Math.cos(s * 0.19 * sp) * 7) + "%) scale(" + (0.92 + g * 0.22 + pu * 0.12).toFixed(3) + ")";
+  bl[1].style.transform = "translate(" + (Math.cos(s * 0.17 * sp + 1) * 8) + "%," + (Math.sin(s * 0.21 * sp + 2) * 9) + "%) scale(" + (0.95 + g * 0.18 + pu * 0.08).toFixed(3) + ")";
+  bl[2].style.transform = "translate(" + (Math.sin(s * 0.27 * sp + 3) * 10) + "%," + (Math.cos(s * 0.15 * sp + 1) * 6) + "%) scale(" + (0.9 + g * 0.25 + pu * 0.15).toFixed(3) + ")";
+  bl[0].style.opacity = (0.75 + g * 0.25).toFixed(3);
+  bl[1].style.opacity = (0.8 + g * 0.2).toFixed(3);
+  bl[2].style.opacity = (0.7 + g * 0.3).toFixed(3);
+}
+
+window.karaokeStopAll = function () {
+  if (KE && state.screen !== "karaoke-play") { karEngineStop(); }
+  if (KAE && state.screen !== "admin-karaoke-edit") { try { KAE.el.pause(); } catch (e) {} }
+};
+
+/* ==========================================================================
+   НИКОЛАЙ: «РАЗМЕТКА КАРАОКЕ»
+   Ученик → песня → минус, текст, тапы в начале строк под музыку, V / v,
+   подсказки. Всё сохраняется само через пару секунд после изменения.
+   ========================================================================== */
+
+var KAE = null; // { el, song, lines, cursor, pick, mode, dirty, saveT }
+
+function karAdmFetch(path, opts) {
+  opts = opts || {};
+  opts.headers = bazaAuthHeaders(opts.headers || {});
+  return fetch(BAZA_API + path, opts).then(function (r) {
+    if (!r.ok) throw new Error(r.status);
+    return r.json();
+  });
+}
+
+function karAdmTop(title, sub) {
+  return '<div class="top pb8">' + backBtn("back") +
+    '<div><div class="top-title lg">' + esc(title) + '</div><div class="top-sub">' + esc(sub) + "</div></div></div>";
+}
+
+function renderAdminKaraoke() {
+  loadAdminStudentsList();
+  var list = state.adminStudentsList, body;
+  if (list === null || list === undefined) body = '<div class="courses-empty">Загружаю список учеников…</div>';
+  else if (!list.length) body = '<div class="courses-empty">' + (state._adminStudentsErr ? "Не удалось загрузить список учеников. Попробуй ещё раз через минуту." : "Учеников пока нет.") + "</div>";
+  else body = list.map(function (st, k) {
+    return '<div class="lesson-card" data-kadm-st="' + k + '"><div class="lesson-dot" style="background:oklch(56% 0.09 235);">' + esc((st.name || "?")[0]) + '</div>' +
+      '<div class="lesson-body"><div class="lesson-name">' + esc(st.name) + "</div></div>" + SVG.chevronRight + "</div>";
+  }).join("");
+  app.innerHTML = karAdmTop("Разметка караоке", "Выбери ученика") +
+    '<div style="padding:8px 16px 130px;display:flex;flex-direction:column;gap:10px;">' + body + "</div>";
+  wireActs();
+  Array.prototype.forEach.call(app.querySelectorAll("[data-kadm-st]"), function (el) {
+    el.onclick = function () {
+      var st = state.adminStudentsList[parseInt(el.getAttribute("data-kadm-st"), 10)];
+      KAR.adm.student = { id: st.id, name: st.name };
+      KAR.adm.songs = null;
+      go("admin-karaoke-songs");
+    };
+  });
+}
+
+function karAdmLoadSongs() {
+  var st = KAR.adm.student;
+  if (!st || KAR.adm.songs === "loading") return;
+  KAR.adm.songs = "loading"; KAR.adm.songsErr = null;
+  karAdmFetch("/api/player-tracks?studentId=" + encodeURIComponent(st.id)).then(function (d) {
+    KAR.adm.songs = d.songs || [];
+    if (state.screen === "admin-karaoke-songs") render();
+  }).catch(function () {
+    KAR.adm.songs = []; KAR.adm.songsErr = true;
+    if (state.screen === "admin-karaoke-songs") render();
+  });
+}
+
+function renderAdminKaraokeSongs() {
+  var st = KAR.adm.student;
+  if (!st) { go("admin-karaoke"); return; }
+  if (KAR.adm.songs == null) karAdmLoadSongs();
+  var songs = KAR.adm.songs, body;
+  if (songs == null || songs === "loading") body = '<div class="courses-empty">Загружаю песни…</div>';
+  else {
+    body = (KAR.adm.songsErr ? '<div class="instruction-note">Не удалось загрузить песни. Если ты давно не входил, выйди из режима админа и войди по ключам заново.</div>' : "") +
+      songs.map(function (s, k) {
+        var n = String(s.lyrics || "").split("\n").filter(function (x) { return x.trim(); }).length;
+        var m = (s.lyricTimes || []).length;
+        var sub = [s.music && s.music.url ? "минус ✓" : "нет минуса", n ? "текст ✓" : "нет текста", n ? "размечено " + Math.min(m, n) + " из " + n : ""].filter(Boolean).join(" · ");
+        return '<div class="lesson-card" data-kadm-song="' + k + '"><div class="lesson-dot" style="background:oklch(60% 0.13 38);">♪</div>' +
+          '<div class="lesson-body"><div class="lesson-name">' + esc(s.title || "Песня") + (s.artist ? " · " + esc(s.artist) : "") + '</div><div class="lesson-sub">' + esc(sub) + "</div></div>" + SVG.chevronRight + "</div>";
+      }).join("") +
+      '<button class="cta" data-kadm="new" style="margin-top:6px;">+ Новая песня</button>';
+  }
+  app.innerHTML = karAdmTop("Разметка караоке", st.name) +
+    '<div style="padding:8px 16px 130px;display:flex;flex-direction:column;gap:10px;">' + body + "</div>";
+  wireActs();
+  Array.prototype.forEach.call(app.querySelectorAll("[data-kadm-song]"), function (el) {
+    el.onclick = function () {
+      KAR.adm.song = KAR.adm.songs[parseInt(el.getAttribute("data-kadm-song"), 10)];
+      go("admin-karaoke-edit");
+    };
+  });
+  var nb = app.querySelector('[data-kadm="new"]');
+  if (nb) nb.onclick = function () {
+    nb.disabled = true; nb.textContent = "Создаю…";
+    karAdmFetch("/api/player-tracks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ studentId: st.id }) })
+      .then(function (d) {
+        KAR.adm.songs.push(d.song);
+        KAR.adm.song = d.song;
+        KAR.adm.editMeta = true;
+        go("admin-karaoke-edit");
+      })
+      .catch(function () { nb.disabled = false; nb.textContent = "Не получилось. Нажми ещё раз"; });
+  };
+}
+
+function karAdmPatch(fields) {
+  var s = KAR.adm.song;
+  return karAdmFetch("/api/player-tracks?id=" + encodeURIComponent(s.id), {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(fields)
+  }).then(function (d) {
+    if (d && d.song) {
+      Object.keys(d.song).forEach(function (k) { s[k] = d.song[k]; });
+    }
+    return s;
+  });
+}
+
+function renderAdminKaraokeEdit() {
+  var s = KAR.adm.song;
+  if (!s) { go("admin-karaoke-songs"); return; }
+  if (!KAE || KAE.song !== s) {
+    if (KAE) { try { KAE.el.pause(); } catch (e) {} }
+    var el = new Audio();
+    el.preload = "auto"; el.setAttribute("playsinline", "");
+    if (s.music && s.music.url) el.src = s.music.url;
+    KAE = { el: el, song: s, lines: [], cursor: 0, pick: -1, mode: null, dirty: false, saveT: 0, msg: "", marksLoaded: false, marks: {}, showLyrics: false };
+    KAE.lines = karBuildLines(s, null);
+    KAE.cursor = karAdmFirstUnmarked();
+    fetch("/api/karaoke?songId=" + encodeURIComponent(s.id), { headers: bazaAuthHeaders() })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!KAE || KAE.song !== s) return;
+        KAE.lines = karBuildLines(s, d && d.lines ? { lines: d.lines } : null);
+        KAE.marksLoaded = true;
+        karAdmPaintLines();
+      })
+      .catch(function () { if (KAE) KAE.marksLoaded = true; });
+  }
+  var hasMusic = !!(s.music && s.music.url);
+  var nLines = KAE.lines.length;
+  app.innerHTML = karAdmTop("Разметка караоке", "Режим Николая · " + (KAR.adm.student ? KAR.adm.student.name : "")) +
+    '<div class="kadm">' +
+      '<div class="fld" data-ka="meta"><span>Песня</span><b>' + esc(s.title || "Песня") + (s.artist ? " · " + esc(s.artist) : "") + " ▾</b></div>" +
+      '<div class="kmeta"></div>' +
+      '<div class="fld" data-ka="music"><span>Минус</span><b class="' + (hasMusic ? "ok" : "") + '">' + (hasMusic ? esc(s.music.name || "минус") + " ✓" : "Загрузить файл") + "</b></div>" +
+      '<input type="file" accept="audio/*,.mp3,.m4a,.wav,.aac" style="display:none" data-ka="file">' +
+      '<div class="fld" data-ka="lyrics"><span>Текст</span><b class="' + (nLines ? "ok" : "") + '">' + (nLines ? nLines + " " + plural(nLines, "строка", "строки", "строк") + " ✓" : "Вставить текст") + "</b></div>" +
+      '<div class="klyr"></div>' +
+      (hasMusic ? '<div class="play-mini"><button class="pbtn" data-ka="play"></button><div class="bar" data-ka="bar"><i></i></div><div class="tm">0:00</div></div>' : "") +
+      '<div class="kcard"></div>' +
+      '<div class="chips">' +
+        '<button class="chip" data-ka="mV">+ <b style="color:var(--terra)">V</b> вдох</button>' +
+        '<button class="chip" data-ka="mv">+ <b style="color:var(--blue)">v</b> добор</button>' +
+        '<button class="chip" data-ka="hint">+ подсказка</button>' +
+      "</div>" +
+      '<div class="tapbig' + (hasMusic && nLines ? "" : " off") + '" data-ka="tap">Тап: следующая строка</div>' +
+      '<div class="row2"><button class="btn2" data-ka="undo">Отменить тап</button><button class="btn2" data-ka="restart">Разметить заново</button></div>' +
+      '<div class="note">Музыка играет — тапаешь в начале каждой строки. Тап по строке в списке выбирает её для V, v и подсказки.</div>' +
+      '<div class="msg"></div>' +
+    "</div>";
+  wireActs();
+  karAdmWire();
+  karAdmPaintLines();
+  if (KAR.adm.editMeta) { KAR.adm.editMeta = false; karAdmOpenMeta(); }
+}
+
+function karAdmFirstUnmarked() {
+  for (var k = 0; k < KAE.lines.length; k++) if (KAE.lines[k].t == null) return k;
+  return KAE.lines.length;
+}
+
+function karAdmMsg(t, err) {
+  var m = app.querySelector(".kadm .msg");
+  if (m) { m.textContent = t || ""; m.classList.toggle("err", !!err); }
+}
+
+function karAdmPaintLines() {
+  var card = app.querySelector(".kadm .kcard");
+  if (!card || !KAE) return;
+  if (!KAE.lines.length) {
+    card.innerHTML = '<div class="ln next" style="border:none">Сначала вставь текст песни — каждая строка с новой строки, куплеты через пустую строку.</div>';
+    return;
+  }
+  card.innerHTML = KAE.lines.map(function (l, k) {
+    var cls = l.t == null ? "next" : "";
+    if (k === KAE.cursor - 1 && l.t != null) cls = "now";
+    if (k === KAE.pick) cls += " pick";
+    var words = l.text.split(/\s+/), h = "";
+    var placing = k === KAE.pick && (KAE.mode === "V" || KAE.mode === "v");
+    for (var g = 0; g <= words.length; g++) {
+      if (l.mk[g]) h += '<span class="' + l.mk[g] + '" data-gap="' + g + '">' + l.mk[g] + "</span>";
+      else if (placing) h += '<span class="gapb" data-gap="' + g + '">+</span>';
+      if (g < words.length) h += esc(words[g]) + " ";
+    }
+    if (k === KAE.pick && KAE.mode === "hint") {
+      h += '<input type="text" class="khint-in" maxlength="200" placeholder="Подсказка к строке" value="' + esc(l.hint || "") + '" style="margin-top:8px">';
+    } else if (l.hint) h += '<span class="hint">' + esc(l.hint) + "</span>";
+    return '<div class="ln ' + cls + '" data-ln="' + k + '"><span class="tm">' + (l.t == null ? "—" : karFmtTenth(l.t)) + '</span><span class="txt">' + h + "</span></div>";
+  }).join("");
+  Array.prototype.forEach.call(card.querySelectorAll("[data-ln]"), function (el) {
+    el.addEventListener("click", function (ev) {
+      var k = parseInt(el.getAttribute("data-ln"), 10);
+      var gap = ev.target.getAttribute && ev.target.getAttribute("data-gap");
+      if (ev.target.classList && ev.target.classList.contains("khint-in")) return;
+      var l = KAE.lines[k];
+      if (gap != null) {
+        if (l.mk[gap]) delete l.mk[gap];
+        else if (KAE.mode === "V" || KAE.mode === "v") l.mk[gap] = KAE.mode;
+        KAE.mode = null; karAdmChips();
+        karAdmDirty(); karAdmPaintLines();
+        return;
+      }
+      if (KAE.pick === k && !KAE.mode) { KAE.pick = -1; }
+      else {
+        KAE.pick = k; KAE.mode = null;
+        // тап по строке — отсюда и продолжаем тапать, музыка встаёт чуть раньше
+        KAE.cursor = k;
+        var prev = null;
+        for (var j = k - 1; j >= 0 && prev == null; j--) if (KAE.lines[j].t != null) prev = KAE.lines[j].t;
+        if (KAE.el.src && prev != null) { try { KAE.el.currentTime = Math.max(0, prev - 1); } catch (e) {} }
+      }
+      karAdmChips(); karAdmPaintLines();
+    });
+  });
+  var hin = card.querySelector(".khint-in");
+  if (hin) {
+    hin.focus();
+    hin.addEventListener("input", function () { KAE.lines[KAE.pick].hint = hin.value; karAdmDirty(); });
+    hin.addEventListener("keydown", function (e) { if (e.key === "Enter") { KAE.mode = null; karAdmChips(); karAdmPaintLines(); } });
+  }
+}
+
+function karAdmChips() {
+  ["V", "v", "hint"].forEach(function (m) {
+    var b = app.querySelector('[data-ka="' + (m === "hint" ? "hint" : "m" + m) + '"]');
+    if (b) b.classList.toggle("on", KAE.mode === m);
+  });
+}
+
+function karAdmDirty() {
+  KAE.dirty = true;
+  karAdmMsg("Сохраняю…");
+  clearTimeout(KAE.saveT);
+  KAE.saveT = setTimeout(karAdmSave, 1200);
+}
+
+function karAdmSave() {
+  if (!KAE) return;
+  var s = KAE.song, lines = KAE.lines, my = KAE;
+  var times = lines.filter(function (l) { return l.t != null; }).map(function (l) { return { i: l.i, t: Math.round(l.t * 100) / 100, text: l.text }; });
+  var marks = {};
+  lines.forEach(function (l) {
+    if (Object.keys(l.mk).length || (l.hint && l.hint.trim())) marks[l.i] = { text: l.text, mk: l.mk, hint: (l.hint || "").trim() };
+  });
+  Promise.all([
+    karAdmPatch({ lyricTimes: times }),
+    fetch("/api/karaoke", {
+      method: "POST", headers: bazaAuthHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ songId: s.id, studentId: s.studentId, lines: marks })
+    }).then(function (r) { if (!r.ok) throw new Error(r.status); })
+  ]).then(function () {
+    if (KAE !== my) return;
+    KAE.dirty = false;
+    karAdmMsg("Сохранено ✓");
+  }).catch(function () {
+    if (KAE !== my) return;
+    karAdmMsg("Не сохранилось. Проверь интернет — попробую ещё раз через несколько секунд.", true);
+    clearTimeout(KAE.saveT);
+    KAE.saveT = setTimeout(karAdmSave, 5000);
+  });
+}
+
+function karAdmOpenMeta() {
+  var box = app.querySelector(".kadm .kmeta");
+  if (!box) return;
+  if (box.innerHTML) { box.innerHTML = ""; return; }
+  var s = KAE.song;
+  box.innerHTML =
+    '<div style="display:flex;flex-direction:column;gap:8px;margin:-2px 0 12px;">' +
+      '<input type="text" data-km="title" placeholder="Название" value="' + esc(s.title === "Новая песня" ? "" : s.title || "") + '">' +
+      '<input type="text" data-km="artist" placeholder="Исполнитель" value="' + esc(s.artist || "") + '">' +
+      '<div class="row2" style="margin-top:2px"><button class="btn2" data-km="other">Другая песня</button><button class="btn2 main" data-km="save">Сохранить</button></div>' +
+    "</div>";
+  box.querySelector('[data-km="other"]').onclick = function () { handleBack(); };
+  box.querySelector('[data-km="save"]').onclick = function () {
+    var title = box.querySelector('[data-km="title"]').value.trim() || "Без названия";
+    var artist = box.querySelector('[data-km="artist"]').value.trim();
+    karAdmMsg("Сохраняю…");
+    karAdmPatch({ title: title, artist: artist }).then(function () { render(); karAdmMsg("Сохранено ✓"); })
+      .catch(function () { karAdmMsg("Не сохранилось. Попробуй ещё раз.", true); });
+  };
+}
+
+function karAdmOpenLyrics() {
+  var box = app.querySelector(".kadm .klyr");
+  if (!box) return;
+  if (box.innerHTML) { box.innerHTML = ""; return; }
+  box.innerHTML =
+    '<div style="margin:-2px 0 12px;">' +
+      '<textarea rows="10" placeholder="Вставь текст песни. Каждая строка с новой строки, куплеты разделяй пустой строкой.">' + esc(KAE.song.lyrics || "") + "</textarea>" +
+      '<div class="row2"><button class="btn2" data-kl="cancel">Отмена</button><button class="btn2 main" data-kl="save">Сохранить текст</button></div>' +
+    "</div>";
+  box.querySelector('[data-kl="cancel"]').onclick = function () { box.innerHTML = ""; };
+  box.querySelector('[data-kl="save"]').onclick = function () {
+    var txt = box.querySelector("textarea").value.replace(/\r/g, "");
+    var raw = txt.split("\n");
+    // тайминг и пометки остаются у строк, текст которых не изменился
+    var keepT = {}, keepM = {};
+    KAE.lines.forEach(function (l) { if (l.t != null) keepT[l.text] = keepT[l.text] || l.t; if (Object.keys(l.mk).length || l.hint) keepM[l.text] = keepM[l.text] || l; });
+    var times = [];
+    raw.forEach(function (line, i) {
+      var tt = line.trim();
+      if (tt && keepT[tt] != null) times.push({ i: i, t: keepT[tt], text: tt });
+    });
+    karAdmMsg("Сохраняю…");
+    karAdmPatch({ lyrics: txt, lyricTimes: times }).then(function () {
+      var marks = {};
+      KAE.lines = karBuildLines(KAE.song, null);
+      KAE.lines.forEach(function (l) { var m = keepM[l.text]; if (m) { l.mk = m.mk; l.hint = m.hint; marks[l.i] = 1; } });
+      KAE.cursor = karAdmFirstUnmarked();
+      render();
+      karAdmDirty();
+    }).catch(function () { karAdmMsg("Текст не сохранился. Попробуй ещё раз.", true); });
+  };
+}
+
+function karAdmUpload(file) {
+  if (!file) return;
+  if (file.size > 80 * 1024 * 1024) { karAdmMsg("Файл больше 80 МБ — возьми файл поменьше.", true); return; }
+  karAdmMsg("Загружаю минус… 0%");
+  var ext = (file.name.split(".").pop() || "mp3").toLowerCase().replace(/[^a-z0-9]/g, "") || "mp3";
+  var name = "tracks/" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8) + "." + ext;
+  function withClient() {
+    if (window.BlobClient && window.BlobClient.upload) return Promise.resolve(window.BlobClient);
+    return new Promise(function (res, rej) {
+      var sc = document.createElement("script");
+      sc.src = "/vendor/blob-client.js";
+      sc.onload = function () { window.BlobClient ? res(window.BlobClient) : rej(new Error("no client")); };
+      sc.onerror = rej;
+      document.head.appendChild(sc);
+    });
+  }
+  var dur = 0;
+  var probe = new Audio();
+  var probeUrl = URL.createObjectURL(file);
+  probe.preload = "metadata"; probe.src = probeUrl;
+  probe.onloadedmetadata = function () { dur = isFinite(probe.duration) ? probe.duration : 0; };
+  withClient().then(function (BC) {
+    return BC.upload(name, file, {
+      access: "public",
+      contentType: file.type || "audio/mpeg",
+      handleUploadUrl: BAZA_API + "/api/player-upload",
+      clientPayload: state._siteAuth || "",
+      onUploadProgress: function (p) { karAdmMsg("Загружаю минус… " + Math.round(p.percentage) + "%"); }
+    });
+  }).then(function (blob) {
+    karAdmMsg("Сохраняю…");
+    return karAdmPeaks(file).catch(function () { return null; }).then(function (pk) {
+      var f = { music: { url: blob.url, name: file.name, durationSec: Math.round(dur) } };
+      if (pk) { f.peaksMusic = pk; if (!(KAE.song.voice && KAE.song.voice.url)) f.peaks = pk; }
+      return karAdmPatch(f);
+    });
+  }).then(function () {
+    URL.revokeObjectURL(probeUrl);
+    try { KAE.el.pause(); } catch (e) {}
+    KAE.el.src = KAE.song.music.url;
+    render();
+    karAdmMsg("Минус загружен ✓");
+  }).catch(function () {
+    karAdmMsg("Минус не загрузился. Если ты давно не входил, выйди из режима админа и войди по ключам заново.", true);
+  });
+}
+
+// Волна для «Репертуара» на сайте — те же 90 столбиков, что считает сайт.
+function karAdmPeaks(file) {
+  return file.arrayBuffer().then(function (ab) {
+    var Off = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    var ctx;
+    try { ctx = new Off(1, 1, 22050); } catch (e) { ctx = getAudioCtx(); }
+    return new Promise(function (res, rej) { var p = ctx.decodeAudioData(ab, res, rej); if (p && p.then) p.then(res, rej); });
+  }).then(function (buf) {
+    var ch = buf.getChannelData(0), N = 90, step = Math.floor(ch.length / N) || 1, out = [], mx = 1e-6;
+    for (var i = 0; i < N; i++) {
+      var m = 0;
+      for (var j = i * step; j < (i + 1) * step && j < ch.length; j += 16) m = Math.max(m, Math.abs(ch[j]));
+      out.push(m); if (m > mx) mx = m;
+    }
+    return out.map(function (v) { return v / mx; });
+  });
+}
+
+function karAdmWire() {
+  var root = app.querySelector(".kadm");
+  var q = function (k) { return root.querySelector('[data-ka="' + k + '"]'); };
+  q("meta").onclick = karAdmOpenMeta;
+  q("lyrics").onclick = karAdmOpenLyrics;
+  var file = q("file");
+  q("music").onclick = function () { file.click(); };
+  file.onchange = function () { karAdmUpload(file.files && file.files[0]); file.value = ""; };
+  ["V", "v"].forEach(function (m) {
+    q("m" + m).onclick = function () {
+      if (KAE.pick < 0) { KAE.pick = Math.max(0, KAE.cursor - 1); }
+      KAE.mode = KAE.mode === m ? null : m;
+      karAdmChips(); karAdmPaintLines();
+      karAdmMsg(KAE.mode ? "Тапни «+» там, где нужен " + (m === "V" ? "вдох" : "добор") + ". Тап по пометке убирает её." : "");
+    };
+  });
+  q("hint").onclick = function () {
+    if (KAE.pick < 0) KAE.pick = Math.max(0, KAE.cursor - 1);
+    KAE.mode = KAE.mode === "hint" ? null : "hint";
+    karAdmChips(); karAdmPaintLines();
+  };
+  var tap = q("tap");
+  tap.addEventListener("pointerdown", function (ev) {
+    ev.preventDefault();
+    if (!KAE.lines.length || !KAE.el.src) return;
+    if (KAE.el.paused) {
+      // первый тап запускает музыку; строки отмечаем следующими тапами
+      if (KAE.cursor >= KAE.lines.length) KAE.cursor = karAdmFirstUnmarked();
+      var p = KAE.el.play(); if (p && p.catch) p.catch(function () {});
+      tap.textContent = "Тап: следующая строка";
+      karAdmPaintPlay();
+      return;
+    }
+    if (KAE.cursor >= KAE.lines.length) { karAdmMsg("Все строки размечены ✓"); return; }
+    // −0,15 с на реакцию пальца: подсветка лучше чуть раньше, чем позже
+    KAE.lines[KAE.cursor].t = Math.max(0, KAE.el.currentTime - 0.15);
+    KAE.pick = -1; KAE.mode = null;
+    KAE.cursor++;
+    karAdmPaintLines(); karAdmDirty();
+    var cur = app.querySelector('.kadm [data-ln="' + (KAE.cursor - 1) + '"]');
+    if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: "center", behavior: "smooth" });
+  });
+  q("undo").onclick = function () {
+    if (KAE.cursor <= 0) return;
+    KAE.cursor--;
+    var l = KAE.lines[KAE.cursor];
+    if (l.t != null) {
+      try { KAE.el.currentTime = Math.max(0, l.t - 2); } catch (e) {}
+      l.t = null;
+      karAdmPaintLines(); karAdmDirty();
+    }
+  };
+  q("restart").onclick = function () {
+    if (!confirm("Стереть тайминг всех строк и разметить заново? Пометки V, v и подсказки останутся.")) return;
+    KAE.lines.forEach(function (l) { l.t = null; });
+    KAE.cursor = 0; KAE.pick = -1;
+    try { KAE.el.pause(); KAE.el.currentTime = 0; } catch (e) {}
+    karAdmPaintLines(); karAdmPaintPlay(); karAdmDirty();
+  };
+  var pb = q("play");
+  if (pb) {
+    pb.onclick = function () {
+      if (KAE.el.paused) { var p = KAE.el.play(); if (p && p.catch) p.catch(function () {}); } else KAE.el.pause();
+      karAdmPaintPlay();
+    };
+    var bar = q("bar");
+    bar.onclick = function (ev) {
+      var r = bar.getBoundingClientRect();
+      if (KAE.el.duration) KAE.el.currentTime = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)) * KAE.el.duration;
+    };
+    karAdmPaintPlay();
+    KAE.el.onplay = KAE.el.onpause = karAdmPaintPlay;
+    clearInterval(KAE.iv);
+    KAE.iv = setInterval(function () {
+      if (!KAE || state.screen !== "admin-karaoke-edit") { if (KAE) { clearInterval(KAE.iv); try { KAE.el.pause(); } catch (e) {} } return; }
+      var i = app.querySelector(".kadm .bar i"), tm = app.querySelector(".kadm .play-mini .tm");
+      var d = KAE.el.duration || 0, t = KAE.el.currentTime || 0;
+      if (i) i.style.width = (d ? t / d * 100 : 0) + "%";
+      if (tm) tm.textContent = karFmt(t) + " / " + karFmt(d);
+    }, 200);
+  }
+}
+
+function karAdmPaintPlay() {
+  var pb = app.querySelector('.kadm [data-ka="play"]');
+  if (pb && KAE) pb.innerHTML = KAE.el.paused
+    ? '<svg width="14" height="16" viewBox="0 0 12 14"><path d="M1.5 1l10 6-10 6V1z" fill="var(--terra)"/></svg>'
+    : '<svg width="14" height="14" viewBox="0 0 18 20"><rect x="2" y="1" width="5" height="18" rx="1.5" fill="var(--terra)"/><rect x="11" y="1" width="5" height="18" rx="1.5" fill="var(--terra)"/></svg>';
+  var tap = app.querySelector('.kadm [data-ka="tap"]');
+  if (tap && KAE) tap.textContent = KAE.el.paused ? "Тап: включить музыку и начать" : "Тап: следующая строка";
+}
+
+/* ---------- подключение к навигации app.js ---------- */
+
+function renderKaraokeScreen() {
+  switch (state.screen) {
+    case "karaoke": renderKaraokeList(); break;
+    case "karaoke-play": renderKaraokePlay(); break;
+    case "admin-karaoke": renderAdminKaraoke(); break;
+    case "admin-karaoke-songs": renderAdminKaraokeSongs(); break;
+    case "admin-karaoke-edit": renderAdminKaraokeEdit(); break;
+  }
+}
+
+ACTS["cab-karaoke"] = function () { go("karaoke"); };
+ACTS["admin-hub-karaoke"] = function () { go("admin-karaoke"); };

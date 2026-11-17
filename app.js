@@ -405,6 +405,11 @@ function backTarget() {
     case "admin-birthdays": return "admin-hub";
     case "admin-plans": return "admin-hub";
     case "admin-plan": return "admin-plans";
+    case "karaoke": return "profile";
+    case "karaoke-play": return "karaoke";
+    case "admin-karaoke": return "admin-hub";
+    case "admin-karaoke-songs": return "admin-karaoke";
+    case "admin-karaoke-edit": return "admin-karaoke-songs";
     case "lecture": case "warmups": case "song": case "quiz-result": return "lesson-home";
     case "feedback": return "song";
     case "quiz": return null; // отдельная логика
@@ -1076,7 +1081,7 @@ function loadAdminStudentsList() {
       state.adminStudentsList = students.map(function (s) {
         return { id: s.id, name: s.name, status: s.status, telegramToken: s.telegramToken };
       });
-      if (state.screen === "admin-students") render();
+      if (state.screen === "admin-students" || state.screen === "admin-karaoke") render();
     })
     .catch(function () {
       // Отличаем «запрос не прошёл» от «учеников правда нет»: раньше обе
@@ -1084,7 +1089,7 @@ function loadAdminStudentsList() {
       // «база пуста».
       state._adminStudentsErr = true;
       state.adminStudentsList = [];
-      if (state.screen === "admin-students") render();
+      if (state.screen === "admin-students" || state.screen === "admin-karaoke") render();
     });
 }
 
@@ -1998,10 +2003,12 @@ function renderCabMain(data) {
     '<div class="cab-card cab-rows">' +
       '<div class="cab-row" data-act="cab-voice"><div class="cab-ico">' + CAB_ICO_VOICE + '</div><div class="cab-row-txt"><b>Мой голос</b><div>Тип голоса, диапазон и цель</div></div><div class="cab-chev">›</div></div>' +
       '<div class="cab-row" data-act="cab-wheel"><div class="cab-ico">' + CAB_ICO_WHEEL + '</div><div class="cab-row-txt"><b>Колесо баланса</b><div>' + srezLine + '</div></div><div class="cab-chev">›</div></div>' +
+      '<div class="cab-row" data-act="cab-karaoke"><div class="cab-ico">' + CAB_ICO_KARAOKE + '</div><div class="cab-row-txt"><b>Караоке</b><div>Твои песни под минус, с текстом</div></div><div class="cab-chev">›</div></div>' +
     "</div>";
 }
 
 var CAB_ICO_VOICE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="9" y="3" width="6" height="11" rx="3" stroke="var(--terra)" stroke-width="1.8"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" stroke="var(--terra)" stroke-width="1.8" stroke-linecap="round"/></svg>';
+var CAB_ICO_KARAOKE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M9 18V5l11-2v13" stroke="var(--terra)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="18" r="3" stroke="var(--terra)" stroke-width="1.8"/><circle cx="17" cy="16" r="3" stroke="var(--terra)" stroke-width="1.8"/></svg>';
 var CAB_ICO_WHEEL = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><polygon points="12,3 20.5,9 17.5,19.5 6.5,19.5 3.5,9" stroke="var(--blue)" stroke-width="1.8" stroke-linejoin="round"/><polygon points="12,8 16,10.5 14.5,15.5 9,15 8,10.5" fill="var(--blue)" fill-opacity=".3" stroke="var(--blue)" stroke-width="1.4"/></svg>';
 
 function renderCabLessons(data) {
@@ -3026,6 +3033,10 @@ function renderAdminHub() {
       icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 14v-5.5a2 2 0 012-2h6a2 2 0 012 2V14M3 14h10M3 14a1 1 0 100 2h10a1 1 0 100-2M8 6.5V3M6 3.2c0 .8.5 1 1 .5s.5-1.2 1-1.2 1 .4 1 1.2-.5 1-1 .5" stroke="var(--gray)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>'
     },
     {
+      label: "Разметка караоке", act: "admin-hub-karaoke", sub: "Минус, текст и тайминг строк для песен ученика",
+      icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 18V5l11-2v13" stroke="var(--gray)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="18" r="3" stroke="var(--gray)" stroke-width="1.9"/><circle cx="17" cy="16" r="3" stroke="var(--gray)" stroke-width="1.9"/></svg>'
+    },
+    {
       label: "Планы уроков", act: "admin-hub-plans", sub: "По темам срезов и колеса баланса",
       icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3.5 2.5h9a1 1 0 011 1v9a1 1 0 01-1 1h-9a1 1 0 01-1-1v-9a1 1 0 011-1z" stroke="var(--gray)" stroke-width="1.3" stroke-linejoin="round"/><path d="M5.5 6h5M5.5 8.5h5M5.5 11h3" stroke="var(--gray)" stroke-width="1.3" stroke-linecap="round"/></svg>'
     }
@@ -3509,12 +3520,12 @@ var MAIN_TAB_SCREENS = ["courses", "profile", "questions", "more"];
    и на них, даже если открыт конкретный шаг урока, а не список уроков. */
 var LESSON_SUB_SCREENS = ["lesson-home", "lecture", "quiz", "quiz-result", "warmups", "song", "feedback", "favorites", "lesson-soon"];
 /* Дока нет ТОЛЬКО на экранах входа — на всех остальных она закреплена всегда. */
-var NO_DOCK_SCREENS = ["tg", "name", "token-entry", "blocked"];
+var NO_DOCK_SCREENS = ["tg", "name", "token-entry", "blocked", "karaoke-play", "admin-karaoke-edit"];
 
 function activeDockTab() {
   if (MAIN_TAB_SCREENS.indexOf(state.screen) !== -1) return state.screen;
   if (LESSON_SUB_SCREENS.indexOf(state.screen) !== -1) return "courses";
-  if (CAB_SCREENS.indexOf(state.screen) !== -1) return "profile";
+  if (CAB_SCREENS.indexOf(state.screen) !== -1 || state.screen === "karaoke") return "profile";
   return null;
 }
 
@@ -4279,6 +4290,7 @@ function stopAllMedia() {
   stopSongShiftedPlayback();
   state.songPlayerKey = null;
   state.songPlayerElapsed = 0;
+  if (window.karaokeStopAll) window.karaokeStopAll();
 }
 
 /* ---------- упражнение с песней ---------- */
@@ -5258,6 +5270,7 @@ function render() {
     case "admin-birthdays": renderAdminBirthdays(); break;
     case "admin-plans": renderAdminPlans(); break;
     case "admin-plan": renderAdminPlanDetail(); break;
+    case "karaoke": case "karaoke-play": case "admin-karaoke": case "admin-karaoke-songs": case "admin-karaoke-edit": renderKaraokeScreen(); break;
     case "lesson-home": renderLessonHome(); break;
     case "lesson-soon": renderLessonSoon(); break;
     case "blocked": renderBlocked(); break;

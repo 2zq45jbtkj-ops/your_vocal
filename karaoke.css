@@ -1,0 +1,182 @@
+/* ==========================================================================
+   Караоке, вариант A (выбран Николаем 17.11): свечение из фирменных цветов
+   под матовым стеклом, как в Apple Music. Текущая строка целиком белая и
+   светится, дальние строки размыты. Повтор строк — karaoke-A-povtor.png.
+   Значения перенесены 1:1 из макета (karaoke2.py / karaoke3.py).
+   ========================================================================== */
+
+.kp {
+  position: fixed; inset: 0; z-index: 50; overflow: hidden; isolation: isolate;
+  display: flex; flex-direction: column;
+  background: oklch(62% 0.09 45);
+  --g1: oklch(58% 0.16 38 / 1); --g2: oklch(54% 0.10 235 / 1); --g3: oklch(64% 0.11 45 / .9);
+  --frost: oklch(52% 0.06 45 / .22);
+  --hi: oklch(99% 0.005 80); --dim: oklch(99% 0.005 80 / .55);
+  --glass: oklch(100% 0 0 / .2); --glass-b: oklch(100% 0 0 / .45); --gtx: oklch(99% 0.005 80);
+  color: var(--gtx);
+  -webkit-user-select: none; user-select: none;
+}
+html.dark .kp {
+  background: oklch(26% 0.012 235);
+  --g1: oklch(52% 0.14 38 / .85); --g2: oklch(50% 0.09 235 / .85); --g3: oklch(60% 0.08 50 / .5);
+  --frost: oklch(22% 0.012 235 / .35);
+  --hi: oklch(98% 0.005 80); --dim: oklch(98% 0.005 80 / .36);
+  --glass: oklch(100% 0 0 / .10); --glass-b: oklch(100% 0 0 / .18);
+}
+/* Пятна и так мягкие (радиальный градиент), поэтому без filter: blur —
+   размытие пересчитывалось бы в каждом кадре и тормозило на слабых телефонах. */
+.kp .amb { position: absolute; inset: -25%; z-index: -2; pointer-events: none; }
+.kp .amb i { position: absolute; border-radius: 50%; display: block; will-change: transform, opacity; }
+.kp .amb .b1 { width: 80%; height: 56%; left: -7%; top: 7%; background: radial-gradient(closest-side, var(--g1), transparent); background: radial-gradient(closest-side, color-mix(in oklab, var(--g1) 80%, transparent), color-mix(in oklab, var(--g1) 50%, transparent) 40%, transparent); }
+.kp .amb .b2 { width: 88%; height: 62%; right: -13%; top: 31%; background: radial-gradient(closest-side, var(--g2), transparent); background: radial-gradient(closest-side, color-mix(in oklab, var(--g2) 80%, transparent), color-mix(in oklab, var(--g2) 50%, transparent) 40%, transparent); }
+.kp .amb .b3 { width: 72%; height: 54%; left: 9%; bottom: -1%; background: radial-gradient(closest-side, var(--g3), transparent); background: radial-gradient(closest-side, color-mix(in oklab, var(--g3) 80%, transparent), color-mix(in oklab, var(--g3) 50%, transparent) 40%, transparent); }
+.kp .frost { position: absolute; inset: 0; z-index: -1; background: var(--frost); -webkit-backdrop-filter: saturate(140%); backdrop-filter: saturate(140%); pointer-events: none; }
+
+.kp .hd { display: flex; align-items: center; gap: 12px; flex-shrink: 0;
+  padding: calc(var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px) + 14px) 20px 4px; }
+.kp .hd .kback { width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  background: var(--glass); border: 1px solid var(--glass-b); color: var(--gtx); cursor: pointer; }
+.kp .hd .tt { font: 800 18px Manrope, sans-serif; }
+.kp .hd .ts { font: 500 12.5px Inter, sans-serif; color: var(--dim); margin-top: 2px; }
+.kp .khint { padding: 4px 22px 0; font: 600 13px Inter, sans-serif; color: var(--dim); flex-shrink: 0; }
+
+.kp .lyr { position: relative; flex: 1; min-height: 0; overflow: hidden; padding: 0 26px;
+  -webkit-mask: linear-gradient(transparent, #000 12%, #000 78%, transparent); mask: linear-gradient(transparent, #000 12%, #000 78%, transparent); }
+.kp .lyr-in { position: relative; transition: transform .7s cubic-bezier(.22, .8, .25, 1); will-change: transform; }
+.kp .lyr p { font: 800 25px/1.25 Manrope, sans-serif; color: var(--dim); margin: 0 0 20px; position: relative;
+  transition: color .35s, font-size .35s, filter .35s, text-shadow .35s; cursor: pointer; }
+.kp .lyr p.gap { margin-top: 18px; }
+.kp .lyr p.f1 { filter: blur(.6px); } .kp .lyr p.f2 { filter: blur(1.4px); } .kp .lyr p.f3 { filter: blur(2.2px); }
+.kp .lyr p.cur { color: var(--hi); font-size: 30px; text-shadow: 0 0 22px oklch(100% 0 0 / .55), 0 0 2px oklch(100% 0 0 / .4); filter: none; }
+.kp .mk { font: 700 16px "JetBrains Mono", ui-monospace, monospace; color: oklch(92% 0.06 50); margin: 0 4px; vertical-align: 4px; }
+.kp .lyr p > .mk:first-child { margin-left: 0; }
+html.dark .kp .mk { color: oklch(80% 0.08 50); }
+.kp .ktag { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; padding: 4px 10px; border-radius: 9px;
+  background: var(--glass); border: 1px solid var(--glass-b); font: 600 12.5px Inter, sans-serif; color: var(--hi); text-shadow: none; }
+.kp .ktag:before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: oklch(80% 0.06 235); flex-shrink: 0; }
+.kp .lyr .knote { margin: 6px 0 22px; padding: 10px 14px; border-radius: 16px; background: var(--glass); border: 1px solid var(--glass-b);
+  font: 600 13px/1.45 Inter, sans-serif; color: var(--hi); }
+
+/* выбор строк для повтора */
+.kp .lyr.selm { padding-left: 52px; -webkit-mask: none; mask: none; overflow-y: auto; }
+.kp .lyr.selm p { font-size: 22px; filter: none; }
+.kp .lyr.selm p.sel { color: var(--hi); }
+.kp .lyr .ck { position: absolute; left: -30px; top: 6px; width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--dim); }
+.kp .lyr .ck.on { background: var(--hi); border-color: var(--hi); }
+.kp .lyr .ck.on:after { content: ""; position: absolute; left: 5px; top: 2px; width: 5px; height: 9px; border: solid oklch(45% 0.1 40); border-width: 0 2.5px 2.5px 0; transform: rotate(45deg); }
+.kp .lyr .ck.off { opacity: .35; }
+.kp .bracket { position: absolute; left: -16px; width: 5px; border-radius: 3px; background: var(--hi); box-shadow: 0 0 12px oklch(100% 0 0 / .6); transition: top .7s cubic-bezier(.22, .8, .25, 1), height .3s; }
+
+.kp .tr { flex-shrink: 0; padding: 14px 22px calc(30px + env(safe-area-inset-bottom, 0px)); }
+.kp .wave { display: flex; align-items: center; gap: 2px; height: 28px; cursor: pointer; touch-action: none; }
+.kp .wave i { flex: 1; border-radius: 2px; background: oklch(100% 0 0 / .3); }
+.kp .wave i.on { background: var(--hi); }
+.kp .wave i.lp { background: oklch(100% 0 0 / .55); }
+.kp .tms { display: flex; justify-content: space-between; font: 600 11.5px Inter, sans-serif; color: var(--dim); margin-top: 6px; font-variant-numeric: tabular-nums; }
+.kp .ctl { display: flex; align-items: center; justify-content: center; gap: 18px; margin: 12px 0 14px; }
+.kp .sk, .kp .lp { width: 46px; height: 46px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font: 700 12.5px Inter, sans-serif; color: var(--gtx); background: var(--glass); border: 1px solid var(--glass-b); cursor: pointer; }
+.kp .lp.on { background: var(--hi); }
+.kp .pl { width: 62px; height: 62px; border-radius: 50%; background: var(--hi); display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 8px 24px oklch(20% 0.02 40 / .3); cursor: pointer; }
+.kp .pl.busy { opacity: .6; }
+.kp .chs { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.kp .gch { height: 32px; padding: 0 12px; border-radius: 16px; background: var(--glass); border: 1px solid var(--glass-b);
+  display: inline-flex; align-items: center; gap: 5px; font: 600 12.5px Inter, sans-serif; color: var(--gtx); cursor: pointer; white-space: nowrap; }
+.kp .gch b { font-weight: 800; }
+.kp .gch.on { background: var(--hi); color: oklch(35% 0.08 40); }
+.kp .gch.on b { margin-left: 6px; }
+
+.kp .selbar { flex-shrink: 0; margin: 0 16px calc(24px + env(safe-area-inset-bottom, 0px)); border-radius: 26px; background: var(--glass); border: 1px solid var(--glass-b);
+  -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); padding: 16px 16px 14px; }
+.kp .selbar .t { font: 800 16px Manrope, sans-serif; text-align: center; }
+.kp .selbar .s { font: 500 12.5px Inter, sans-serif; color: var(--dim); text-align: center; margin-top: 3px; }
+.kp .selbar .row { display: flex; gap: 10px; margin-top: 14px; }
+.kp .bt { flex: 1; height: 48px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font: 700 14px Manrope, sans-serif;
+  background: var(--glass); border: 1px solid var(--glass-b); color: var(--gtx); cursor: pointer; }
+.kp .bt.main { background: var(--hi); border-color: var(--hi); color: oklch(35% 0.08 40); }
+.kp .bt.off { opacity: .45; pointer-events: none; }
+
+/* окно «Тональность» / «Темп» — стеклянное, поверх плеера */
+.kp .ksheet { position: absolute; left: 16px; right: 16px; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); z-index: 3; border-radius: 26px;
+  background: var(--glass); border: 1px solid var(--glass-b); -webkit-backdrop-filter: blur(30px); backdrop-filter: blur(30px); padding: 18px 18px 16px; }
+html.dark .kp .ksheet { background: oklch(30% 0.012 235 / .7); }
+.kp .ksheet .t { font: 800 16px Manrope, sans-serif; text-align: center; }
+.kp .ksheet .s { font: 500 12.5px Inter, sans-serif; color: var(--dim); text-align: center; margin-top: 3px; }
+.kp .stp { display: flex; align-items: center; justify-content: center; gap: 22px; margin: 16px 0 6px; }
+.kp .stp .sk { font-size: 22px; font-weight: 600; }
+.kp .stp .v { min-width: 90px; text-align: center; font: 800 28px Manrope, sans-serif; font-variant-numeric: tabular-nums; }
+.kp .kload { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: 600 14px Inter, sans-serif; color: var(--dim); }
+
+/* ---------- список песен (в Кабинете) ---------- */
+.kar-list { display: flex; flex-direction: column; gap: 10px; }
+.kar-song { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 20px; background: var(--bg); box-shadow: var(--raised-sm); cursor: pointer; }
+.kar-song .kar-ic { width: 42px; height: 42px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, oklch(62% 0.13 38), oklch(56% 0.09 235)); color: var(--white-text); }
+.kar-song b { display: block; font: 700 15px Manrope, sans-serif; color: var(--ink); }
+.kar-song .kar-sub { font: 500 12.5px Inter, sans-serif; color: var(--gray); margin-top: 2px; }
+.kar-song.off { cursor: default; opacity: .6; }
+
+/* ---------- наушники (общее окно для караоке и питча) ---------- */
+.hp-dim { position: fixed; inset: 0; z-index: 80; background: oklch(20% 0.02 60 / .35); display: flex; align-items: flex-end; }
+.hp-sheet { width: 100%; background: var(--bg); color: var(--ink); border-radius: 30px 30px 0 0; box-shadow: 0 -10px 40px oklch(20% 0.02 60 / .25);
+  padding: 12px 22px calc(34px + env(safe-area-inset-bottom, 0px)); text-align: center; animation: hpUp .28s cubic-bezier(.2, .8, .3, 1); }
+@keyframes hpUp { from { transform: translateY(100%); } to { transform: none; } }
+.hp-grab { width: 40px; height: 5px; border-radius: 3px; background: var(--line); margin: 0 auto 18px; }
+.hp-ill { width: 120px; height: 120px; border-radius: 50%; box-shadow: var(--inset); margin: 0 auto 14px; display: flex; align-items: center; justify-content: center; }
+.hp-sheet h3 { font: 800 20px Manrope, sans-serif; margin: 0 0 8px; }
+.hp-sheet p { font: 500 13.5px/1.5 Inter, sans-serif; color: var(--tx3); margin: 0; }
+.hp-b1 { height: 50px; border-radius: 16px; background: var(--terra); color: var(--white-text); font: 700 14.5px Manrope, sans-serif; display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--raised); margin-top: 18px; cursor: pointer; border: 0; width: 100%; }
+.hp-b1.off { opacity: .45; pointer-events: none; }
+.hp-b2 { height: 48px; border-radius: 16px; box-shadow: var(--raised-sm); color: var(--blue); font: 700 14px Manrope, sans-serif; display: flex; align-items: center; justify-content: center;
+  margin-top: 12px; cursor: pointer; background: var(--bg); border: 0; width: 100%; }
+.hp-chk { display: flex; align-items: flex-start; gap: 10px; text-align: left; margin-top: 14px; padding: 12px 14px; border-radius: 16px; box-shadow: var(--inset-sm); cursor: pointer; }
+.hp-chk .bx { width: 22px; height: 22px; border-radius: 7px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  color: #fff; font: 800 13px Inter, sans-serif; box-shadow: var(--inset-sm); }
+.hp-chk.on .bx { background: var(--terra); box-shadow: none; }
+.hp-chk p { font-size: 13px; }
+
+/* ---------- экран Николая «Разметка караоке» ---------- */
+.kadm { padding: 6px 20px calc(40px + env(safe-area-inset-bottom)); }
+.kadm .fld { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-radius: 16px; box-shadow: var(--inset-sm);
+  margin-bottom: 10px; font: 500 13px Inter, sans-serif; color: var(--gray); cursor: pointer; }
+.kadm .fld b { font: 700 14px Manrope, sans-serif; color: var(--ink); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.kadm .fld b.ok { color: var(--blue); }
+.kadm .kcard { background: var(--bg); box-shadow: var(--raised-sm); border-radius: 20px; padding: 4px 16px 8px; margin-top: 6px; }
+.kadm .ln { display: flex; align-items: baseline; gap: 10px; padding: 11px 0; border-bottom: 1px solid var(--line); font: 600 14px/1.4 Inter, sans-serif; color: var(--ink); cursor: pointer; }
+.kadm .ln:last-child { border-bottom: 0; }
+.kadm .ln .tm { font: 600 12px "JetBrains Mono", ui-monospace, monospace; color: var(--gray); width: 48px; flex-shrink: 0; }
+.kadm .ln.next { color: var(--gray); }
+.kadm .ln.now { color: var(--terra); }
+.kadm .ln.pick { background: var(--soft-blue); margin: 0 -16px; padding: 11px 16px; border-radius: 12px; }
+html.dark .kadm .ln.pick { background: oklch(36% 0.03 235); }
+.kadm .ln .txt { flex: 1; min-width: 0; }
+.kadm .ln .hint { display: block; font: 500 12px Inter, sans-serif; color: var(--blue); margin-top: 3px; }
+.kadm .V, .kadm .v { font: 700 13px "JetBrains Mono", ui-monospace, monospace; margin: 0 3px; }
+.kadm .V { color: var(--terra); } .kadm .v { color: var(--blue); }
+.kadm .gapb { display: inline-block; min-width: 18px; height: 22px; line-height: 22px; text-align: center; margin: 0 2px; border-radius: 6px;
+  background: var(--soft-blue); color: var(--blue); font: 700 12px Inter, sans-serif; cursor: pointer; vertical-align: 1px; }
+html.dark .kadm .gapb { background: oklch(36% 0.03 235); }
+.kadm .chips { display: flex; gap: 8px; margin: 14px 0; flex-wrap: wrap; }
+.kadm .chip { height: 34px; padding: 0 12px; border-radius: 17px; box-shadow: var(--raised-sm); display: inline-flex; align-items: center; gap: 4px;
+  font: 600 13px Inter, sans-serif; color: var(--ink); cursor: pointer; background: var(--bg); border: 0; }
+.kadm .chip.on { box-shadow: var(--inset-sm); color: var(--terra); }
+.kadm .tapbig { height: 76px; border-radius: 22px; background: var(--terra); color: var(--white-text); font: 800 17px Manrope, sans-serif;
+  display: flex; align-items: center; justify-content: center; box-shadow: var(--raised); cursor: pointer; touch-action: manipulation;
+  position: sticky; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 3; }
+.kadm .tapbig.off { opacity: .45; pointer-events: none; }
+.kadm .row2 { display: flex; gap: 10px; margin-top: 10px; }
+.kadm .btn2 { flex: 1; height: 46px; border-radius: 16px; box-shadow: var(--raised-sm); background: var(--bg); border: 0; color: var(--blue); font: 700 13.5px Manrope, sans-serif; cursor: pointer; }
+.kadm .btn2.main { background: var(--blue); color: var(--white-text); }
+.kadm .btn2.off { opacity: .45; pointer-events: none; }
+.kadm .note { text-align: center; font: 500 12px Inter, sans-serif; color: var(--gray); margin-top: 10px; }
+.kadm textarea, .kadm input[type=text] { width: 100%; box-sizing: border-box; border: 0; border-radius: 16px; padding: 12px 14px; box-shadow: var(--inset-sm);
+  background: var(--bg); color: var(--ink); font: 500 14px/1.5 Inter, sans-serif; resize: vertical; outline: none; }
+.kadm .play-mini { display: flex; align-items: center; gap: 12px; margin: 12px 0 0; }
+.kadm .play-mini .pbtn { width: 44px; height: 44px; border-radius: 50%; box-shadow: var(--raised-sm); display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; background: var(--bg); border: 0; }
+.kadm .play-mini .bar { flex: 1; height: 6px; border-radius: 3px; box-shadow: var(--inset-sm); position: relative; cursor: pointer; }
+.kadm .play-mini .bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--terra); }
+.kadm .play-mini .tm { font: 600 12px Inter, sans-serif; color: var(--gray); font-variant-numeric: tabular-nums; min-width: 72px; text-align: right; }
+.kadm .msg { font: 600 13px Inter, sans-serif; color: var(--blue); text-align: center; margin-top: 10px; min-height: 18px; }
+.kadm .msg.err { color: var(--ink-red); }
