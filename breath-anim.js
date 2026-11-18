@@ -324,13 +324,13 @@
       '<path d="M216 204 C214 192 214 184 220 178 L242 184 M220 178 L192 186" stroke="#3f509f" stroke-width="10" fill="none" stroke-linecap="round"/>' +
       '<path d="M216 204 C214 192 214 184 220 178 L242 184 M220 178 L192 186" stroke="#6577c6" stroke-width="6.5" fill="none" stroke-linecap="round"/>' +
       // тело сердца: ПП — правый контур, ПЖ — нижний на диафрагме, ЛЖ — левый, ушко ЛП
-      '<path d="M184 206 C173 222 171 250 180 270 C196 284 232 292 262 290 C266 274 256 236 238 212 C234 204 240 197 233 190 C223 185 213 193 205 197 C197 201 190 202 184 206 Z" fill="url(#ba-heart)" stroke="#5f1f1e" stroke-width="1.2"/>' +
-      '<path d="M184 206 C176 222 175 248 182 266 C186 256 188 230 196 210 Z" fill="#a23d3a" fill-opacity=".6"/>' +
+      '<path d="M184 206 C173 222 171 248 180 266 C196 278 230 281 258 268 C266 252 256 230 238 212 C234 204 240 197 233 190 C223 185 213 193 205 197 C197 201 190 202 184 206 Z" fill="url(#ba-heart)" stroke="#5f1f1e" stroke-width="1.2"/>' +
+      '<path d="M184 206 C176 222 175 246 182 263 C186 254 188 230 196 210 Z" fill="#a23d3a" fill-opacity=".6"/>' +
       // борозды с жиром и венечными артериями
-      '<path d="M222 206 C229 232 241 262 255 286" stroke="#d6a24b" stroke-width="3.2" fill="none" stroke-linecap="round" opacity=".85"/>' +
-      '<path d="M222 206 C229 232 241 262 255 286" stroke="#e1584f" stroke-width="1.1" fill="none"/>' +
-      '<path d="M197 204 C188 230 188 262 207 283" stroke="#d6a24b" stroke-width="3" fill="none" stroke-linecap="round" opacity=".8"/>' +
-      '<path d="M197 204 C188 230 188 262 207 283" stroke="#e1584f" stroke-width="1" fill="none"/>';
+      '<path d="M222 206 C229 230 240 252 252 271" stroke="#d6a24b" stroke-width="3.2" fill="none" stroke-linecap="round" opacity=".85"/>' +
+      '<path d="M222 206 C229 230 240 252 252 271" stroke="#e1584f" stroke-width="1.1" fill="none"/>' +
+      '<path d="M197 204 C188 228 189 258 205 276" stroke="#d6a24b" stroke-width="3" fill="none" stroke-linecap="round" opacity=".8"/>' +
+      '<path d="M197 204 C188 228 189 258 205 276" stroke="#e1584f" stroke-width="1" fill="none"/>';
 
     // лёгкие
     function lungEls() {
@@ -659,7 +659,7 @@
       var SH = [[0, 134.5], [6, 129.5], [12, 129], [15.5, 131.5], [19, 134], [22.5, 137], [22, 141],
                 [20.5, 145], [17.5, 152], [15, 158], [16.5, 162], [15.2, 166], [16.4, 172], [15.2, 182],
                 [17, 191], [15.6, 201], [17.6, 211], [15.8, 221], [17, 232], [14.6, 243], [13.8, 252],
-                [11.5, 260], [9.6, 265.5], [7.2, 268.5], [6, 274], [4.6, 280], [3, 285], [0, 287.5]];
+                [11.5, 260], [9.6, 265.5], [8, 268.5], [7.6, 272.5], [6.4, 277], [4.2, 280.5], [0, 282]];
       var shR = SH.map(function (q) { return [X0 + q[0], q[1] - sdy]; });
       var shL = SH.slice(1, -1).reverse().map(function (q) { return [X0 - q[0], q[1] - sdy]; });
       stern.setAttribute("d", crPath(shR.concat(shL), true));
