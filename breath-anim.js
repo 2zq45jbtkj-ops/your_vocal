@@ -920,34 +920,72 @@
         musStrap(MU.scm.m[s][0], [X(30, -2), X(22, 46), X(11, 98), X(4, 131 - sdy)], [X(42, -2), X(31, 46), X(19, 98), X(12, 131 - sdy)], 5, aIn);   // грудинная головка
         musStrap(MU.scm.m[s][1], [X(30, 40), X(26, 70), X(22, 102), X(20, cy)], [X(34, 38), X(32, 70), X(32, 102), X(37, cy - 1)], 5, aIn);       // ключичная головка
       });
-      if (vis("tra")) {
-        var apo = "";
+      /* Мышцы живота «пришиты» к телу: их форма задана в покое, а каждый кадр
+         деформируется вместе с рёберной дугой (верх), боками туловища (ширина)
+         и тазом (низ) — чтобы рёбра не скользили поверх мышц. */
+      if (vis("tra") || vis("obl") || vis("rec")) {
+        var P0 = { c: 0, r: 0, d: 0 };
+        if (!st.G0) st.G0 = geometry(P0);
+        var latP = function (s, y, pp) {
+          var T = [[206, 133], [300, 131 + pp.r * 4], [398, 123 + pp.d * 3], [470, 127 + pp.d * 6], [564, 131 + pp.d * 3]];
+          for (var k = 0; k < T.length - 1; k++) if (y <= T[k + 1][0]) return lerp(T[k][1], T[k + 1][1], clamp((y - T[k][0]) / (T[k + 1][0] - T[k][0]), 0, 1));
+          return T[T.length - 1][1];
+        };
+        var archOf = function (s, g, pp) {                    // нижний край рёберной дуги: |x| → y
+          var a = [cartilage(7, s, pp, g)[1], cartilage(8, s, pp, g)[1], cartilage(9, s, pp, g)[1], cartilage(10, s, pp, g)[1], g[10].J, g[11].J];
+          var pts = a.map(function (q) { return [Math.abs(q[0] - X0), q[1]]; });
+          pts.push([latP(s, 380, pp) + 6, 384]);
+          return function (dx) {
+            if (dx <= pts[0][0]) return pts[0][1];
+            for (var k = 0; k < pts.length - 1; k++) if (dx <= pts[k + 1][0]) return lerp(pts[k][1], pts[k + 1][1], (dx - pts[k][0]) / Math.max(1e-3, pts[k + 1][0] - pts[k][0]));
+            return pts[pts.length - 1][1];
+          };
+        };
+        var YB = 560;
+        var warpers = {};
         [-1, 1].forEach(function (s) {
-          var med = col(12, function (u) { var y = lerp(292, 512, u); return [X0 + s * 46 * ab, y]; });
-          var lat = col(12, function (u) { var y = lerp(292, 500, u); return [latX(s, y) - s * 4, y]; });
-          musBand(MU.tra.m[s], med, lat, 3, 0, aOut);
-          apo += polyOf(col(4, function (u) { return [X0 + s * 6, lerp(300, 512, u)]; }), col(4, function (u) { return [X0 + s * 46 * ab, lerp(300, 512, u)]; }));
+          var side = s < 0 ? "left" : "right";
+          var aR = archOf(s, st.G0[side], P0), aN = archOf(s, G[side], p);
+          warpers[s] = function (q) {
+            var dx = Math.abs(q[0] - X0), y = q[1];
+            var kx = latP(s, y, p) / latP(s, y, P0);
+            var r0 = aR(dx), r1 = aN(dx * kx);
+            var y2 = r1 + (y - r0) * (YB - r1) / (YB - r0);
+            return [X0 + s * dx * kx, y2];
+          };
         });
-        MU.tra.apo.setAttribute("d", apo);
-      }
-      if (vis("obl")) [-1, 1].forEach(function (s) {
-        var ioLat = col(12, function (u) { var y = lerp(300, 482, u); return [latX(s, y) - s * 3, y]; });
-        var ioMed = col(12, function (u) { var y = lerp(262, 462, u); return [X0 + s * lerp(56, 50, u) * ab, y]; });
-        musBand(MU.obl.io[s], ioLat, ioMed, 3, 0, aOut);          // внутренняя: от бока вверх к середине
-        var eoLat = col(12, function (u) { var y = lerp(236, 470, u); return [latX(s, y) - s * 2, y]; });
-        var eoMed = col(12, function (u) { var y = lerp(300, 540, u); return [X0 + s * lerp(52, 30, u * u) * ab, y]; });
-        musBand(MU.obl.eo[s], eoLat, eoMed, 3, 0, aOut);          // наружная: от рёбер вниз к середине
-      });
-      if (vis("rec")) {
-        [-1, 1].forEach(function (s) {
-          var med = [[X0 + s * 8 * ab, 272 - sdy], [X0 + s * 7 * ab, 340], [X0 + s * 7 * ab, 400], [X0 + s * 7 * ab, 470], [X0 + s * 8 * ab, 545]];
-          var lat = [[X0 + s * 52 * ab, 288 - sdy], [X0 + s * 54 * ab, 340], [X0 + s * 52 * ab, 400], [X0 + s * 44 * ab, 470], [X0 + s * 24 * ab, 545]];
-          musStrap(MU.rec.m[s], med, lat, 6, aOut);
+        var W = function (s, arr) { return arr.map(warpers[s]); };
+        var latR = function (s, y) { return X0 + s * latP(s, y, P0); };
+
+        if (vis("tra")) {
+          var apo = "";
+          [-1, 1].forEach(function (s) {
+            var med = col(12, function (u) { var y = lerp(292, 512, u); return [X0 + s * 46, y]; });
+            var lat = col(12, function (u) { var y = lerp(292, 500, u); return [latR(s, y) - s * 4, y]; });
+            musBand(MU.tra.m[s], W(s, med), W(s, lat), 3, 0, aOut);
+            apo += polyOf(W(s, col(4, function (u) { return [X0 + s * 6, lerp(300, 512, u)]; })), W(s, col(4, function (u) { return [X0 + s * 46, lerp(300, 512, u)]; })));
+          });
+          MU.tra.apo.setAttribute("d", apo);
+        }
+        if (vis("obl")) [-1, 1].forEach(function (s) {
+          var ioLat = col(12, function (u) { var y = lerp(300, 482, u); return [latR(s, y) - s * 3, y]; });
+          var ioMed = col(12, function (u) { var y = lerp(262, 462, u); return [X0 + s * lerp(56, 50, u), y]; });
+          musBand(MU.obl.io[s], W(s, ioLat), W(s, ioMed), 3, 0, aOut);          // внутренняя: от бока вверх к середине
+          var eoLat = col(12, function (u) { var y = lerp(236, 470, u); return [latR(s, y) - s * 2, y]; });
+          var eoMed = col(12, function (u) { var y = lerp(300, 540, u); return [X0 + s * lerp(52, 30, u * u), y]; });
+          musBand(MU.obl.eo[s], W(s, eoLat), W(s, eoMed), 3, 0, aOut);          // наружная: от рёбер вниз к середине
         });
-        MU.rec.tend.setAttribute("d", [334, 390, 446].map(function (y) {
-          var w = y < 400 ? 52 : 48;
-          return "M" + f1(X0 - w * ab) + " " + (y + 2) + "Q" + X0 + " " + (y - 3) + " " + f1(X0 + w * ab) + " " + (y + 2);
-        }).join(""));
+        if (vis("rec")) {
+          [-1, 1].forEach(function (s) {
+            var med = [[X0 + s * 8, 272], [X0 + s * 7, 340], [X0 + s * 7, 400], [X0 + s * 7, 470], [X0 + s * 8, 545]];
+            var lat = [[X0 + s * 52, 288], [X0 + s * 54, 340], [X0 + s * 52, 400], [X0 + s * 44, 470], [X0 + s * 24, 545]];
+            musStrap(MU.rec.m[s], W(s, med), W(s, lat), 6, aOut);
+          });
+          MU.rec.tend.setAttribute("d", [334, 390, 446].map(function (y) {
+            var w = y < 400 ? 52 : 48, a = warpers[-1]([X0 - w, y + 2]), m = warpers[1]([X0 + 0.01, y - 3]), b = warpers[1]([X0 + w, y + 2]);
+            return "M" + P(a) + "Q" + P(m) + " " + P(b);
+          }).join(""));
+        }
       }
     }
 
