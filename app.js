@@ -451,6 +451,8 @@ function backTarget() {
 }
 
 function handleBack() {
+  // открыт слой «Газообмен» — «Назад» закрывает только его
+  if (window.BreathAnim && BreathAnim.closeOverlay()) return;
   if (state.screen === "quiz") {
     if (state.quizIndex > 0) { state.quizIndex--; render(); }
     else go("lesson-home");
@@ -3433,6 +3435,8 @@ function planLectureHtml(lecture) {
       html += lecturePanelsHtml(blk);
     } else if (blk.type === "image") {
       html += lectureImageHtml(blk);
+    } else if (blk.type === "breath-anim") {
+      html += '<div class="banim-mount"></div>'; // breath-anim.js монтирует сам
     }
   });
   return html;
@@ -3694,6 +3698,8 @@ function renderLecture() {
       html += lecturePanelsHtml(blk);
     } else if (blk.type === "image") {
       html += lectureImageHtml(blk);
+    } else if (blk.type === "breath-anim") {
+      html += '<div class="banim-mount"></div>'; // breath-anim.js монтирует сам
     }
   });
   html += "</div>";

@@ -1,0 +1,79 @@
+/* Анимации к лекции «Дыхание» (breath-anim.js).
+   Карточка всегда тёмная — как экран анатомического атласа: на тёмном фоне
+   ткани читаются лучше в обеих темах приложения. */
+.banim {
+  margin: 18px -8px 8px; padding: 14px 12px 12px; border-radius: 20px;
+  background: #16181c; color: #e9edf1; box-shadow: var(--raised-sm);
+  -webkit-user-select: none; user-select: none;
+}
+.banim-head { display: flex; align-items: baseline; justify-content: space-between; padding: 0 4px; }
+.banim-phase { font: 700 22px 'Manrope', sans-serif; transition: color .3s; }
+.banim-phase.in { color: #79b8ff; }
+.banim-phase.out { color: #c3a6ff; }
+.banim-sub { font-size: 13px; color: #9aa3ad; }
+.banim-bar { height: 3px; margin: 8px 4px 10px; border-radius: 2px; background: #2a2e34; overflow: hidden; }
+.banim-bar > div { height: 100%; width: 0; background: linear-gradient(90deg, #79b8ff, #c3a6ff); }
+.banim-fig { position: relative; border-radius: 16px; background: #1d2025; overflow: hidden; cursor: pointer; }
+.banim-fig svg { display: block; width: 100%; height: auto; font-family: 'Inter', sans-serif; }
+.banim-pause {
+  position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%);
+  padding: 5px 10px; border-radius: 10px; background: rgba(0,0,0,.6);
+  font-size: 12px; color: #dfe4e9; white-space: nowrap; opacity: 0; transition: opacity .2s; pointer-events: none;
+}
+.banim.paused .banim-pause { opacity: 1; }
+.banim-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.banim-mode {
+  padding: 13px 12px; border-radius: 14px; border: 1px solid #30343b; background: #1d2025;
+  color: #e9edf1; font: 600 15px 'Inter', sans-serif; text-align: left; cursor: pointer;
+  transition: background .2s, border-color .2s;
+}
+.banim-mode.on { background: rgba(108,145,166,.28); border-color: #6C91A6; }
+.banim-cap { margin: 12px 4px 0; font-size: 13.5px; line-height: 1.5; color: #c9d0d7; }
+.banim-cap b { color: #fff; font-weight: 600; }
+.banim-cap-ex { display: block; margin-top: 6px; color: #9aa3ad; font-size: 12.5px; }
+.banim-gx {
+  display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 12px;
+  padding: 12px 14px; border-radius: 14px; border: 1px solid #5a3a30;
+  background: linear-gradient(135deg, rgba(174,95,63,.32), rgba(174,95,63,.12));
+  color: #fff; text-align: left; cursor: pointer; font-family: 'Inter', sans-serif;
+}
+.banim-gx b { display: block; font: 700 15px 'Manrope', sans-serif; }
+.banim-gx small { display: block; margin-top: 2px; font-size: 12px; color: #e3c9bd; }
+.banim-gx-ico { flex: none; width: 40px; height: 40px; border-radius: 12px; background: #1d2025; display: flex; align-items: center; justify-content: center; }
+.banim-gx-go { margin-left: auto; font-size: 24px; color: #e3c9bd; }
+
+/* ---------- полноэкранный слой «Газообмен» ---------- */
+.gx-ov {
+  position: fixed; inset: 0; z-index: 3000; background: #0f1114; color: #e9edf1;
+  overflow-y: auto; -webkit-overflow-scrolling: touch; opacity: 0; transition: opacity .2s;
+  font-family: 'Inter', sans-serif;
+}
+.gx-ov.show { opacity: 1; }
+.gx-sheet {
+  max-width: 430px; margin: 0 auto;
+  padding: calc(var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px) + 14px) 14px calc(28px + env(safe-area-inset-bottom, 0px));
+}
+.gx-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; padding: 6px 2px 10px; background: linear-gradient(#0f1114 70%, rgba(15,17,20,0)); }
+.gx-title { font: 800 21px 'Manrope', sans-serif; }
+.gx-close { width: 36px; height: 36px; border-radius: 50%; border: none; background: #23272d; color: #e9edf1; font-size: 24px; line-height: 1; cursor: pointer; }
+.gx-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.gx-step { padding: 8px 0; border-radius: 10px; background: #1b1e23; text-align: center; font-size: 13px; color: #8f98a2; transition: background .25s, color .25s; }
+.gx-step.on { background: rgba(108,145,166,.3); color: #fff; font-weight: 600; }
+.gx-stepbar { height: 3px; margin: 8px 0 4px; border-radius: 2px; background: #23272d; overflow: hidden; }
+.gx-stepbar > div { height: 100%; width: 0; background: linear-gradient(90deg, #4fd0ff, #b896ff); }
+.gx-sec { margin: 16px 2px 8px; font: 700 15px 'Manrope', sans-serif; color: #fff; }
+.gx-fig { border-radius: 16px; background: #1b1e23; overflow: hidden; }
+.gx-fig svg { display: block; width: 100%; height: auto; font-family: 'Inter', sans-serif; }
+.gx-cap { min-height: 60px; margin: 10px 2px 0; font-size: 13.5px; line-height: 1.5; color: #c9d0d7; }
+.gx-cap b { color: #fff; }
+.gx-grad { margin: 12px 2px 0; }
+.gx-grad-row { display: flex; justify-content: space-between; font-size: 11.5px; color: #9aa3ad; line-height: 1.4; }
+.gx-grad-row b { color: #e9edf1; font-weight: 600; }
+.gx-grad-row .r { text-align: right; }
+.gx-grad-bar { position: relative; height: 10px; margin: 6px 0; border-radius: 5px; background: linear-gradient(90deg, #7a2448 0%, #e8383d 33%, #e8383d 100%); }
+.gx-grad-bar i { position: absolute; left: 33%; top: -3px; bottom: -3px; width: 2px; background: #fff; border-radius: 1px; }
+.gx-grad-note { font-size: 11.5px; color: #8f98a2; line-height: 1.45; }
+.gx-legend { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 14px 2px 0; font-size: 12px; color: #c9d0d7; }
+.gx-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+.gx-notes { margin: 14px 2px 0; padding-top: 12px; border-top: 1px solid #23272d; }
+.gx-notes p { font-size: 12px; line-height: 1.5; color: #8f98a2; margin-bottom: 8px; }
