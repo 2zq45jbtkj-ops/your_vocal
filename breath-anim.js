@@ -277,7 +277,86 @@
     label: "#cdd4db", lead: "#79828c"
   };
 
-  function buildBreath(mount) {
+  /* ===================================================================
+     1б. ДЫХАТЕЛЬНЫЕ МЫШЦЫ — отдельная карточка (блок { "type": "breath-muscles" }).
+     Та же фигура спереди, но подписи костей/органов скрыты, органы приглушены;
+     кнопка мышцы показывает только её, она светлеет, когда работает
+     (мышцы вдоха — на вдохе, мышцы выдоха — на выдохе), а скелет дышит в
+     подходящем режиме. В упрощённой лекции — только главные мышцы.
+     =================================================================== */
+  var MUSCLES = [
+    { key: "dia", g: "in", mode: 2, basic: true, name: "Диафрагма",
+      text: "<b>Диафрагма</b> — главная мышца вдоха. Куполом лежит под лёгкими. Сокращаясь, уплощается и опускается: лёгкие растягиваются вниз, воздух входит, живот мягко выходит вперёд. На выдохе расслабляется и поднимается обратно." },
+    { key: "ext", g: "in", mode: 1, basic: true, name: "Наружные межрёберные",
+      text: "<b>Наружные межрёберные</b> лежат между рёбрами, волокна идут вниз и к середине — как руки в карманах. Сокращаясь, поднимают рёбра и разводят их в стороны: грудная клетка становится шире." },
+    { key: "scal", g: "in", mode: 0, name: "Лестничные",
+      text: "<b>Лестничные мышцы</b> тянутся от шейных позвонков к 1-му и 2-му рёбрам и поднимают их. Это вспомогательные мышцы вдоха: если вдох идёт «шеей», работают в первую очередь они — шея и гортань зажимаются." },
+    { key: "scm", g: "in", mode: 0, name: "Грудино-ключично-сосцевидная",
+      text: "<b>Грудино-ключично-сосцевидная</b> идёт от кости за ухом к грудине и ключице. При глубоком или ключичном вдохе тянет грудину и ключицы вверх. Вспомогательная — в спокойном певческом вдохе ей лучше отдыхать." },
+    { key: "allIn", g: "in", mode: 3, all: ["dia", "ext", "scal", "scm"], name: "Все мышцы вдоха",
+      text: "<b>Вдох вместе:</b> диафрагма опускается, наружные межрёберные поднимают рёбра; при очень глубоком или ключичном вдохе подключаются лестничные и грудино-ключично-сосцевидные." },
+    { key: "int", g: "out", mode: 1, name: "Внутренние межрёберные",
+      text: "<b>Внутренние межрёберные</b> лежат глубже наружных, их волокна идут поперёк. На активном выдохе опускают и сближают рёбра — помогают выпускать воздух дозированно." },
+    { key: "tra", g: "out", mode: 2, basic: true, name: "Поперечная мышца живота",
+      text: "<b>Поперечная мышца живота</b> — самая глубокая, её волокна идут поперёк, как широкий пояс. Сжимает живот и мягко подаёт органы вверх, к диафрагме, — главная мышца опоры на выдохе." },
+    { key: "obl", g: "out", mode: 2, name: "Косые мышцы живота",
+      text: "<b>Наружная и внутренняя косые</b> лежат по бокам живота, их волокна перекрещиваются. Опускают нижние рёбра и сужают талию — помогают ровно вести выдох." },
+    { key: "rec", g: "out", mode: 2, name: "Прямая мышца живота",
+      text: "<b>Прямая мышца живота</b> идёт от лобка к рёбрам и грудине, разделена сухожильными перемычками — те самые «кубики». Тянет грудную клетку вниз и сгибает корпус; в опоре главная роль — у поперечной и косых." },
+    { key: "allOut", g: "out", mode: 3, all: ["int", "tra", "obl", "rec"], name: "Все мышцы выдоха",
+      text: "<b>Выдох вместе:</b> поперечная, косые и прямая сжимают живот и подают органы к диафрагме, внутренние межрёберные опускают рёбра — выдох становится управляемым." }
+  ];
+  function musAct(g, t) {                       // 0…1: насколько мышца сейчас работает
+    t = ((t % T_CYC) + T_CYC) % T_CYC;
+    var inEnd = T_IN + T_HOLD, outEnd = inEnd + T_OUT, r = 0.3;
+    if (g === "in") return clamp(t / r, 0, 1) * clamp((inEnd + r - t) / r, 0, 1);
+    return clamp((t - inEnd) / r, 0, 1) * clamp((outEnd + r - t) / r, 0, 1);
+  }
+  function mkMus(parent, op) {
+    return {
+      base: E("path", { fill: C.musc, stroke: C.muscO, "stroke-width": 1, "stroke-linejoin": "round", "fill-opacity": op || 1 }, parent),
+      hi: E("path", { fill: "#e07a68", "fill-opacity": 0, stroke: "none" }, parent),
+      fibD: E("path", { fill: "none", stroke: C.muscO, "stroke-opacity": .55, "stroke-width": .7, "stroke-linecap": "round" }, parent),
+      fibL: E("path", { fill: "none", stroke: "#e88b7a", "stroke-opacity": .55, "stroke-width": .6, "stroke-linecap": "round" }, parent)
+    };
+  }
+  function edgeAt(arr, t) {
+    if (t < 0 || t > arr.length - 1) return null;
+    var k = Math.min(Math.floor(t), arr.length - 2), f = t - k;
+    return [lerp(arr[k][0], arr[k + 1][0], f), lerp(arr[k][1], arr[k + 1][1], f)];
+  }
+  function polyOf(a, b) { return "M" + a.map(P).join("L") + "L" + b.slice().reverse().map(P).join("L") + "Z"; }
+  function musLook(o, act) {
+    o.hi.setAttribute("fill-opacity", (act * 0.38).toFixed(2));
+    o.fibL.setAttribute("stroke-opacity", (0.4 + act * 0.45).toFixed(2));
+  }
+  // волокна поперёк ленты: от края up к краю dn со сдвигом dir (в долях отрезков)
+  function musBand(o, up, dn, step, dir, act) {
+    var poly = polyOf(up, dn); o.base.setAttribute("d", poly); o.hi.setAttribute("d", poly);
+    var n = up.length - 1, dD = "", dL = "";
+    for (var k = -step * 3; k <= step * (n + 3); k++) {
+      var a = k / step, b = a + dir * 0.9;
+      var A = edgeAt(up, clamp(a, 0, n)), B = edgeAt(dn, clamp(b, 0, n));
+      if ((a < 0 && b < 0) || (a > n && b > n) || !A || !B) continue;
+      if ((a < 0 || a > n) || (b < 0 || b > n)) continue;
+      var seg = "M" + P([lerp(A[0], B[0], .04), lerp(A[1], B[1], .04)]) + "L" + P([lerp(A[0], B[0], .96), lerp(A[1], B[1], .96)]);
+      if (k % 2) dL += seg; else dD += seg;
+    }
+    o.fibD.setAttribute("d", dD); o.fibL.setAttribute("d", dL); musLook(o, act);
+  }
+  // волокна вдоль ленты (лестничные, ГКС, прямая)
+  function musStrap(o, l, r, nF, act) {
+    var poly = polyOf(l, r); o.base.setAttribute("d", poly); o.hi.setAttribute("d", poly);
+    var dD = "", dL = "";
+    for (var f = 1; f < nF; f++) {
+      var w = f / nF, pts = l.map(function (q, k) { return [lerp(q[0], r[k][0], w), lerp(q[1], r[k][1], w)]; });
+      var seg = "M" + pts.map(P).join("L");
+      if (f % 2) dL += seg; else dD += seg;
+    }
+    o.fibD.setAttribute("d", dD); o.fibL.setAttribute("d", dL); musLook(o, act);
+  }
+
+  function buildBreath(mount, MUS) {
     mount.innerHTML = "";
     mount.classList.add("banim");
     var head = H("div", "banim-head", mount);
@@ -301,7 +380,7 @@
     // порядок слоёв: бронхи лежат позади сердца, сердце — в переднем средостении
     var gTorso = E("g", null, svg), gAbd = E("g", null, svg),
         gRibBack = E("g", null, svg), gLung = E("g", null, svg), gBr = E("g", null, svg), gHeart = E("g", null, svg), gDia = E("g", null, svg),
-        gIc = E("g", null, svg), gRib = E("g", null, svg), gStern = E("g", null, svg), gTop = E("g", null, svg),
+        gAbdM = E("g", null, svg), gIc = E("g", null, svg), gRib = E("g", null, svg), gStern = E("g", null, svg), gTop = E("g", null, svg), gNeckM = E("g", null, svg),
         gArr = E("g", null, svg), gLab = E("g", null, svg);
 
     // туловище
@@ -462,10 +541,70 @@
       '<span class="banim-gx-ico">' + GX_ICON + '</span><span><b>Газообмен в альвеолах</b><small>Как O₂ попадает в кровь, а CO₂ выходит</small></span><span class="banim-gx-go">›</span>');
     gxBtn.type = "button";
     gxBtn.addEventListener("click", function () { openGasExchange(); });
-    if (mount.getAttribute("data-gx") === "0") gxBtn.remove();   // упрощённая лекция
+    if (mount.getAttribute("data-gx") === "0" || MUS) gxBtn.remove();   // упрощённая лекция / карточка мышц
 
-    var st = { mode: 2, t0: performance.now(), paused: false, pauseAt: 0, visible: true, raf: 0, last: 0, airOff: 0, lastT: 0 };
-    var btns = MODES.map(function (m, i) {
+    var st = { mode: 2, t0: performance.now(), paused: false, pauseAt: 0, visible: true, raf: 0, last: 0, airOff: 0, lastT: 0, mus: null };
+    var MU = null;                                    // слои мышц (только в карточке мышц)
+    if (MUS) MU = buildMuscleLayers();
+    function buildMuscleLayers() {
+      [gLung, gHeart, gAbd, gBr].forEach(function (g) { g.setAttribute("opacity", ".55"); });
+      labEls.forEach(function (le) { [le.tx, le.ln, le.dot].forEach(function (e) { e.style.display = "none"; }); });
+      gIc.style.display = "none";                     // «окно» межрёберных из карточки дыхания
+      var L = {};
+      function grp(parent) { var g = E("g", { display: "none" }, parent); return g; }
+      // межрёберные: все промежутки, обе стороны; костная часть + хрящевая
+      ["ext", "int"].forEach(function (key) {
+        var g = grp(gRib.parentNode.insertBefore(E("g", null), gRib)), sp = { left: [], right: [] };
+        ["left", "right"].forEach(function (side) {
+          for (var i = 1; i <= 11; i++) sp[side][i] = { b: mkMus(g), c: i <= 6 ? mkMus(g) : null };
+        });
+        L[key] = { g: g, sp: sp };
+      });
+      L.scal = { g: grp(gIc.parentNode.insertBefore(E("g", null), gRib)) };
+      L.scal.m = { "-1": [mkMus(L.scal.g), mkMus(L.scal.g), mkMus(L.scal.g)], "1": [mkMus(L.scal.g), mkMus(L.scal.g), mkMus(L.scal.g)] };
+      L.scm = { g: grp(gNeckM) };
+      L.scm.m = { "-1": [mkMus(L.scm.g), mkMus(L.scm.g)], "1": [mkMus(L.scm.g), mkMus(L.scm.g)] };
+      L.tra = { g: grp(gAbdM) };
+      L.tra.m = { "-1": mkMus(L.tra.g), "1": mkMus(L.tra.g) };
+      L.tra.apo = E("path", { fill: "none", stroke: C.tendon, "stroke-opacity": .3, "stroke-width": .7, "stroke-dasharray": "3 3" }, L.tra.g);
+      L.obl = { g: grp(gAbdM) };
+      L.obl.io = { "-1": mkMus(L.obl.g), "1": mkMus(L.obl.g) };
+      L.obl.eo = { "-1": mkMus(L.obl.g, .62), "1": mkMus(L.obl.g, .62) };
+      L.rec = { g: grp(gAbdM) };
+      L.rec.m = { "-1": mkMus(L.rec.g), "1": mkMus(L.rec.g) };
+      L.rec.tend = E("path", { fill: "none", stroke: C.tendon, "stroke-width": 2.2, "stroke-opacity": .8, "stroke-linecap": "round" }, L.rec.g);
+      L.dia = { g: grp(gDia) };
+      L.dia.hl = E("path", { fill: "none", stroke: "#ff9c84", "stroke-width": 8, "stroke-linecap": "round", "stroke-opacity": .3 }, L.dia.g);
+      return L;
+    }
+    if (MUS) {
+      subEl.textContent = "дыхательные мышцы";
+      var basicOnly = MUS.level === "basic";
+      var list = MUSCLES.filter(function (m) { return basicOnly ? m.basic : true; });
+      var mbtns = [];
+      modesEl.className = "bmus-groups";
+      [["in", "Вдох"], ["out", "Выдох"]].forEach(function (gr) {
+        H("div", "bmus-ghead " + gr[0], modesEl, gr[1]);
+        var grid = H("div", "banim-modes bmus-grid", modesEl);
+        list.filter(function (m) { return m.g === gr[0]; }).forEach(function (m) {
+          var b = H("button", "banim-mode bmus-btn" + (m.all ? " all" : ""), grid, m.name);
+          b.type = "button";
+          b.addEventListener("click", function () { pickMuscle(m); });
+          mbtns.push([b, m]);
+        });
+      });
+      var pickMuscle = function (m) {
+        st.mus = m; st.mode = m.mode; st.t0 = performance.now(); st.paused = false; st.airOff = 0;
+        mount.classList.remove("paused");
+        mbtns.forEach(function (x) { x[1].on = x[1] === m; x[0].classList.toggle("on", x[1] === m); });
+        var show = m.all ? m.all.filter(function (k) { return list.some(function (q) { return q.key === k; }); }) : [m.key];
+        Object.keys(MU).forEach(function (k) { MU[k].g.setAttribute("display", show.indexOf(k) >= 0 ? "inline" : "none"); });
+        cap.innerHTML = m.text;
+        kick();
+      };
+      setTimeout(function () { pickMuscle(list[0]); }, 0);
+    }
+    var btns = (MUS ? [] : MODES).map(function (m, i) {
       var b = H("button", "banim-mode", modesEl, m.name);
       b.type = "button";
       b.addEventListener("click", function () {
@@ -476,6 +615,7 @@
       return b;
     });
     function syncModes() {
+      if (MUS) return;
       btns.forEach(function (b, i) { b.classList.toggle("on", i === st.mode); });
       cap.innerHTML = MODES[st.mode].text +
         '<span class="banim-cap-ex">Выдох: диафрагма расслабляется и поднимается куполом, рёбра опускаются, воздух выходит.</span>';
@@ -615,7 +755,8 @@
 
       // межрёберные мышцы — светлеют, когда сокращаются (вдох с участием рёбер)
       var icAct = clamp(p.r * (p.inhale ? 1 : 0.5), 0, 1);
-      (function () {
+      if (MU) drawMuscles(p, G, D, sdy, t);
+      if (!MU) (function () {
         var s = IC_SIDE === "left" ? -1 : 1, g = G[IC_SIDE];
         function band(o, pre, up, dn, step, dir) {
           var poly = "M" + up.map(P).join("L") + "L" + dn.slice().reverse().map(P).join("L") + "Z";
@@ -716,9 +857,91 @@
       var txt = p.inhale ? "Вдох" : "Выдох";
       phaseEl.textContent = txt;
       phaseEl.className = "banim-phase " + (p.inhale ? "in" : "out");
-      if (mode.w && p.u >= 0) subEl.textContent = p.u < 0.5 ? "① диафрагма" : "② рёбра";
+      if (MUS) subEl.textContent = st.mus ? st.mus.name.toLowerCase() : "дыхательные мышцы";
+      else if (mode.w && p.u >= 0) subEl.textContent = p.u < 0.5 ? "① диафрагма" : "② рёбра";
       else subEl.textContent = "вид спереди";
       barFill.style.width = (p.t / T_CYC * 100).toFixed(1) + "%";
+    }
+
+    function drawMuscles(p, G, D, sdy, t) {
+      var m = st.mus; if (!m) return;
+      var aIn = musAct("in", t), aOut = musAct("out", t);
+      var vis = function (k) { return MU[k].g.getAttribute("display") !== "none"; };
+      var ab = 1 + p.d * 0.05;
+      var latX = function (s, y) {
+        var T = [[206, 133], [300, 131 + p.r * 4], [398, 123 + p.d * 3], [470, 127 + p.d * 6], [564, 131 + p.d * 3]];
+        for (var k = 0; k < T.length - 1; k++) if (y <= T[k + 1][0]) return X0 + s * lerp(T[k][1], T[k + 1][1], (y - T[k][0]) / (T[k + 1][0] - T[k][0]));
+        return X0 + s * T[T.length - 1][1];
+      };
+      var col = function (n, f) { var a = []; for (var k = 0; k <= n; k++) a.push(f(k / n)); return a; };
+      if (vis("dia")) {
+        MU.dia.hl.setAttribute("d", "M" + D.poly.map(P).join("L"));
+        MU.dia.hl.setAttribute("stroke-opacity", (0.25 + aIn * 0.7).toFixed(2));
+      }
+      ["ext", "int"].forEach(function (key) {
+        if (!vis(key)) return;
+        var act = key === "ext" ? aIn : aOut;
+        ["left", "right"].forEach(function (side) {
+          var s = side === "left" ? -1 : 1, g = G[side];
+          for (var i = 1; i <= 11; i++) {
+            var o = MU[key].sp[side][i], A = g[i], B = g[i + 1], N = 10;
+            var up = col(N, function (u) { return ribPt(A.J, A.L, lerp(0.02, i <= 2 ? 0.8 : 0.93, u)); });
+            var dn = col(N, function (u) { return ribPt(B.J, B.L, lerp(0.02, i <= 2 ? 0.8 : 0.93, u)); });
+            // наружные — вниз и к середине; внутренние — вниз и в стороны
+            musBand(o.b, up, dn, 3, key === "ext" ? -1.6 : 1.6, act);
+            if (o.c) {
+              var ca = cartilage(i, s, p, g), cb = cartilage(i + 1, s, p, g);
+              var cu = col(8, function (w) { return cartPt(ca[0], ca[1], w * 0.97); });
+              var cd = col(8, function (w) { return cartPt(cb[0], cb[1], w * 0.97); });
+              musBand(o.c, cu, cd, 3, key === "ext" ? 1.4 : -1.4, act);
+            }
+          }
+        });
+      });
+      if (vis("scal")) [-1, 1].forEach(function (s) {
+        var g = G[s < 0 ? "left" : "right"], r1 = function (u) { return ribPt(g[1].J, g[1].L, u); }, r2 = function (u) { return ribPt(g[2].J, g[2].L, u); };
+        var X = function (x, y) { return [X0 + s * x, y]; };
+        var S3 = [
+          [[X(15, 50), X(17, 78), X(24, 100), r1(0.45)], [X(19, 48), X(22, 78), X(31, 100), r1(0.62)]],   // передняя
+          [[X(20, 46), X(23, 76), X(33, 100), r1(0.72)], [X(24, 44), X(27, 76), X(42, 102), r1(0.9)]],    // средняя
+          [[X(24, 58), X(27.5, 84), X(46, 108), r2(0.82)], [X(27, 56), X(29, 84), X(56, 108), r2(0.97)]]  // задняя
+        ];
+        S3.forEach(function (q, k) { musStrap(MU.scal.m[s][k], q[0], q[1], 4, aIn); });
+      });
+      if (vis("scm")) [-1, 1].forEach(function (s) {
+        var X = function (x, y) { return [X0 + s * x, y]; }, cy = 131 - p.c * 4;
+        musStrap(MU.scm.m[s][0], [X(30, -2), X(22, 46), X(11, 98), X(4, 131 - sdy)], [X(42, -2), X(31, 46), X(19, 98), X(12, 131 - sdy)], 5, aIn);   // грудинная головка
+        musStrap(MU.scm.m[s][1], [X(30, 40), X(26, 70), X(22, 102), X(20, cy)], [X(34, 38), X(32, 70), X(32, 102), X(37, cy - 1)], 5, aIn);       // ключичная головка
+      });
+      if (vis("tra")) {
+        var apo = "";
+        [-1, 1].forEach(function (s) {
+          var med = col(12, function (u) { var y = lerp(292, 512, u); return [X0 + s * 46 * ab, y]; });
+          var lat = col(12, function (u) { var y = lerp(292, 500, u); return [latX(s, y) - s * 4, y]; });
+          musBand(MU.tra.m[s], med, lat, 3, 0, aOut);
+          apo += polyOf(col(4, function (u) { return [X0 + s * 6, lerp(300, 512, u)]; }), col(4, function (u) { return [X0 + s * 46 * ab, lerp(300, 512, u)]; }));
+        });
+        MU.tra.apo.setAttribute("d", apo);
+      }
+      if (vis("obl")) [-1, 1].forEach(function (s) {
+        var ioLat = col(12, function (u) { var y = lerp(300, 482, u); return [latX(s, y) - s * 3, y]; });
+        var ioMed = col(12, function (u) { var y = lerp(262, 462, u); return [X0 + s * lerp(56, 50, u) * ab, y]; });
+        musBand(MU.obl.io[s], ioLat, ioMed, 3, 0, aOut);          // внутренняя: от бока вверх к середине
+        var eoLat = col(12, function (u) { var y = lerp(236, 470, u); return [latX(s, y) - s * 2, y]; });
+        var eoMed = col(12, function (u) { var y = lerp(300, 540, u); return [X0 + s * lerp(52, 30, u * u) * ab, y]; });
+        musBand(MU.obl.eo[s], eoLat, eoMed, 3, 0, aOut);          // наружная: от рёбер вниз к середине
+      });
+      if (vis("rec")) {
+        [-1, 1].forEach(function (s) {
+          var med = [[X0 + s * 8 * ab, 272 - sdy], [X0 + s * 7 * ab, 340], [X0 + s * 7 * ab, 400], [X0 + s * 7 * ab, 470], [X0 + s * 8 * ab, 545]];
+          var lat = [[X0 + s * 52 * ab, 288 - sdy], [X0 + s * 54 * ab, 340], [X0 + s * 52 * ab, 400], [X0 + s * 44 * ab, 470], [X0 + s * 24 * ab, 545]];
+          musStrap(MU.rec.m[s], med, lat, 6, aOut);
+        });
+        MU.rec.tend.setAttribute("d", [334, 390, 446].map(function (y) {
+          var w = y < 400 ? 52 : 48;
+          return "M" + f1(X0 - w * ab) + " " + (y + 2) + "Q" + X0 + " " + (y - 3) + " " + f1(X0 + w * ab) + " " + (y + 2);
+        }).join(""));
+      }
     }
 
     function loop(now) {
@@ -1175,6 +1398,8 @@
   function scan(root) {
     var list = (root || document).querySelectorAll(".banim-mount:not([data-banim])");
     Array.prototype.forEach.call(list, function (m) { m.setAttribute("data-banim", "1"); buildBreath(m); });
+    var ml = (root || document).querySelectorAll(".bmus-mount:not([data-banim])");
+    Array.prototype.forEach.call(ml, function (m) { m.setAttribute("data-banim", "1"); buildBreath(m, { level: m.getAttribute("data-level") || "deep" }); });
   }
   function start() {
     scan(document);

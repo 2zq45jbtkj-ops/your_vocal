@@ -28,6 +28,14 @@
   transition: background .2s, border-color .2s;
 }
 .banim-mode.on { background: rgba(108,145,166,.28); border-color: #6C91A6; }
+/* карточка «Дыхательные мышцы» */
+.bmus-groups { margin-top: 12px; }
+.bmus-ghead { margin: 10px 4px 6px; font: 700 13px 'Inter', sans-serif; letter-spacing: .04em; text-transform: uppercase; }
+.bmus-ghead.in { color: #79b8ff; }
+.bmus-ghead.out { color: #c3a6ff; }
+.bmus-groups .bmus-grid { margin-top: 0; }
+.bmus-btn { font-size: 14px; line-height: 1.25; padding: 11px 12px; }
+.bmus-btn.all { grid-column: 1 / -1; text-align: center; border-style: dashed; }
 .banim-cap { margin: 12px 4px 0; font-size: 16.3px; line-height: 1.5; color: #c9d0d7; }
 .banim-cap b { color: #fff; font-weight: 600; }
 .banim-cap-ex { display: block; margin-top: 6px; color: #9aa3ad; font-size: 15.3px; }

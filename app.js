@@ -3444,6 +3444,8 @@ function planLectureHtml(lecture) {
       html += lectureImageHtml(blk);
     } else if (blk.type === "breath-anim") {
       html += '<div class="banim-mount"></div>'; // breath-anim.js монтирует сам
+    } else if (blk.type === "breath-muscles") {
+      html += '<div class="bmus-mount" data-level="deep"></div>';
     }
   });
   return html;
@@ -3723,6 +3725,9 @@ function renderLecture() {
           return "<li><b>" + (i + 1) + ". " + esc(it.name) + "</b>" + (it.note ? " — " + esc(it.note) : "") + "</li>";
         }).join("") + "</ul>";
       }
+    } else if (blk.type === "breath-muscles") {
+      // карточка «Дыхательные мышцы»: в упрощённой — только главные мышцы
+      html += '<div class="bmus-mount" data-level="' + (!hasLevels || lvl === "deep" ? "deep" : "basic") + '"></div>';
     }
   });
   html += "</div>";
