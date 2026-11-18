@@ -1318,3 +1318,5 @@ html.dark .cab-zone.on, body.dark .cab-zone.on { background: color-mix(in srgb, 
 .llevel-opt b { display: block; font: 700 16px 'Manrope', sans-serif; color: var(--ink); }
 .llevel-opt span { display: block; margin-top: 3px; font-size: 13px; color: var(--gray); line-height: 1.4; }
 .llevel-opt.deep b { color: var(--terra); }
+.banim-legend { margin: 12px 0 6px; }
+.banim-legend li { padding: 2px 0; }

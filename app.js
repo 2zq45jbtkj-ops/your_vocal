@@ -3713,6 +3713,11 @@ function renderLecture() {
     } else if (blk.type === "breath-anim") {
       // breath-anim.js монтирует сам; газообмен — только в подробной лекции
       html += '<div class="banim-mount" data-gx="' + (!hasLevels || lvl === "deep" ? "1" : "0") + '"></div>';
+      if (blk.legend && blk.legend.length) {
+        html += '<ul class="lpanels-legend banim-legend">' + blk.legend.map(function (it, i) {
+          return "<li><b>" + (i + 1) + ". " + esc(it.name) + "</b>" + (it.note ? " — " + esc(it.note) : "") + "</li>";
+        }).join("") + "</ul>";
+      }
     }
   });
   html += "</div>";
