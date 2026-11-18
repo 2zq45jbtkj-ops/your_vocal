@@ -410,7 +410,14 @@ function ptCtx() {
   if (!PT.ctx) {
     var AC = window.AudioContext || window.webkitAudioContext;
     try { PT.ctx = new AC({ latencyHint: "interactive" }); } catch (e) { PT.ctx = new AC(); }
-    PT.piano = new window.Raspevki.PianoVoice(PT.ctx);
+    // Пианино идёт через отвод: так мы знаем, насколько громко оно звучит прямо сейчас,
+    // и можем отличить его отголосок в микрофоне от голоса.
+    PT.pOut = PT.ctx.createGain();
+    PT.pOut.connect(PT.ctx.destination);
+    PT.pAn = PT.ctx.createAnalyser(); PT.pAn.fftSize = 2048;
+    PT.pBuf = new Float32Array(2048);
+    PT.pOut.connect(PT.pAn);
+    PT.piano = new window.Raspevki.PianoVoice(PT.ctx, PT.pOut);
   }
   try { if (navigator.audioSession) navigator.audioSession.type = "play-and-record"; } catch (e) {}
   if (PT.ctx.state !== "running") PT.ctx.resume();
@@ -471,7 +478,7 @@ function ptDetect(buf, sr) {
   }
   var best = -1;
   for (tau = minLag; tau <= maxLag; tau++) {
-    if (d[tau] < 0.15) {
+    if (d[tau] < 0.13) {
       while (tau + 1 <= maxLag && d[tau + 1] < d[tau]) tau++;
       best = tau; break;
     }
@@ -526,6 +533,8 @@ function ptStartFrom(run, beat) {
   while (run.idx < run.tl.events.length && run.tl.events[run.idx].t < beat - 1e-6) run.idx++;
   run.nPtr = 0;
   run.med = [];
+  run.pHist = []; run.vRun = 0;
+  if (!run.bleedS) { run.bleedS = []; run.bleed = ptBleedLoad(); } // начинаем с прошлого замера на этом телефоне
   run.playing = true;
   run.btn.innerHTML = PT_ICO.pause;
   ptSchedule(run);
@@ -566,14 +575,72 @@ function ptHalt(run) {
   if (run.btn) run.btn.innerHTML = PT_ICO.play;
 }
 
+/* ---------- голос или пианино? ----------
+   Без наушников пианино из динамика попадает в микрофон — и ровно на тех же нотах,
+   что поёт ученик. Поэтому смотрим на громкость: сколько пианино сейчас звучит
+   (знаем точно, это наш же звук) и какая доля его доходит до микрофона.
+   Эту долю меряем в паузах между тональностями, где петь не нужно, и запоминаем
+   на телефоне. Голосом считаем только звук заметно громче этого отголоска. */
+var PT_GATE_K = 2.2;       // во сколько раз голос должен быть громче отголоска пианино (~7 дБ)
+var PT_MIC_FLOOR = 0.01;   // совсем тихо — не голос
+
+function ptRms(buf) { var s = 0; for (var i = 0; i < buf.length; i++) s += buf[i] * buf[i]; return Math.sqrt(s / buf.length); }
+function ptBleedKey() { return "pt-bleed-" + (PT.mic && PT.mic.hp ? "hp" : "spk"); }
+function ptBleedLoad() {
+  var v = parseFloat(ptGet(ptBleedKey(), ""));
+  return isFinite(v) && v > 0 ? v : 0;
+}
+// Громкость пианино «на слух микрофона»: максимум за последние ~0.4 с —
+// звук доходит до микрофона с задержкой и тянется хвостом реверба.
+function ptPianoEnv(run, now) {
+  if (!PT.pAn) return 0;
+  PT.pAn.getFloatTimeDomainData(PT.pBuf);
+  var h = run.pHist || (run.pHist = []);
+  h.push({ t: now, r: ptRms(PT.pBuf) });
+  while (h.length && h[0].t < now - 0.4) h.shift();
+  var mx = 0; for (var i = 0; i < h.length; i++) if (h[i].r > mx) mx = h[i].r;
+  return mx;
+}
+// В паузе между тональностями (своих нот нет рядом) учимся, сколько пианино слышно в микрофоне.
+function ptLearnBleed(run, sungBeat, micR, pEnv) {
+  if (pEnv < 0.02) return;
+  for (var i = Math.max(0, run.nPtr - 1); i < run.notes.length; i++) {
+    var n = run.notes[i];
+    if (n.t > sungBeat + 1) break;
+    if (sungBeat > n.t - 0.5 && sungBeat < n.t + n.d + 0.6) return; // рядом нота — тут может звучать голос
+  }
+  var arr = run.bleedS || (run.bleedS = []);
+  arr.push(micR / pEnv);
+  if (arr.length > 400) arr.shift();
+  if (arr.length >= 10) {
+    var s = arr.slice().sort(function (a, b) { return a - b; });
+    var est = s[Math.floor(s.length * 0.4)]; // устойчиво к случайному «подпеванию» в паузе
+    run.bleed = est;
+    if (arr.length % 20 === 0) ptSet(ptBleedKey(), String(est));
+  }
+}
+function ptIsVoice(run, micR, pEnv) {
+  if (micR < PT_MIC_FLOOR) return false;
+  var r = run.bleed || 0;
+  if (!r && pEnv > 0.02 && !(PT.mic && PT.mic.hp)) r = 0.6; // ещё не измерили — осторожно
+  return micR > PT_GATE_K * r * pEnv;
+}
+
 function ptTick(run) {
   var ctx = PT.ctx, now = ctx.currentTime;
   run.heard = (now - run.outLat - run.t0) / run.spb;
+  // момент, когда звук попал в микрофон, в долях «услышанного» времени
+  var sungBeat = (now - (PT.mic ? 1024 / ctx.sampleRate + 0.02 : 0) - run.outLat - run.t0) / run.spb;
   // голос
   var mic = PT.mic, p = 0;
   if (mic) {
     mic.an.getFloatTimeDomainData(mic.buf);
-    var f = ptDetect(mic.buf, ctx.sampleRate);
+    var micR = ptRms(mic.buf), pEnv = ptPianoEnv(run, now);
+    ptLearnBleed(run, sungBeat, micR, pEnv);
+    var f = ptIsVoice(run, micR, pEnv) ? ptDetect(mic.buf, ctx.sampleRate) : 0;
+    // голос держится — пианинный «укол» на атаке ноты в 1–2 кадра не считаем
+    run.vRun = f > 0 ? (run.vRun || 0) + 1 : 0;
+    if (run.vRun < 3) f = 0;
     if (f > 0) {
       var m = 69 + 12 * Math.log(f / 440) / Math.LN2;
       run.med.push(m); if (run.med.length > 3) run.med.shift();
@@ -581,8 +648,6 @@ function ptTick(run) {
       p = s[s.length >> 1];
     } else run.med = [];
   }
-  // момент, когда звук попал в микрофон, в долях «услышанного» времени
-  var sungBeat = (now - (mic ? 1024 / ctx.sampleRate + 0.02 : 0) - run.outLat - run.t0) / run.spb;
   var ref = run.cur || ptNearNote(run, sungBeat);
   if (p) {
     run.voicedTotal++;
