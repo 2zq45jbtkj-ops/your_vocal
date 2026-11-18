@@ -90,7 +90,7 @@ var state = {
   // то же самое, но для плеера в упражнении с песней — свой набор настроек.
   songTempoMap: {}, songPitchMap: {}, songLoopMap: {}, songAutoplayNext: false,
   favorites: {}, // "lessonId-w-n" / "lessonId-s-ti" -> { lessonTitle, label }
-  darkMode: false, notifOn: true, // раздел «Ещё»; darkMode хранится отдельным ключом (см. loadDarkMode)
+  darkMode: true, notifOn: true, // раздел «Ещё»; darkMode хранится отдельным ключом (см. loadDarkMode)
   // transient (не сохраняется):
   playerIdx: null, playerElapsed: 0, durations: {}, openSettings: {},
   songPlayerKey: null, songPlayerElapsed: 0, songDurations: {}, songOpenSettings: {},
@@ -147,7 +147,9 @@ function saveState() {
    Сама тема — класс .dark на <html>, все цвета/тени переопределены через
    CSS-переменные в styles.css (см. блок html.dark в начале файла). */
 function loadDarkMode() {
-  try { state.darkMode = localStorage.getItem("vocalAppDarkMode") === "1"; } catch (e) {}
+  // По умолчанию — тёмная тема; светлая только если ученик сам её включил («0»).
+  state.darkMode = true;
+  try { state.darkMode = localStorage.getItem("vocalAppDarkMode") !== "0"; } catch (e) {}
 }
 function applyDarkMode() {
   document.documentElement.classList.toggle("dark", !!state.darkMode);
@@ -5436,8 +5438,10 @@ if (tg) {
     }
   } catch (e) {}
   try {
-    tg.setHeaderColor("#F1EEE8");
-    tg.setBackgroundColor("#F1EEE8");
+    var bootLight = false;
+    try { bootLight = localStorage.getItem("vocalAppDarkMode") === "0"; } catch (e) {}
+    tg.setHeaderColor(bootLight ? "#F1EEE8" : "#232A2E");
+    tg.setBackgroundColor(bootLight ? "#F1EEE8" : "#232A2E");
   } catch (e) {}
   tg.BackButton.onClick(handleBack);
 }
