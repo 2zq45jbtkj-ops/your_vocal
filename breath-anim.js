@@ -1108,6 +1108,32 @@
     requestAnimationFrame(function () { ov.classList.add("show"); });
     gxOpen = { ov: ov, stop: function () { if (raf) cancelAnimationFrame(raf); } };
   }
+  /* «Дыхательные мышцы» — спрятаны за кнопкой, как газообмен:
+     кнопка в лекции → полноэкранный слой с карточкой мышц. */
+  var MUS_ICON = '<svg viewBox="0 0 32 32" width="28" height="28"><path d="M7 25 C5 16 9 8 16 6 C23 8 27 16 25 25 Z" fill="#b2473c" stroke="#6e2a24" stroke-width="1.2"/>' +
+    '<path d="M11 23 L14 9 M15 24 L16 7 M19 24 L18 9 M22 22 L20 11" stroke="#e88b7a" stroke-width="1.1" stroke-linecap="round" fill="none"/></svg>';
+  function muscleButton(m) {
+    var level = m.getAttribute("data-level") || "deep";
+    var b = H("button", "banim-gx bmus-open", m,
+      '<span class="banim-gx-ico">' + MUS_ICON + '</span><span><b>Дыхательные мышцы</b><small>Какие мышцы делают вдох и выдох</small></span><span class="banim-gx-go">›</span>');
+    b.type = "button";
+    b.addEventListener("click", function () { openMuscles(level); });
+  }
+  function openMuscles(level) {
+    if (gxOpen) return;
+    var ov = H("div", "gx-ov", document.body);
+    var sheet = H("div", "gx-sheet", ov);
+    var head = H("div", "gx-head", sheet);
+    H("div", "gx-title", head, "Дыхательные мышцы");
+    var close = H("button", "gx-close", head, "×"); close.type = "button";
+    close.setAttribute("aria-label", "Закрыть");
+    close.addEventListener("click", closeGasExchange);
+    var mount = H("div", "bmus-card", sheet);
+    buildBreath(mount, { level: level });
+    requestAnimationFrame(function () { ov.classList.add("show"); });
+    gxOpen = { ov: ov, stop: function () {} };      // цикл сам остановится, когда слой уберут из DOM
+  }
+
   function closeGasExchange() {
     if (!gxOpen) return false;
     var g = gxOpen; gxOpen = null;
@@ -1399,7 +1425,7 @@
     var list = (root || document).querySelectorAll(".banim-mount:not([data-banim])");
     Array.prototype.forEach.call(list, function (m) { m.setAttribute("data-banim", "1"); buildBreath(m); });
     var ml = (root || document).querySelectorAll(".bmus-mount:not([data-banim])");
-    Array.prototype.forEach.call(ml, function (m) { m.setAttribute("data-banim", "1"); buildBreath(m, { level: m.getAttribute("data-level") || "deep" }); });
+    Array.prototype.forEach.call(ml, function (m) { m.setAttribute("data-banim", "1"); muscleButton(m); });
   }
   function start() {
     scan(document);
@@ -1408,5 +1434,5 @@
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
 
-  window.BreathAnim = { closeOverlay: closeGasExchange, openGasExchange: openGasExchange, mount: scan };
+  window.BreathAnim = { closeOverlay: closeGasExchange, openGasExchange: openGasExchange, openMuscles: openMuscles, mount: scan };
 })();
