@@ -251,7 +251,7 @@
     { t: "Бронхи", side: 1, y: 166, a: function (S) { return S.bronL; } },
     { t: "Сердце", side: 1, y: 228, a: function (S) { return [X0 + 26, 213 + S.hDy * 0.5]; } },
     { t: "Левое лёгкое", side: 1, y: 266, a: function (S) { return [X0 + 96 + S.p.r * 7, 196]; } },
-    { t: "Межрёберные\nмышцы", side: 1, y: 290, a: function (S) { return S.icR || [X0 + 90, 250]; } },
+    { t: "Межрёберные\nмышцы", side: 1, y: 292, a: function (S) { return S.icR || [X0 + 90, 250]; } },
     { t: "Рёберная дуга", side: 1, y: 330, a: function (S) { var c = S.cartR9; return [lerp(c[0][0], c[1][0], 0.5), lerp(c[0][1], c[1][1], 0.5)]; } },
     { t: "Желудок", side: 1, y: 402, a: function (S) { return [X0 + 66, polyY(S.D.poly, X0 + 66) + 36]; } }
   ];
@@ -428,10 +428,10 @@
     // подписи
     var labEls = LABELS.map(function (L) {
       var x = L.side < 0 ? 6 : 394;
-      var tx = E("text", { x: x, y: L.y, "text-anchor": L.side < 0 ? "start" : "end", "font-size": 12, fill: C.label }, gLab);
+      var tx = E("text", { x: x, y: L.y, "text-anchor": L.side < 0 ? "start" : "end", "font-size": 9, fill: C.label, stroke: "#1b1f24", "stroke-width": 2.6, "stroke-linejoin": "round", "paint-order": "stroke" }, gLab);
       var lines = L.t.split("\n"), spans = [];
       if (lines.length === 1) tx.textContent = L.t;
-      else lines.forEach(function (t, n) { var sp = E("tspan", { x: x, dy: n ? 14 : 0 }, tx); sp.textContent = t; spans.push(sp); });
+      else lines.forEach(function (t, n) { var sp = E("tspan", { x: x, dy: n ? 11 : 0 }, tx); sp.textContent = t; spans.push(sp); });
       var ln = E("path", { fill: "none", stroke: C.lead, "stroke-width": 0.9 }, gLab);
       var dot = E("circle", { r: 2.2, fill: "#eef2f5" }, gLab);
       return { L: L, tx: tx, ln: ln, dot: dot, w: 0, spans: spans, n: lines.length };
@@ -669,10 +669,10 @@
       labEls.forEach(function (le) {
         if (!le.w) {
           try { le.w = le.spans.length ? Math.max.apply(null, le.spans.map(function (sp) { return sp.getComputedTextLength(); })) : le.tx.getComputedTextLength(); } catch (e) {}
-          if (!le.w) le.w = Math.max.apply(null, le.L.t.split("\n").map(function (t) { return t.length; })) * 6.6;
+          if (!le.w) le.w = Math.max.apply(null, le.L.t.split("\n").map(function (t) { return t.length; })) * 5;
         }
         var a = le.L.a(S);
-        var sx = le.L.side < 0 ? 6 + le.w + 4 : 394 - le.w - 4, sy = le.L.y - 4 + (le.n - 1) * 7;
+        var sx = le.L.side < 0 ? 6 + le.w + 4 : 394 - le.w - 4, sy = le.L.y - 3 + (le.n - 1) * 5;
         var mx = le.L.side < 0 ? sx + 8 : sx - 8;
         le.ln.setAttribute("d", "M" + f1(sx) + " " + f1(sy) + "L" + f1(mx) + " " + f1(sy) + "L" + P(a));
         le.dot.setAttribute("cx", f1(a[0])); le.dot.setAttribute("cy", f1(a[1]));
