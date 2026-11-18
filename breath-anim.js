@@ -705,8 +705,14 @@
     close.setAttribute("aria-label", "Закрыть");
     close.addEventListener("click", closeGasExchange);
 
+    // шаги — кнопки: нажатие останавливает анимацию на этом этапе, ▶ / ❚❚ — пуск и пауза
     var steps = H("div", "gx-steps", sheet);
-    var stepEls = ["1 · Вдох", "2 · Обмен", "3 · Выдох"].map(function (t) { return H("div", "gx-step", steps, t); });
+    var playBtn = H("button", "gx-play", steps, ""); playBtn.type = "button";
+    var stepEls = ["1 · Вдох", "2 · Обмен", "3 · Выдох"].map(function (t, i) {
+      var b = H("button", "gx-step", steps, t); b.type = "button";
+      b.addEventListener("click", function () { pickStep(i); });
+      return b;
+    });
     var stepBar = H("div", "gx-stepbar", sheet); var stepFill = H("div", "", stepBar);
 
     H("div", "gx-sec", sheet, "Ацинус — здесь начинается газообмен");
@@ -732,16 +738,15 @@
       "<p>Толщина барьера ≈ 0,5 мкм, эритроцит ≈ 7,5 мкм — барьер на схеме утолщён, чтобы были видны слои.</p>");
 
     var stA = buildAcinus(svgA), stB = buildBarrier(svgB);
-    var t0 = performance.now(), raf = 0, lastPh = -1;
+    var vt = 0, lastNow = 0, paused = false, raf = 0, lastPh = -1;
+    var FREEZE = [2.2, 4.4, 6.9];      // кадр, на котором останавливаемся в каждом этапе
     var CAPS = [
       "<b>Вдох.</b> Воздух (≈ 21% O₂) идёт по терминальной и дыхательной бронхиолам, альвеолярным ходам — в мешочки и альвеолы.",
       "<b>Обмен.</b> O₂ проходит через стенку альвеолы в кровь капилляров и садится на гемоглобин, CO₂ выходит из крови в альвеолу. Всё — простой диффузией, по разнице давлений.",
       "<b>Выдох.</b> CO₂ и неиспользованный O₂ уходят обратно: в выдыхаемом воздухе ≈ 16% O₂ и ≈ 4% CO₂."
     ];
-    function loop(now) {
-      raf = 0;
-      if (!ov.isConnected) return;
-      var t = (now - t0) / 1000, ct = t % GX_T, ph = Math.min(2, Math.floor(ct / 3));
+    function draw(t) {
+      var ct = t % GX_T, ph = Math.min(2, Math.floor(ct / 3));
       stA(ct, t); stB(t);
       if (ph !== lastPh) {
         lastPh = ph;
@@ -749,9 +754,34 @@
         capEl.innerHTML = CAPS[ph];
       }
       stepFill.style.width = (ct / GX_T * 100).toFixed(1) + "%";
+    }
+    function loop(now) {
+      raf = 0;
+      if (!ov.isConnected || paused) return;
+      if (lastNow) vt += Math.min(0.1, (now - lastNow) / 1000);
+      lastNow = now;
+      draw(vt);
       raf = requestAnimationFrame(loop);
     }
-    raf = requestAnimationFrame(loop);
+    function setPaused(p) {
+      paused = p;
+      ov.classList.toggle("paused", p);
+      playBtn.innerHTML = p   // SVG, а не символы ▶ — на iPhone они превращаются в эмодзи
+        ? '<svg viewBox="0 0 16 16" width="14" height="14"><path d="M4 2.5 L13 8 L4 13.5 Z" fill="#fff"/></svg>'
+        : '<svg viewBox="0 0 16 16" width="14" height="14"><rect x="3.5" y="2.5" width="3" height="11" rx="1" fill="#fff"/><rect x="9.5" y="2.5" width="3" height="11" rx="1" fill="#fff"/></svg>';
+      playBtn.setAttribute("aria-label", p ? "Продолжить" : "Пауза");
+      if (!p) { lastNow = 0; if (!raf) raf = requestAnimationFrame(loop); }
+    }
+    function pickStep(i) {
+      vt = Math.floor(vt / GX_T) * GX_T + FREEZE[i];
+      lastPh = -1;
+      setPaused(true);
+      draw(vt);
+    }
+    playBtn.addEventListener("click", function () { setPaused(!paused); });
+    figA.addEventListener("click", function () { setPaused(!paused); });
+    figB.addEventListener("click", function () { setPaused(!paused); });
+    setPaused(false);
     requestAnimationFrame(function () { ov.classList.add("show"); });
     gxOpen = { ov: ov, stop: function () { if (raf) cancelAnimationFrame(raf); } };
   }
