@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="pitch.css?v=20261117x">
   <link rel="stylesheet" href="bylo.css?v=20261117x">
   <link rel="stylesheet" href="breath-anim.css?v=20261119c">
+  <link rel="stylesheet" href="splash.css?v=20261119a">
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
@@ -32,6 +33,13 @@
   </script>
 </head>
 <body>
+  <div id="splash" aria-hidden="true">
+    <div class="sp-logo"><canvas width="880" height="392"></canvas></div>
+    <div class="sp-pill"><img src="/icons/icon-192.png" alt=""><div><b>СЕПТ · ДЗ</b><span>домашние задания</span></div></div>
+    <div class="sp-bar"><i></i></div>
+    <video src="/splash/logo.mp4" muted playsinline webkit-playsinline autoplay preload="auto"></video>
+  </div>
+  <script src="splash.js?v=20261119a"></script>
   <div id="app" aria-live="polite"></div>
   <!-- Тексты оферты / политики / «О преподавателе» — только данные, без логики.
        Обязательно до app.js: renderDoc() читает LEGAL_DOCS при первом рендере. -->
