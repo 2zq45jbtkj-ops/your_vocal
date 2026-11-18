@@ -53,6 +53,53 @@
   if (v.readyState >= 2) start(); else v.addEventListener("loadeddata", start, { once: true });
   v.addEventListener("error", showStatic);
 
+
+  /* ---- Удар камертона: звук + затухающая вибрация ----
+     Камертон встаёт на место «С» на 1,1 с видео — в этот момент «удар».
+     Звук — синтез камертона ля 440 Гц (основной тон + короткий обертон),
+     играет только если телефон разрешил звук без нажатия; в беззвучном
+     режиме iPhone сам его глушит. Вибрация — Telegram HapticFeedback
+     (вне Telegram на iPhone вибрации у веб-страниц нет). */
+  var STRIKE = 1.1, struck = false, actx = null;
+  try {
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (AC) { actx = new AC(); if (actx.resume) actx.resume().catch(function () {}); }
+  } catch (e) { actx = null; }
+  function forkSound() {
+    if (!actx || actx.state !== "running") return;
+    try {
+      var t = actx.currentTime + 0.01, out = actx.createGain();
+      out.gain.value = 0.5; out.connect(actx.destination);
+      function tone(f, g, dec) {
+        var o = actx.createOscillator(), a = actx.createGain();
+        o.type = "sine"; o.frequency.value = f;
+        a.gain.setValueAtTime(0.0001, t);
+        a.gain.exponentialRampToValueAtTime(g, t + 0.006);
+        a.gain.exponentialRampToValueAtTime(0.0001, t + dec);
+        o.connect(a); a.connect(out); o.start(t); o.stop(t + dec + 0.05);
+      }
+      tone(440, 0.55, 3.4);      // основной тон, долгое затухание
+      tone(2760, 0.12, 0.35);    // металлический обертон удара (≈6,27×)
+      tone(880, 0.04, 1.2);      // лёгкая вторая гармоника
+    } catch (e) {}
+  }
+  function forkHaptic() {
+    var tg = getTg(), h = tg && tg.HapticFeedback;
+    if (!h || !h.impactOccurred) return;
+    try { if (tg.isVersionAtLeast && !tg.isVersionAtLeast("6.1")) return; } catch (e) {}
+    // от сильного к еле заметному, паузы растут — как гаснущий камертон
+    var seq = [["heavy",0],["heavy",70],["medium",150],["medium",230],["medium",320],
+               ["light",420],["light",530],["light",650],["light",780],["soft",930],
+               ["soft",1100],["soft",1290],["soft",1500],["soft",1740],["soft",2010]];
+    seq.forEach(function (s) { setTimeout(function () { if (!gone) try { h.impactOccurred(s[0]); } catch (e) {} }, s[1]); });
+  }
+  function strike() { if (struck) return; struck = true; forkSound(); forkHaptic(); }
+  (function watch() {
+    if (struck || gone) return;
+    if (v.currentTime >= STRIKE) { strike(); return; }
+    if (v.ended || v.error) return;
+    requestAnimationFrame(watch);
+  })();
   setTimeout(function () { bar.classList.add("on"); }, 150);
   [[200, "18%", .5], [900, "42%", .9], [2000, "63%", .7], [2900, "81%", .8]].forEach(function (s) {
     setTimeout(function () { if (!gone) { fill.style.transition = "width " + s[2] + "s ease-in-out"; fill.style.width = s[1]; } }, s[0]);
@@ -72,7 +119,7 @@
       window.__splashOn = false;
       if (typeof window.applyDarkMode === "function") { try { window.applyDarkMode(); } catch (e) {} }
       else tgColor("#F1EEE8");
-      setTimeout(function () { try { v.pause(); v.removeAttribute("src"); v.load(); } catch (e) {} root.remove(); }, 500);
+      setTimeout(function () { try { v.pause(); v.removeAttribute("src"); v.load(); } catch (e) {} root.remove(); try { if (actx) setTimeout(function () { actx.close(); }, 2500); } catch (e) {} }, 500);
     }, 380);
   }
 })();
