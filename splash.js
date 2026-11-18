@@ -6,13 +6,19 @@
 (function () {
   var root = document.getElementById("splash");
   if (!root) return;
+  window.__splashOn = true;
   var v = root.querySelector("video"), c = root.querySelector("canvas");
   var x = c.getContext("2d", { willReadFrequently: true });
   var pill = root.querySelector(".sp-pill"), bar = root.querySelector(".sp-bar"), fill = bar.querySelector("i");
-  var tg = window.Telegram && window.Telegram.WebApp;
-  var DARK = "#232d3b", animDone = false, gone = false, t0 = Date.now();
+  var SPLASH_TOP = "#2f3f52";
+  function getTg() { return window.Telegram && window.Telegram.WebApp; }
+  var meta = document.querySelector('meta[name="theme-color"]');
+  // Верх экрана (часы, размытие iOS) — в цвет заставки, без светлой плашки
+  document.documentElement.style.backgroundColor = SPLASH_TOP;
+  if (meta) meta.setAttribute("content", SPLASH_TOP);
+  var DARK = SPLASH_TOP, animDone = false, gone = false, t0 = Date.now();
 
-  function tgColor(col) { try { if (tg) { tg.setHeaderColor(col); tg.setBackgroundColor(col); } } catch (e) {} }
+  function tgColor(col) { try { var tg = getTg(); if (tg) { tg.setHeaderColor(col); tg.setBackgroundColor(col); } } catch (e) {} }
   tgColor(DARK);
   // app.js при запуске красит шапку Telegram в светлый — держим тёмный, пока видна заставка
   var keep = setInterval(function () { if (gone) clearInterval(keep); else tgColor(DARK); }, 250);
@@ -62,6 +68,8 @@
     fill.style.transition = "width .35s ease-out"; fill.style.width = "100%";
     setTimeout(function () {
       root.classList.add("sp-out");
+      document.documentElement.style.backgroundColor = "";
+      window.__splashOn = false;
       if (typeof window.applyDarkMode === "function") { try { window.applyDarkMode(); } catch (e) {} }
       else tgColor("#F1EEE8");
       setTimeout(function () { try { v.pause(); v.removeAttribute("src"); v.load(); } catch (e) {} root.remove(); }, 500);

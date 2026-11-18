@@ -16,7 +16,7 @@ export default function handler(req) {
     start_url: start,
     scope: "/",
     display: "standalone",
-    background_color: "#F2ECE7",
+    background_color: "#2f3f52",
     theme_color: "#F2ECE7",
     icons: [
       { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },

@@ -153,6 +153,9 @@ function loadDarkMode() {
 }
 function applyDarkMode() {
   document.documentElement.classList.toggle("dark", !!state.darkMode);
+  // Цвет верхнего края (часы на iPhone, значок «ДЗ» на экране «Домой») — под тему
+  var tcm = document.querySelector('meta[name="theme-color"]');
+  if (tcm && !window.__splashOn) tcm.setAttribute("content", state.darkMode ? "#232A2E" : "#F1EEE8");
   if (tg) {
     try {
       tg.setHeaderColor(state.darkMode ? "#232A2E" : "#F1EEE8");

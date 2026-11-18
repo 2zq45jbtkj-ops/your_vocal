@@ -3,24 +3,67 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-  <meta name="theme-color" content="#232A2E">
+  <meta name="theme-color" content="#2f3f52">
+  <style>
+    /* Заставка должна нарисоваться первой — до шрифтов и скрипта Telegram */
+    html,body{background:#2f3f52}
+/* Заставка при открытии: анимация логотипа СЕПТ (камертон) из оригинального
+   видео + плашка «СЕПТ · ДЗ» + полоса загрузки. Фон — тёмная версия градиента
+   иконки «ДЗ». Логика — splash.js. */
+#splash{position:fixed;inset:0;z-index:100000;overflow:hidden;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
+  background:
+    linear-gradient(180deg,#2f3f52 0,rgba(47,63,82,.85) calc(env(safe-area-inset-top,0px) + 10px),rgba(47,63,82,0) calc(env(safe-area-inset-top,0px) + 140px)),
+    radial-gradient(90% 70% at 100% 100%, rgba(150,78,48,.85) 0%, rgba(150,78,48,0) 70%),
+    radial-gradient(80% 60% at 0% 0%, rgba(92,118,142,.55) 0%, rgba(92,118,142,0) 70%),
+    linear-gradient(135deg,#2c3d50 0%,#232d3b 50%,#3a2c2c 100%);
+  transition:opacity .45s ease;-webkit-user-select:none;user-select:none}
+#splash.sp-out{opacity:0;pointer-events:none}
+#splash .sp-logo{position:absolute;left:50%;top:26vh;transform:translateX(-50%);width:min(81.5vw,440px);aspect-ratio:880/392}
+#splash canvas{width:100%;height:100%;display:block}
+#splash video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+#splash .sp-pill{position:absolute;left:50%;top:calc(26vh + min(81.5vw,440px)*392/880 + 3vh);
+  display:flex;align-items:center;gap:12px;padding:7px 22px 7px 7px;border-radius:999px;background:rgba(243,242,235,.96);
+  opacity:0;transform:translateX(-50%) scale(.6);white-space:nowrap}
+#splash .sp-pill img{width:44px;height:44px;border-radius:50%;display:block}
+#splash .sp-pill b{display:block;font-size:17px;line-height:1.25;color:#1f2a37;font-weight:700;letter-spacing:.01em}
+#splash .sp-pill span{display:block;font-size:14px;line-height:1.25;color:#AE5F3F;margin-top:1px}
+#splash .sp-pill.on{animation:spPill .55s cubic-bezier(.3,1.4,.5,1) forwards}
+@keyframes spPill{0%{opacity:0;transform:translateX(-50%) scale(.6)}60%{opacity:1}100%{opacity:1;transform:translateX(-50%) scale(1)}}
+#splash .sp-bar{position:absolute;left:50%;transform:translateX(-50%);top:calc(26vh + min(81.5vw,440px)*392/880 + 3vh + 58px + 7vh);
+  width:min(42vw,190px);height:5px;border-radius:3px;background:rgba(243,242,235,.22);overflow:hidden;opacity:0;transition:opacity .4s}
+#splash .sp-bar.on{opacity:1}
+#splash .sp-bar i{display:block;height:100%;width:0;border-radius:3px;background:#F3F2EB}
+  </style>
   <title>Домашка по вокалу</title>
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script defer src="https://telegram.org/js/telegram-web-app.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <link rel="stylesheet" href="styles.css?v=20261119c">
   <link rel="stylesheet" href="karaoke.css?v=20261117x">
   <link rel="stylesheet" href="pitch.css?v=20261117x">
   <link rel="stylesheet" href="bylo.css?v=20261117x">
   <link rel="stylesheet" href="breath-anim.css?v=20261119c">
-  <link rel="stylesheet" href="splash.css?v=20261119a">
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
   <link rel="manifest" id="app-manifest" href="/manifest.webmanifest">
   <meta name="apple-mobile-web-app-title" content="СЕПТ · ДЗ">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-startup-image" media="screen and (device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/splash/startup-440x956@3.png">
+  <link rel="apple-touch-startup-image" media="screen and (device-width: 420px) and (device-height: 912px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/splash/startup-420x912@3.png">
+  <link rel="apple-touch-startup-image" media="screen and (device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/splash/startup-402x874@3.png">
+  <link rel="apple-touch-startup-image" media="screen and (device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/splash/startup-430x932@3.png">
+  <link rel="apple-touch-startup-image" media="screen and (device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/splash/startup-393x852@3.png">
+  <link rel="apple-touch-startup-image" media="screen and (device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/splash/startup-428x926@3.png">
+  <link rel="apple-touch-startup-image" media="screen and (device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/splash/startup-390x844@3.png">
+  <link rel="apple-touch-startup-image" media="screen and (device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/splash/startup-375x812@3.png">
+  <link rel="apple-touch-startup-image" media="screen and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/splash/startup-414x896@3.png">
+  <link rel="apple-touch-startup-image" media="screen and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="/splash/startup-414x896@2.png">
+  <link rel="apple-touch-startup-image" media="screen and (device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="/splash/startup-375x667@2.png">
+  <link rel="apple-touch-startup-image" media="screen and (device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/splash/startup-414x736@3.png">
+  <link rel="apple-touch-startup-image" media="screen and (device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="/splash/startup-320x568@2.png">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <script>
@@ -39,16 +82,16 @@
     <div class="sp-bar"><i></i></div>
     <video src="/splash/logo.mp4" muted playsinline webkit-playsinline autoplay preload="auto"></video>
   </div>
-  <script src="splash.js?v=20261119a"></script>
+  <script src="splash.js?v=20261119b"></script>
   <div id="app" aria-live="polite"></div>
   <!-- Тексты оферты / политики / «О преподавателе» — только данные, без логики.
        Обязательно до app.js: renderDoc() читает LEGAL_DOCS при первом рендере. -->
-  <script src="legal.js?v=20261117x"></script>
-  <script src="app.js?v=20261119d"></script>
-  <script src="karaoke.js?v=20261117x"></script>
-  <script src="pitch.js?v=20261117x"></script>
-  <script src="bylo.js?v=20261117x"></script>
-  <script src="breath-anim.js?v=20261119b"></script>
+  <script defer src="legal.js?v=20261117x"></script>
+  <script defer src="app.js?v=20261119e"></script>
+  <script defer src="karaoke.js?v=20261117x"></script>
+  <script defer src="pitch.js?v=20261117x"></script>
+  <script defer src="bylo.js?v=20261117x"></script>
+  <script defer src="breath-anim.js?v=20261119b"></script>
   <script>
     /* Новая версия без ручного перезапуска: значок на экране телефона держит
        страницу в памяти, поэтому при возвращении в приложение сверяем версию
