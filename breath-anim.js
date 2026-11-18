@@ -418,6 +418,7 @@
       '<span class="banim-gx-ico">' + GX_ICON + '</span><span><b>Газообмен в альвеолах</b><small>Как O₂ попадает в кровь, а CO₂ выходит</small></span><span class="banim-gx-go">›</span>');
     gxBtn.type = "button";
     gxBtn.addEventListener("click", function () { openGasExchange(); });
+    if (mount.getAttribute("data-gx") === "0") gxBtn.remove();   // упрощённая лекция
 
     var st = { mode: 2, t0: performance.now(), paused: false, pauseAt: 0, visible: true, raf: 0, last: 0, airOff: 0, lastT: 0 };
     var btns = MODES.map(function (m, i) {

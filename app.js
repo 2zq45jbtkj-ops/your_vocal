@@ -395,6 +395,8 @@ function backBtn(handlerName) {
 /* ---------- навигация ---------- */
 
 function go(screen) {
+  // каждый новый вход в лекцию заново спрашивает уровень (упрощённая / подробная)
+  if (screen === "lecture" && state.screen !== "lecture") state._lectureLevel = null;
   state.screen = screen;
   if (BROWSER_MODE) pushBackEntry();
   render();
@@ -3676,10 +3678,20 @@ function stepHeader(title, stepNum, pct) {
 function renderLecture() {
   if (!state.lectureViewed) { state.lectureViewed = true; saveState(); sendProgressToBaza((LESSON.id || 1), "lecture"); }
   var html = stepHeader("Лекция «" + esc(LESSON.title) + "»", 1, 25);
+  /* Два уровня лекции: lecture.levels = true. Блок с level: "deep" виден
+     только в подробной, level: "basic" — только в упрощённой, без level — в обеих. */
+  var hasLevels = !!LESSON.lecture.levels;
+  var lvl = hasLevels ? (state._lectureLevel || "basic") : null;
+  if (hasLevels) {
+    html += '<div class="llevel-seg">' +
+      '<button class="' + (lvl === "basic" ? "on" : "") + '" data-act="lecture-level" data-level="basic">Упрощённая</button>' +
+      '<button class="' + (lvl === "deep" ? "on" : "") + '" data-act="lecture-level" data-level="deep">Подробная</button></div>';
+  }
   html += '<div class="lecture-body">';
   var num = 0;
   var first = true;
   LESSON.lecture.blocks.forEach(function (blk) {
+    if (hasLevels && blk.level && blk.level !== lvl) return;
     if (blk.type === "header") {
       html += '<div class="section-label' + (first ? "" : " mt") + '">' + esc(blk.text) + "</div>";
       first = false;
@@ -3699,11 +3711,20 @@ function renderLecture() {
     } else if (blk.type === "image") {
       html += lectureImageHtml(blk);
     } else if (blk.type === "breath-anim") {
-      html += '<div class="banim-mount"></div>'; // breath-anim.js монтирует сам
+      // breath-anim.js монтирует сам; газообмен — только в подробной лекции
+      html += '<div class="banim-mount" data-gx="' + (!hasLevels || lvl === "deep" ? "1" : "0") + '"></div>';
     }
   });
   html += "</div>";
   html += '<div class="bottom-cta"><button class="cta" data-act="go-quiz">Пройти тест</button></div>';
+  if (hasLevels && !state._lectureLevel) {
+    html += '<div class="llevel-ov"><div class="llevel-card">' +
+      '<div class="llevel-title">Как будешь проходить лекцию?</div>' +
+      '<div class="llevel-sub">Выбор можно поменять в любой момент — переключателем вверху.</div>' +
+      '<button class="llevel-opt" data-act="lecture-level" data-level="basic"><b>Упрощённая</b><span>Главное о дыхании — коротко и понятно</span></button>' +
+      '<button class="llevel-opt deep" data-act="lecture-level" data-level="deep"><b>Подробная</b><span>С анатомией и тем, как кислород попадает в кровь</span></button>' +
+      "</div></div>";
+  }
   app.innerHTML = html;
   wireActs();
 }
@@ -5207,6 +5228,14 @@ var ACTS = {
   // из фильтра «В работе»: сразу на первый непройденный шаг
   "open-lesson-continue": function () { go(firstIncompleteStepScreen()); },
   "go-lecture": function () { go("lecture"); },
+  "lecture-level": function (el) {
+    var v = el && el.getAttribute("data-level");
+    if (v !== "basic" && v !== "deep") return;
+    var y = window.scrollY;
+    state._lectureLevel = v;
+    render();
+    window.scrollTo(0, y);
+  },
   "go-quiz": function () { go("quiz"); },
   "go-warmups": function () { go("warmups"); },
   "go-warmups-free": function () { go("warmups"); },
@@ -5303,7 +5332,7 @@ function wireActs() {
         return;
       }
       var fn = ACTS[act];
-      if (fn) fn();
+      if (fn) fn(el);
     });
   });
 }

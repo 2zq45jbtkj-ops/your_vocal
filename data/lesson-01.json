@@ -8,6 +8,7 @@
     "song": "Разметка нюансов · практика"
   },
   "lecture": {
+    "levels": true,
     "blocks": [
       { "type": "header", "text": "Виды дыхания" },
       { "type": "panels", "title": "Дыхание", "items": [{ "name": "Верхнее", "note": "поднимаются плечи", "zone": "top" }, { "name": "Среднее", "note": "расширяются рёбра", "zone": "middle" }, { "name": "Нижнее", "note": "работает живот", "zone": "bottom" }, { "name": "Двойной вдох (W)", "note": "живот, затем рёбра", "zone": "mixed" }] },

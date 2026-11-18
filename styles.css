@@ -1290,3 +1290,31 @@ html.dark .cab-zone.on, body.dark .cab-zone.on { background: color-mix(in srgb, 
 @media (display-mode: standalone) {
   #app { padding-top: calc(var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px) + 24px); }
 }
+
+/* ---------- уровень лекции: упрощённая / подробная ---------- */
+.llevel-seg {
+  display: flex; gap: 4px; margin: 4px 20px 14px; padding: 4px; border-radius: 14px;
+  background: var(--bgmuted); box-shadow: var(--inset-sm);
+}
+.llevel-seg button {
+  flex: 1; padding: 9px 0; border: none; border-radius: 10px; background: transparent;
+  font: 600 14px 'Inter', sans-serif; color: var(--gray); cursor: pointer;
+}
+.llevel-seg button.on { background: var(--bg); color: var(--ink); box-shadow: var(--raised-sm); }
+.llevel-ov {
+  position: fixed; inset: 0; z-index: 2500; display: flex; align-items: flex-end; justify-content: center;
+  background: oklch(20% 0.01 235 / 0.45); animation: fadein .2s;
+}
+.llevel-card {
+  width: 100%; max-width: 430px; padding: 22px 20px calc(22px + var(--tg-safe-area-inset-bottom, 0px));
+  border-radius: 24px 24px 0 0; background: var(--bg); box-shadow: var(--raised-lg);
+}
+.llevel-title { font: 800 21px 'Manrope', sans-serif; color: var(--ink); }
+.llevel-sub { margin: 6px 0 16px; font-size: 13.5px; color: var(--gray); line-height: 1.45; }
+.llevel-opt {
+  display: block; width: 100%; margin-top: 10px; padding: 15px 16px; border: none; border-radius: 16px;
+  text-align: left; background: var(--bg); box-shadow: var(--raised); cursor: pointer; font-family: inherit;
+}
+.llevel-opt b { display: block; font: 700 16px 'Manrope', sans-serif; color: var(--ink); }
+.llevel-opt span { display: block; margin-top: 3px; font-size: 13px; color: var(--gray); line-height: 1.4; }
+.llevel-opt.deep b { color: var(--terra); }
