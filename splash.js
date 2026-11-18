@@ -58,7 +58,7 @@
      Оригинальная запись камертона из видео (splash/kamerton.m4a), удар —
      на 1,05 с анимации, как в видео. Телефоны запрещают звук до первого
      нажатия, поэтому пробуем по очереди Web Audio и аудио-элемент; если оба
-     запрещены — звук включится от первого касания экрана. В беззвучном
+     запрещены — звук будет, только если экрана коснулись до удара. В беззвучном
      режиме iPhone звук не играет. */
   var STRIKE = 1.05, struck = false, actx = null, forkBuf = null, played = false, strikeAt = 0;
   // Звук подчиняется беззвучному режиму iPhone (как звуки игр), а не играет поверх него
@@ -97,17 +97,16 @@
     // 2) обычный аудио-элемент — в части Telegram-клиентов разрешён, когда Web Audio нет
     playElement(0);
   }
-  /* Если система не дала звук сама — первое касание экрана во время заставки
-     включает его с того места, где камертон звучал бы сейчас (не с начала). */
+  /* Касание ДО удара снимает запрет на звук — тогда удар прозвучит вовремя.
+     Касание после удара звук не включает. */
   function onTouch() {
-    root.removeEventListener("pointerdown", onTouch);
-    if (played) return;
-    if (!struck) { try { if (actx && actx.resume) actx.resume(); } catch (e) {} root.addEventListener("pointerdown", onTouch, { once: true }); return; }
-    var off = (Date.now() - strikeAt) / 1000;
-    if (actx) {
-      var go = function () { if (actx.state === "running" && playBuffer(off)) played = true; else playElement(off); };
-      if (actx.state !== "running" && actx.resume) actx.resume().then(go, function () { playElement(off); }); else go();
-    } else playElement(off);
+    if (struck) return;
+    try { if (actx && actx.resume) actx.resume().catch(function () {}); } catch (e) {}
+    try { // разблокировать аудио-элемент тихим запуском и сразу остановить
+      if (forkEl) { forkEl.muted = true; var pr = forkEl.play();
+        var stop = function () { forkEl.pause(); forkEl.currentTime = 0; forkEl.muted = false; };
+        if (pr && pr.then) pr.then(stop, function () { forkEl.muted = false; }); else stop(); }
+    } catch (e) {}
   }
   root.addEventListener("pointerdown", onTouch, { once: true });
   function strike() { if (struck) return; struck = true; strikeAt = Date.now(); forkSound(); }
