@@ -542,6 +542,13 @@
     gxBtn.type = "button";
     gxBtn.addEventListener("click", function () { openGasExchange(); });
     if (mount.getAttribute("data-gx") === "0" || MUS) gxBtn.remove();   // упрощённая лекция / карточка мышц
+    // «Дыхательные мышцы» — кнопка рядом с газообменом (в упрощённой лекции — только главные мышцы)
+    if (!MUS) {
+      var musWrap = H("div", "bmus-mount", mount);
+      musWrap.setAttribute("data-level", mount.getAttribute("data-gx") === "0" ? "basic" : "deep");
+      musWrap.setAttribute("data-banim", "1");
+      muscleButton(musWrap);
+    }
 
     var st = { mode: 2, t0: performance.now(), paused: false, pauseAt: 0, visible: true, raf: 0, last: 0, airOff: 0, lastT: 0, mus: null };
     var MU = null;                                    // слои мышц (только в карточке мышц)
