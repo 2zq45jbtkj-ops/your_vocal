@@ -173,6 +173,12 @@
     var c2 = [L[0] + s * 3, L[1] - 12 * k];
     return "M" + P(J) + "Q" + P(c1) + " " + P(L) + "Q" + P(c2) + " " + P(T);
   }
+  function qPt(a, c, b, u) {
+    var v = 1 - u;
+    return [v * v * a[0] + 2 * v * u * c[0] + u * u * b[0], v * v * a[1] + 2 * v * u * c[1] + u * u * b[1]];
+  }
+  function ribPt(J, L, u) { return qPt(J, [lerp(J[0], L[0], 0.85), lerp(J[1], L[1], 0.12)], L, u); }   // 0 = хрящ, 1 = бок
+  function cartPt(a, b, u) { return qPt(a, [lerp(a[0], b[0], 0.5), lerp(a[1], b[1], 0.5) + 3], b, u); } // 0 = ребро, 1 = грудина
   function cartPath(a, b) {
     var m = [lerp(a[0], b[0], 0.5), lerp(a[1], b[1], 0.5) + 3];
     return "M" + P(a) + "Q" + P(m) + " " + P(b);
@@ -237,6 +243,7 @@
     { t: "Ключица", side: -1, y: 100, a: function (S) { return S.clavL; } },
     { t: "Правое лёгкое", side: -1, y: 184, a: function (S) { return [X0 - 64, 180 - S.p.c * 2]; } },
     { t: "Рёбра", side: -1, y: 236, a: function (S) { var g = S.G.left[6]; return [lerp(g.J[0], g.L[0], 0.7), lerp(g.J[1], g.L[1], 0.7) + 4]; } },
+    { t: "Межрёберные", side: -1, y: 268, a: function (S) { return S.icL || [X0 - 90, 262]; } },
     { t: "Диафрагма", side: -1, y: 300, a: function (S) { var x = X0 - 74; return [x, polyY(S.D.poly, x) + 2]; } },
     { t: "Печень", side: -1, y: 360, a: function (S) { return [X0 - 52, polyY(S.D.poly, X0 - 52) + 44]; } },
     { t: "Брюшная стенка", side: -1, y: 474, a: function (S) { return [X0 - 26 - S.p.d * 2, 486]; } },
@@ -281,7 +288,7 @@
     // порядок слоёв: бронхи лежат позади сердца, сердце — в переднем средостении
     var gTorso = E("g", null, svg), gAbd = E("g", null, svg),
         gLung = E("g", null, svg), gBr = E("g", null, svg), gHeart = E("g", null, svg), gDia = E("g", null, svg),
-        gRib = E("g", null, svg), gStern = E("g", null, svg), gTop = E("g", null, svg),
+        gIc = E("g", null, svg), gRib = E("g", null, svg), gStern = E("g", null, svg), gTop = E("g", null, svg),
         gArr = E("g", null, svg), gLab = E("g", null, svg);
 
     // туловище
@@ -347,6 +354,21 @@
     var diaM2 = E("path", { fill: "none", stroke: C.musc, "stroke-width": 9, "stroke-linecap": "round" }, gDia);
     var diaT = E("path", { fill: "none", stroke: C.tendon, "stroke-width": 6.5, "stroke-opacity": .9, "stroke-linecap": "round" }, gDia);
     var diaFib = E("path", { fill: "none", stroke: "#d86a5c", "stroke-opacity": .55, "stroke-width": 1, "stroke-dasharray": "1.5 3.5" }, gDia);
+
+    /* межрёберные мышцы: между костными частями рёбер — наружные (волокна
+       идут вниз и к середине, «руки в карманы»); между хрящами у грудины —
+       внутренние (волокна вниз и в стороны). Стиль — как у диафрагмы. */
+    var icEls = { left: [], right: [] };
+    ["left", "right"].forEach(function (side) {
+      for (var i = 1; i <= 11; i++) {
+        icEls[side][i] = {
+          fill: E("path", { fill: C.musc, "fill-opacity": .34, stroke: C.muscO, "stroke-opacity": .55, "stroke-width": .8, "stroke-linejoin": "round" }, gIc),
+          fib: E("path", { fill: "none", stroke: "#d86a5c", "stroke-opacity": .6, "stroke-width": .9, "stroke-linecap": "round" }, gIc)
+        };
+        if (i <= 6) icEls[side][i].cf = E("path", { fill: C.musc, "fill-opacity": .26, stroke: C.muscO, "stroke-opacity": .45, "stroke-width": .8 }, gIc),
+                    icEls[side][i].cb = E("path", { fill: "none", stroke: "#d86a5c", "stroke-opacity": .5, "stroke-width": .8, "stroke-linecap": "round" }, gIc);
+      }
+    });
 
     // рёбра (обе стороны)
     var ribEls = { left: [], right: [] };
@@ -566,6 +588,39 @@
             if (i === 9 && s === 1) S.cartR9 = cc;
           }
         }
+      });
+
+      // межрёберные мышцы — ярче, когда работают (вдох с участием рёбер)
+      var icAct = clamp(p.r * (p.inhale ? 1 : 0.55), 0, 1);
+      ["left", "right"].forEach(function (sideKey) {
+        var s = sideKey === "left" ? -1 : 1, g = G[sideKey];
+        for (var i = 1; i <= 11; i++) {
+          var o = icEls[sideKey][i], A = g[i], B = g[i + 1], N = 12, up = [], dn = [], k;
+          var u0 = 0.06, u1 = i <= 2 ? 0.8 : 0.93;          // до бокового изгиба ребра
+          for (k = 0; k <= N; k++) { var u = lerp(u0, u1, k / N); up.push(ribPt(A.J, A.L, u)); dn.push(ribPt(B.J, B.L, u)); }
+          o.fill.setAttribute("d", "M" + up.map(P).join("L") + "L" + dn.reverse().map(P).join("L") + "Z");
+          dn.reverse();
+          var fd = "";
+          for (k = 2; k <= N; k += 1) {                     // наружные: вниз и к середине
+            var a = up[k], b = dn[Math.max(0, k - 2)];
+            fd += "M" + P([lerp(a[0], b[0], .1), lerp(a[1], b[1], .1)]) + "L" + P([lerp(a[0], b[0], .9), lerp(a[1], b[1], .9)]);
+          }
+          o.fib.setAttribute("d", fd);
+          o.fill.setAttribute("fill-opacity", (0.16 + icAct * 0.26).toFixed(2));
+          o.fib.setAttribute("stroke-opacity", (0.38 + icAct * 0.42).toFixed(2));
+          if (o.cf) {                                       // хрящевая часть: внутренние межрёберные
+            var ca = cartilage(i, s, p, g), cb = cartilage(i + 1, s, p, g), cu = [], cd = [], M = 8;
+            for (k = 0; k <= M; k++) { var w = lerp(0.08, 0.92, k / M); cu.push(cartPt(ca[0], ca[1], w)); cd.push(cartPt(cb[0], cb[1], w)); }
+            o.cf.setAttribute("d", "M" + cu.map(P).join("L") + "L" + cd.slice().reverse().map(P).join("L") + "Z");
+            var cfd = "";
+            for (k = 0; k <= M - 2; k++) {                  // внутренние: вниз и в стороны (перпендикулярно наружным)
+              var a2 = cu[k + 2], b2 = cd[k];
+              cfd += "M" + P([lerp(a2[0], b2[0], .12), lerp(a2[1], b2[1], .12)]) + "L" + P([lerp(a2[0], b2[0], .88), lerp(a2[1], b2[1], .88)]);
+            }
+            o.cb.setAttribute("d", cfd);
+          }
+        }
+        if (s < 0) { var m = ribPt(g[6].J, g[6].L, 0.62), m2 = ribPt(g[7].J, g[7].L, 0.62); S.icL = [lerp(m[0], m2[0], .5), lerp(m[1], m2[1], .5)]; }
       });
 
       // грудина
