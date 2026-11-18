@@ -54,13 +54,17 @@
   v.addEventListener("error", showStatic);
 
 
-  /* ---- Удар камертона: звук + затухающая вибрация ----
-     Звук удара в оригинальном видео начинается на 1,05 с — синхронно с ним.
-     Звук — оригинальная запись камертона из видео (splash/kamerton.m4a),
-     пока она не загрузилась — синтез ля 440 Гц. Играет только если телефон разрешил звук без нажатия; в беззвучном
-     режиме iPhone сам его глушит. Вибрация — Telegram HapticFeedback
-     (вне Telegram на iPhone вибрации у веб-страниц нет). */
-  var STRIKE = 1.05, struck = false, actx = null, forkBuf = null;
+  /* ---- Удар камертона: только звук, без вибрации ----
+     Оригинальная запись камертона из видео (splash/kamerton.m4a), удар —
+     на 1,05 с анимации, как в видео. Телефоны запрещают звук до первого
+     нажатия, поэтому пробуем по очереди Web Audio и аудио-элемент; если оба
+     запрещены — звук включится от первого касания экрана. В беззвучном
+     режиме iPhone звук не играет. */
+  var STRIKE = 1.05, struck = false, actx = null, forkBuf = null, played = false, strikeAt = 0;
+  // Звук подчиняется беззвучному режиму iPhone (как звуки игр), а не играет поверх него
+  try { if (navigator.audioSession) navigator.audioSession.type = "ambient"; } catch (e) {}
+  var forkEl = null;
+  try { forkEl = new Audio("/splash/kamerton.m4a"); forkEl.preload = "auto"; } catch (e) {}
   try {
     var AC = window.AudioContext || window.webkitAudioContext;
     if (AC) { actx = new AC(); if (actx.resume) actx.resume().catch(function () {}); }
@@ -70,38 +74,43 @@
       .then(function (ab) { actx.decodeAudioData(ab, function (b) { forkBuf = b; }, function () {}); })
       .catch(function () {});
   }
-  function forkSound() {
-    if (!actx || actx.state !== "running") return;
-    if (forkBuf) {
-      try { var src = actx.createBufferSource(); src.buffer = forkBuf; src.connect(actx.destination); src.start(); return; } catch (e) {}
-    }
+  function playBuffer(offset) {
+    if (!forkBuf) return false;
     try {
-      var t = actx.currentTime + 0.01, out = actx.createGain();
-      out.gain.value = 0.5; out.connect(actx.destination);
-      function tone(f, g, dec) {
-        var o = actx.createOscillator(), a = actx.createGain();
-        o.type = "sine"; o.frequency.value = f;
-        a.gain.setValueAtTime(0.0001, t);
-        a.gain.exponentialRampToValueAtTime(g, t + 0.006);
-        a.gain.exponentialRampToValueAtTime(0.0001, t + dec);
-        o.connect(a); a.connect(out); o.start(t); o.stop(t + dec + 0.05);
-      }
-      tone(440, 0.55, 3.4);      // основной тон, долгое затухание
-      tone(2760, 0.12, 0.35);    // металлический обертон удара (≈6,27×)
-      tone(880, 0.04, 1.2);      // лёгкая вторая гармоника
+      var src = actx.createBufferSource(); src.buffer = forkBuf; src.connect(actx.destination);
+      src.start(0, Math.min(offset || 0, forkBuf.duration - 0.05)); return true;
+    } catch (e) { return false; }
+  }
+  function playElement(offset) {
+    if (!forkEl) return;
+    try {
+      if (offset) forkEl.currentTime = offset;
+      var pr = forkEl.play();
+      if (pr && pr.then) pr.then(function () { played = true; }).catch(function () {});
+      else played = true;
     } catch (e) {}
   }
-  function forkHaptic() {
-    var tg = getTg(), h = tg && tg.HapticFeedback;
-    if (!h || !h.impactOccurred) return;
-    try { if (tg.isVersionAtLeast && !tg.isVersionAtLeast("6.1")) return; } catch (e) {}
-    // от сильного к еле заметному, паузы растут — как гаснущий камертон
-    var seq = [["heavy",0],["heavy",70],["medium",150],["medium",230],["medium",320],
-               ["light",420],["light",530],["light",650],["light",780],["soft",930],
-               ["soft",1100],["soft",1290],["soft",1500],["soft",1740],["soft",2010],["soft",2320],["soft",2680],["soft",3100]];
-    seq.forEach(function (s) { setTimeout(function () { if (!gone) try { h.impactOccurred(s[0]); } catch (e) {} }, s[1]); });
+  function forkSound() {
+    // 1) Web Audio — если телефон разрешил звук без нажатия
+    if (actx && actx.state !== "running" && actx.resume) actx.resume().catch(function () {});
+    if (actx && actx.state === "running" && playBuffer(0)) { played = true; return; }
+    // 2) обычный аудио-элемент — в части Telegram-клиентов разрешён, когда Web Audio нет
+    playElement(0);
   }
-  function strike() { if (struck) return; struck = true; forkSound(); forkHaptic(); }
+  /* Если система не дала звук сама — первое касание экрана во время заставки
+     включает его с того места, где камертон звучал бы сейчас (не с начала). */
+  function onTouch() {
+    root.removeEventListener("pointerdown", onTouch);
+    if (played) return;
+    if (!struck) { try { if (actx && actx.resume) actx.resume(); } catch (e) {} root.addEventListener("pointerdown", onTouch, { once: true }); return; }
+    var off = (Date.now() - strikeAt) / 1000;
+    if (actx) {
+      var go = function () { if (actx.state === "running" && playBuffer(off)) played = true; else playElement(off); };
+      if (actx.state !== "running" && actx.resume) actx.resume().then(go, function () { playElement(off); }); else go();
+    } else playElement(off);
+  }
+  root.addEventListener("pointerdown", onTouch, { once: true });
+  function strike() { if (struck) return; struck = true; strikeAt = Date.now(); forkSound(); }
   (function watch() {
     if (struck || gone) return;
     if (v.currentTime >= STRIKE) { strike(); return; }
