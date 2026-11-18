@@ -173,6 +173,18 @@
     var c2 = [L[0] + s * 3, L[1] - 12 * k];
     return "M" + P(J) + "Q" + P(c1) + " " + P(L) + "Q" + P(c2) + " " + P(T);
   }
+  /* Передний отдел ребра (от хряща до бокового изгиба) — лежит спереди;
+     «хвостик» после изгиба — это уже задний отдел ребра, он уходит назад к
+     позвоночнику и рисуется ПОЗАДИ лёгких, а не поверх соседних рёбер. */
+  function ribFront(i, J, L, s) {
+    var c1 = [lerp(J[0], L[0], 0.85), lerp(J[1], L[1], 0.12)];
+    return "M" + P(J) + "Q" + P(c1) + " " + P(L);
+  }
+  function ribBack(i, J, L, s) {
+    var k = i <= 3 ? 0.55 : i >= 11 ? 0.6 : 1;
+    var T = [L[0] - s * 12 * k, L[1] - 24 * k], c2 = [L[0] + s * 3, L[1] - 12 * k];
+    return "M" + P(L) + "Q" + P(c2) + " " + P(T);
+  }
   function qPt(a, c, b, u) {
     var v = 1 - u;
     return [v * v * a[0] + 2 * v * u * c[0] + u * u * b[0], v * v * a[1] + 2 * v * u * c[1] + u * u * b[1]];
@@ -200,9 +212,10 @@
   }
   function lungPts(s, p, G, D) {
     var g = s < 0 ? G.left : G.right, pts = [];
-    pts.push([X0 + s * 20, 120]);
-    pts.push([X0 + s * 36, 104]);
-    pts.push([X0 + s * 55, 116 - p.c * 2]);
+    // верхушка лёгкого прячется за ключицу, а не выпирает над ней
+    pts.push([X0 + s * 20, 137]);
+    pts.push([X0 + s * 36, 129 - p.c * 2]);
+    pts.push([X0 + s * 55, 135 - p.c * 3]);
     for (var i = 1; i <= 8; i++) pts.push([g[i].L[0] - s * 7, g[i].L[1] + (i === 1 ? 4 : 8)]);
     var W = s < 0 ? D.Wl : D.Wr;
     var recess = 20 - 15 * p.d;                     // рёберно-диафрагмальный синус
@@ -287,7 +300,7 @@
 
     // порядок слоёв: бронхи лежат позади сердца, сердце — в переднем средостении
     var gTorso = E("g", null, svg), gAbd = E("g", null, svg),
-        gLung = E("g", null, svg), gBr = E("g", null, svg), gHeart = E("g", null, svg), gDia = E("g", null, svg),
+        gRibBack = E("g", null, svg), gLung = E("g", null, svg), gBr = E("g", null, svg), gHeart = E("g", null, svg), gDia = E("g", null, svg),
         gIc = E("g", null, svg), gRib = E("g", null, svg), gStern = E("g", null, svg), gTop = E("g", null, svg),
         gArr = E("g", null, svg), gLab = E("g", null, svg);
 
@@ -381,6 +394,8 @@
           o.cO = E("path", { fill: "none", stroke: C.cartO, "stroke-width": 6.2, "stroke-linecap": "round" }, gRib);
           o.cI = E("path", { fill: "none", stroke: C.cart, "stroke-width": 4.2, "stroke-linecap": "round", "stroke-opacity": .95 }, gRib);
         }
+        o.kO = E("path", { fill: "none", stroke: C.boneO, "stroke-width": i === 1 ? 8.5 : 7.6, "stroke-linecap": "round" }, gRibBack);
+        o.kI = E("path", { fill: "none", stroke: "#cfc2a2", "stroke-width": i === 1 ? 6.3 : 5.2, "stroke-linecap": "round" }, gRibBack);
         o.bO = E("path", { fill: "none", stroke: C.boneO, "stroke-width": i === 1 ? 8.5 : 7.6, "stroke-linecap": "round" }, gRib);
         o.bI = E("path", { fill: "none", stroke: C.bone, "stroke-width": i === 1 ? 6.3 : 5.2, "stroke-linecap": "round" }, gRib);
         ribEls[side][i] = o;
@@ -390,12 +405,15 @@
     // грудина: рукоятка, тело, мечевидный отросток
     var stern = E("path", { fill: "url(#ba-stern)", stroke: C.boneO, "stroke-width": 1.2 }, gStern);
     var sternLines = E("path", { fill: "none", stroke: "#a8946c", "stroke-width": 1 }, gStern);
+    var sternRidges = E("path", { fill: "none", stroke: "#a8946c", "stroke-opacity": .45, "stroke-width": .8 }, gStern);
 
     // ключицы, гортань
     var clav = {};
     [-1, 1].forEach(function (s) {
       clav[s] = {
+        e: E("path", { fill: "none", stroke: C.boneO, "stroke-width": 12.5, "stroke-linecap": "round" }, gTop),
         o: E("path", { fill: "none", stroke: C.boneO, "stroke-width": 9.5, "stroke-linecap": "round" }, gTop),
+        eI: E("path", { fill: "none", stroke: C.bone, "stroke-width": 10, "stroke-linecap": "round" }, gTop),
         i: E("path", { fill: "none", stroke: C.bone, "stroke-width": 7, "stroke-linecap": "round" }, gTop)
       };
     });
@@ -584,8 +602,9 @@
       ["left", "right"].forEach(function (sideKey) {
         var s = sideKey === "left" ? -1 : 1, g = G[sideKey];
         for (var i = 1; i <= 12; i++) {
-          var o = ribEls[sideKey][i], bd = ribPath(i, g[i].J, g[i].L, s);
+          var o = ribEls[sideKey][i], bd = ribFront(i, g[i].J, g[i].L, s), bk = ribBack(i, g[i].J, g[i].L, s);
           o.bO.setAttribute("d", bd); o.bI.setAttribute("d", bd);
+          o.kO.setAttribute("d", bk); o.kI.setAttribute("d", bk);
           if (o.cO) {
             var cc = cartilage(i, s, p, g), cd = cartPath(cc[0], cc[1]);
             o.cO.setAttribute("d", cd); o.cI.setAttribute("d", cd);
@@ -633,20 +652,35 @@
 
       // грудина
       var yS = function (y) { return f1(y - sdy); };
-      stern.setAttribute("d",
-        "M" + (X0 - 21) + " " + yS(131) + " Q" + (X0 - 8) + " " + yS(127) + " " + X0 + " " + yS(133) + " Q" + (X0 + 8) + " " + yS(127) + " " + (X0 + 21) + " " + yS(131) +
-        " L" + (X0 + 14) + " " + yS(160) + " L" + (X0 + 17) + " " + yS(232) + " L" + (X0 + 11) + " " + yS(266) +
-        " L" + (X0 + 6) + " " + yS(270) + " L" + X0 + " " + yS(292) + " L" + (X0 - 6) + " " + yS(270) +
-        " L" + (X0 - 11) + " " + yS(266) + " L" + (X0 - 17) + " " + yS(232) + " L" + (X0 - 14) + " " + yS(160) + " Z");
-      sternLines.setAttribute("d", "M" + (X0 - 14) + " " + yS(161) + " L" + (X0 + 14) + " " + yS(161) +
-        "M" + (X0 - 10) + " " + yS(267) + " L" + (X0 + 10) + " " + yS(267));
+      /* Грудина по анатомии: рукоятка (яремная вырезка, ключичные вырезки,
+         вырезка 1-го ребра) → грудинный угол → тело, слегка расширяющееся
+         книзу, с рёберными вырезками по краям (2–7 рёбра) → маленький тупой
+         мечевидный отросток. Правая половина, затем зеркально. */
+      var SH = [[0, 134.5], [6, 129.5], [12, 129], [15.5, 131.5], [19, 134], [22.5, 137], [22, 141],
+                [20.5, 145], [17.5, 152], [15, 158], [16.5, 162], [15.2, 166], [16.4, 172], [15.2, 182],
+                [17, 191], [15.6, 201], [17.6, 211], [15.8, 221], [17, 232], [14.6, 243], [13.8, 252],
+                [11.5, 260], [9.6, 265.5], [7.2, 268.5], [6, 274], [4.6, 280], [3, 285], [0, 287.5]];
+      var shR = SH.map(function (q) { return [X0 + q[0], q[1] - sdy]; });
+      var shL = SH.slice(1, -1).reverse().map(function (q) { return [X0 - q[0], q[1] - sdy]; });
+      stern.setAttribute("d", crPath(shR.concat(shL), true));
+      // грудинный угол и мечевидно-грудинное соединение — чётко; сросшиеся сегменты тела — еле заметно
+      sternLines.setAttribute("d", "M" + (X0 - 15) + " " + yS(160) + " Q" + X0 + " " + yS(162) + " " + (X0 + 15) + " " + yS(160) +
+        "M" + (X0 - 7.5) + " " + yS(267.5) + " L" + (X0 + 7.5) + " " + yS(267.5));
+      sternRidges.setAttribute("d", [182, 201, 221, 243].map(function (y, k) {
+        var w = [12, 13, 13, 11][k];
+        return "M" + (X0 - w) + " " + yS(y) + " Q" + X0 + " " + yS(y + 1.5) + " " + (X0 + w) + " " + yS(y);
+      }).join(""));
 
       // ключицы
       [-1, 1].forEach(function (s) {
-        var m = [X0 + s * 16, 131 - p.c * 3 - p.r * 1], lat = [X0 + s * 113, 116 - p.c * 15 - p.r * 1.5];
-        var d = "M" + P(m) + "C" + P([X0 + s * 42, 141 - p.c * 5]) + " " + P([X0 + s * 72, 110 - p.c * 11]) + " " + P(lat);
+        // короче и анатомичнее: медиальный конец толще (у грудины), лёгкий S-изгиб,
+        // латеральный конец почти горизонтально уходит к акромиону
+        var m = [X0 + s * 17, 132 - p.c * 3 - p.r * 1], lat = [X0 + s * 96, 121 - p.c * 13 - p.r * 1.5];
+        var d = "M" + P(m) + "C" + P([X0 + s * 38, 139 - p.c * 5]) + " " + P([X0 + s * 66, 117 - p.c * 10]) + " " + P(lat);
+        var de = "M" + P(m) + "L" + P([X0 + s * 24, 134.5 - p.c * 3.6 - p.r]);
+        clav[s].e.setAttribute("d", de); clav[s].eI.setAttribute("d", de);
         clav[s].o.setAttribute("d", d); clav[s].i.setAttribute("d", d);
-        if (s < 0) S.clavL = [X0 - 66, 122 - p.c * 10];
+        if (s < 0) S.clavL = [X0 - 62, 125 - p.c * 9];
       });
 
       // стрелки — видны, только пока соответствующая часть движется
