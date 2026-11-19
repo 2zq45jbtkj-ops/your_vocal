@@ -326,10 +326,10 @@ html.dark, body.dark {
   --rim-hi: 235 242 250; --rim-hi-a: .85; --rim-lo: 0 0 0; --rim-lo-a: .55; --rim-base: .22;
   --rim-warm: 72% 0.12 38; --rim-cool: 82% 0.08 215; --rim-wa: .55; --rim-ca: .6;
   --dock-drop: 0 12px 30px oklch(10% 0.01 235 / .6), 0 2px 6px oklch(10% 0.01 235 / .4);
-  --dock-glint: block;
+  --dock-glint: none; /* 20.11: блик убран и в тёмной теме — вернуть: block + анимация у .dock-fx */
 }
 .dock-fx, .dock-lit { position: absolute; inset: 0; border-radius: 26px; pointer-events: none; }
-.dock-fx { z-index: 3; animation: dockDrift 26s ease-in-out infinite; }
+.dock-fx { z-index: 3; }
 .dock-lit { display: var(--dock-glint);
   -webkit-mask: linear-gradient(180deg, #000 0%, rgb(0 0 0 / .55) 55%, rgb(0 0 0 / .18) 100%);
           mask: linear-gradient(180deg, #000 0%, rgb(0 0 0 / .55) 55%, rgb(0 0 0 / .18) 100%);
