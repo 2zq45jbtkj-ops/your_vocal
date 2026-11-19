@@ -184,6 +184,7 @@ var TrackCovers = {
 var TRK_ICO = {
   pencil: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M13.5 6.5l4 4" stroke="currentColor" stroke-width="2"/></svg>',
   plus: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
+  warn: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3.5L2.8 19.5h18.4L12 3.5z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v4.2" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="17" r="1.2" fill="currentColor"/></svg>',
   note: '<svg width="34" height="34" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 18V5l11-2v13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="18" r="3" stroke="currentColor" stroke-width="1.7"/><circle cx="17" cy="16" r="3" stroke="currentColor" stroke-width="1.7"/></svg>'
 };
 
@@ -192,11 +193,21 @@ var TrackCard = {
     if (it.kind === "skel") {
       return '<div class="trk-card trk-skel" aria-hidden="true"><div class="trk-cover"></div><div class="trk-meta"><i></i><i></i></div></div>';
     }
+    if (it.kind === "warn") {
+      var full = it.count >= it.limit;
+      return '<div class="trk-card trk-warn" role="note" aria-label="' + (full ? "Места больше нет" : "Места становится меньше") + ", занято " + it.count + " из " + it.limit + '">' +
+        '<div class="trk-tint"></div>' +
+        '<div class="trk-warn-ic">' + TRK_ICO.warn + '</div>' +
+        '<div class="trk-warn-t">' + (full ? "Места больше нет" : "Внимание! Места становится меньше") + "</div>" +
+        '<div class="trk-warn-n">Занято ' + it.count + " из " + it.limit + "</div>" +
+        '<div class="trk-warn-s">Удали произведения, которыми не пользуешься, чтобы приложение продолжало качественно работать.</div>' +
+        "</div>";
+    }
     if (it.kind === "add") {
       return '<div class="trk-card trk-add" role="button" tabindex="0" data-trk-add aria-label="Добавить трек">' +
         '<div class="trk-add-ic">' + TRK_ICO.plus + '</div><div class="trk-add-t">Добавить трек</div></div>';
     }
-    var s = it.song, lb = trkLabels(s), url = trkCoverUrl(s), c = trkCover(s) || {}, adm = karIsAdm() || state.isAdmin;
+    var s = it.song, lb = trkLabels(s), url = trkCoverUrl(s), c = trkCover(s) || {}, adm = karIsAdm() || state.isAdmin || s.addedBy === "student";
     var tint = c.palette && c.palette.dominant ? ' style="--tc:' + c.palette.dominant + ";--tc2:" + (c.palette.second || c.palette.dominant) + '"' : "";
     var cover = url
       ? '<img src="' + esc(url) + '" alt="" loading="lazy" decoding="async" draggable="false">'
@@ -207,7 +218,7 @@ var TrackCard = {
     return '<div class="trk-card' + (it.kind === "draft" ? " trk-draft" : "") + '"' + tint + ' role="button" tabindex="0" aria-label="' + esc(label) + '">' +
       '<div class="trk-tint"></div>' +
       '<div class="trk-cover">' + cover + badge + "</div>" +
-      (adm ? '<button class="trk-edit" type="button" data-trk-edit aria-label="Изменить трек">' + TRK_ICO.pencil + "</button>" : "") +
+      '<button class="trk-edit" type="button" data-trk-edit aria-label="Изменить или убрать трек">' + TRK_ICO.pencil + "</button>" +
       '<div class="trk-meta"><div class="trk-artist">' + esc(line1) + "</div>" + (line2 ? '<div class="trk-title">' + esc(line2) + "</div>" : "") + "</div>" +
       "</div>";
   }
@@ -302,11 +313,11 @@ var TrackGrid = {
     function release() { clearTimeout(lp); lp = 0; if (pressed) pressed.classList.remove("pressed"); pressed = null; }
     el.addEventListener("pointerdown", function (e) {
       var c = card(e);
-      if (!c || c.classList.contains("trk-skel") || e.target.closest("[data-trk-edit]")) return;
+      if (!c || c.classList.contains("trk-skel") || c.classList.contains("trk-warn") || e.target.closest("[data-trk-edit]")) return;
       x0 = e.clientX; y0 = e.clientY; lpDone = false;
       pressed = c; c.classList.add("pressed"); trkHaptic();
       var it = item(c), g = TrackGrid.g;
-      if (it && it.song && g.opts.onEdit && (state.isAdmin || karIsAdm())) {
+      if (it && it.song && g.opts.onEdit) {
         lp = setTimeout(function () { lp = 0; lpDone = true; release(); trkHaptic(); g.opts.onEdit(it); }, 500);
       }
     });
@@ -319,7 +330,7 @@ var TrackGrid = {
       if (!g || !c) return;
       if (lpDone) { lpDone = false; return; }
       var it = item(c);
-      if (!it || it.kind === "skel") return;
+      if (!it || it.kind === "skel" || it.kind === "warn") return;
       if (e.target.closest("[data-trk-edit]")) { trkHaptic(); if (g.opts.onEdit) g.opts.onEdit(it); return; }
       if (it.kind === "add") { if (g.opts.onAdd) g.opts.onAdd(c); return; }
       if (g.opts.onOpen) g.opts.onOpen(it);
@@ -340,36 +351,97 @@ function trkSkeletonHtml() {
   return '<div class="trk-skel-grid">' + h + "</div>";
 }
 
-/* ---------- TrackEditSheet ---------- */
+/* ---------- запись в песню: Николай — токеном, ученик — своей сессией ---------- */
+
+function trkTeacher() { return !!(state.isAdmin && state._siteAuth); }
+
+function trkPatch(song, fields) {
+  var opts = { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(fields) };
+  var path = "/api/player-tracks?id=" + encodeURIComponent(song.id);
+  var p = trkTeacher() ? karAdmFetch(path, opts) : karSession().then(function (sess) {
+    opts.headers["X-Player-Session"] = sess;
+    return fetch(BAZA_API + path, opts).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
+  });
+  return p.then(function (d) {
+    if (d && d.song) Object.keys(d.song).forEach(function (k) { song[k] = d.song[k]; });
+    return song;
+  });
+}
+
+function trkCoverPost(payload) {
+  if (trkTeacher()) return fetch("/api/karaoke-cover", { method: "POST", headers: bazaAuthHeaders({ "Content-Type": "application/json" }), body: JSON.stringify(payload) });
+  return karSession().then(function (sess) {
+    return fetch("/api/karaoke-cover", { method: "POST", headers: { "Content-Type": "application/json", "X-Player-Session": sess }, body: JSON.stringify(payload) });
+  });
+}
+
+// Убрать песню из приложения: в базе и в Репертуаре она остаётся (20.11).
+function trkHide(song) {
+  return trkPatch(song, { appHidden: true }).then(function () {
+    ["songs", "drafts"].forEach(function (k) {
+      if (Array.isArray(KAR[k])) KAR[k] = KAR[k].filter(function (x) { return x.id !== song.id; });
+    });
+    KAR.appCount = karAppCount((KAR.songs || []).concat(KAR.drafts || []));
+  });
+}
+
+/* ---------- TrackEditSheet ----------
+   Николай: исполнитель, название, обложка, «Текст, минус и разметка», убрать.
+   Ученик, свой трек: исполнитель, название, обложка, убрать.
+   Ученик, трек Николая: только «Убрать из приложения». */
 
 var TrackEditSheet = {
   open: function (song, onFull) {
     var lb = trkLabels(song), url = trkCoverUrl(song);
+    var canEdit = trkTeacher() || song.addedBy === "student";
     var ov = document.createElement("div");
     ov.className = "trk-shade";
     ov.innerHTML =
-      '<div class="hw-sheet trk-sheet" role="dialog" aria-modal="true" aria-label="Изменить трек">' +
+      '<div class="hw-sheet trk-sheet" role="dialog" aria-modal="true" aria-label="' + (canEdit ? "Изменить трек" : "Трек") + '">' +
         '<div class="hw-grip"></div>' +
-        '<div class="hw-sheet-title">Изменить трек</div>' +
-        '<div class="trk-sheet-cover"><div class="trk-sheet-img">' + (url ? '<img src="' + esc(url) + '" alt="Обложка">' : TRK_ICO.note) + "</div>" +
-          '<label class="trk-sheet-btn">Заменить обложку<input type="file" accept="image/*" hidden></label></div>' +
-        '<label class="field-label" for="trk-artist">Исполнитель</label>' +
-        '<input id="trk-artist" class="field-input mb" maxlength="120" autocomplete="off" value="' + esc(song.artist || (trkCover(song) || {}).tagArtist || "") + '">' +
-        '<label class="field-label" for="trk-title">Название</label>' +
-        '<input id="trk-title" class="field-input" maxlength="160" autocomplete="off" value="' + esc(lb.title) + '" aria-describedby="trk-err">' +
+        '<div class="hw-sheet-title">' + (canEdit ? "Изменить трек" : esc(lb.title)) + "</div>" +
+        (canEdit
+          ? '<div class="trk-sheet-cover"><div class="trk-sheet-img">' + (url ? '<img src="' + esc(url) + '" alt="Обложка">' : TRK_ICO.note) + "</div>" +
+              '<label class="trk-sheet-btn">Заменить обложку<input type="file" accept="image/*" hidden></label></div>' +
+            '<label class="field-label" for="trk-artist">Исполнитель</label>' +
+            '<input id="trk-artist" class="field-input mb" maxlength="120" autocomplete="off" value="' + esc(song.artist || (trkCover(song) || {}).tagArtist || "") + '">' +
+            '<label class="field-label" for="trk-title">Название</label>' +
+            '<input id="trk-title" class="field-input" maxlength="160" autocomplete="off" value="' + esc(lb.title) + '" aria-describedby="trk-err">'
+          : '<div class="hw-sheet-sub">' + esc(lb.artist || "") + (lb.artist ? " · " : "") + "трек от Николая. Если он больше не нужен на занятиях, убери его, чтобы освободить место.</div>") +
         '<div class="trk-err" id="trk-err" role="alert"></div>' +
         (onFull ? '<button class="trk-sheet-link" type="button" data-trs="full">Текст, минус и разметка<span>›</span></button>' : "") +
-        '<div class="trk-sheet-row"><button class="trk-sheet-cancel" type="button" data-trs="cancel">Отмена</button>' +
-          '<button class="cta" type="button" data-trs="save">Сохранить</button></div>' +
+        '<button class="trk-sheet-del" type="button" data-trs="hide">Убрать из приложения</button>' +
+        '<div class="trk-sheet-row"><button class="trk-sheet-cancel" type="button" data-trs="cancel">' + (canEdit ? "Отмена" : "Закрыть") + "</button>" +
+          (canEdit ? '<button class="cta" type="button" data-trs="save">Сохранить</button>' : "") + "</div>" +
       "</div>";
     document.body.appendChild(ov);
-    var sheet = ov.querySelector(".trk-sheet"), file = null, preview = null;
-    var tIn = ov.querySelector("#trk-title"), aIn = ov.querySelector("#trk-artist"), err = ov.querySelector(".trk-err");
+    var file = null, preview = null, err = ov.querySelector(".trk-err");
+    var tIn = ov.querySelector("#trk-title"), aIn = ov.querySelector("#trk-artist");
     function close() { if (preview) URL.revokeObjectURL(preview); if (ov.parentNode) ov.parentNode.removeChild(ov); }
     ov.addEventListener("click", function (e) { if (e.target === ov) close(); });
     ov.querySelector('[data-trs="cancel"]').onclick = close;
     var full = ov.querySelector('[data-trs="full"]');
     if (full) full.onclick = function () { close(); onFull(); };
+
+    // «Убрать» — со второго нажатия: случайный тап не должен стирать трек
+    var hide = ov.querySelector('[data-trs="hide"]'), armed = false;
+    hide.onclick = function () {
+      if (!armed) {
+        armed = true; hide.classList.add("armed");
+        hide.textContent = "Точно убрать? Нажми ещё раз";
+        err.textContent = "";
+        setTimeout(function () { if (armed && hide.isConnected) { armed = false; hide.classList.remove("armed"); hide.textContent = "Убрать из приложения"; } }, 4000);
+        return;
+      }
+      hide.disabled = true; hide.textContent = "Убираю…";
+      trkHide(song).then(function () { close(); trkHaptic(); render(); }).catch(function () {
+        hide.disabled = false; armed = false; hide.classList.remove("armed"); hide.textContent = "Убрать из приложения";
+        err.textContent = "Не получилось убрать. Проверь интернет и попробуй ещё раз.";
+      });
+    };
+
+    if (!canEdit) { setTimeout(function () { ov.querySelector(".trk-sheet").classList.add("on"); }, 0); return; }
+
     tIn.addEventListener("input", function () { if (tIn.value.trim()) { err.textContent = ""; tIn.classList.remove("bad"); } });
     ov.querySelector('input[type="file"]').addEventListener("change", function (e) {
       var f = e.target.files && e.target.files[0];
@@ -386,22 +458,18 @@ var TrackEditSheet = {
       btn.disabled = true; btn.textContent = "Сохраняю…"; err.textContent = "";
       var jobs = [];
       if (title !== String(song.title || "").trim() || artist !== String(song.artist || "").trim()) {
-        jobs.push(karAdmFetch("/api/player-tracks?id=" + encodeURIComponent(song.id), {
-          method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: title, artist: artist })
-        }).then(function (d) { song.title = (d && d.song && d.song.title) || title; song.artist = d && d.song ? d.song.artist : artist; }));
+        jobs.push(trkPatch(song, { title: title, artist: artist }));
       }
       if (file) {
         jobs.push(CoverExtractor.thumb(file).then(function (t) {
           var pal = PaletteResolver.fromPixels(t.pixels, t.size, t.size);
           return trkBlobToB64(t.jpeg).then(function (b64) {
-            return fetch("/api/karaoke-cover", {
-              method: "POST", headers: bazaAuthHeaders({ "Content-Type": "application/json" }),
-              body: JSON.stringify({ songId: song.id, jpeg: b64, palette: pal, status: "cover", manual: true })
-            }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }).then(function (d) {
-              var c = trkCover(song) || {};
-              KAR.covers = KAR.covers || {};
-              KAR.covers[song.id] = { src: "", palette: pal, tagTitle: c.tagTitle || "", tagArtist: c.tagArtist || "", status: "cover", manual: true, v: d.v, local: URL.createObjectURL(t.jpeg) };
-            });
+            return trkCoverPost({ songId: song.id, jpeg: b64, palette: pal, status: "cover", manual: true })
+              .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }).then(function (d) {
+                var c = trkCover(song) || {};
+                KAR.covers = KAR.covers || {};
+                KAR.covers[song.id] = { src: "", palette: pal, tagTitle: c.tagTitle || "", tagArtist: c.tagArtist || "", status: "cover", manual: true, v: d.v, local: URL.createObjectURL(t.jpeg) };
+              });
           });
         }));
       }
@@ -410,10 +478,114 @@ var TrackEditSheet = {
         TrackGrid.refreshSong(song.id);
       }).catch(function () {
         btn.disabled = false; btn.textContent = "Сохранить";
-        err.textContent = "Не сохранилось. Если ты давно не входил, выйди из режима админа и войди по ключам заново.";
+        err.textContent = trkTeacher() ? "Не сохранилось. Если ты давно не входил, выйди из режима админа и войди по ключам заново." : "Не сохранилось. Проверь интернет и попробуй ещё раз.";
       });
     };
-    setTimeout(function () { sheet.classList.add("on"); }, 0);
+    setTimeout(function () { ov.querySelector(".trk-sheet").classList.add("on"); }, 0);
+  }
+};
+
+/* ---------- TrackUpload: ученик добавляет трек сам (20.11) ----------
+   Выбирает файл минуса на телефоне → песня создаётся в его Репертуаре
+   (baza-dannih, added_by = student) с названием и исполнителем из тегов →
+   файл уходит в хранилище → обложка достаётся из того же файла.
+   Лимит 15 проверяет сервер (409). Если загрузка сорвалась — пустая песня
+   убирается из приложения, место не занимает. */
+
+var TRK_STUDENT_MAX = 25 * 1024 * 1024;
+
+var TrackUpload = {
+  pick: function (el) {
+    if (el._busy) return;
+    var inp = document.createElement("input");
+    inp.type = "file"; inp.accept = "audio/*,.mp3,.m4a,.wav,.flac,.aac,.ogg";
+    inp.style.display = "none";
+    document.body.appendChild(inp);
+    inp.addEventListener("change", function () {
+      var f = inp.files && inp.files[0];
+      inp.parentNode.removeChild(inp);
+      if (f) TrackUpload.run(f, el);
+    });
+    inp.click();
+  },
+
+  label: function (el, t, bad) {
+    var l = el.querySelector(".trk-add-t");
+    if (l) { l.textContent = t; l.classList.toggle("bad", !!bad); }
+  },
+
+  run: function (file, el) {
+    if (file.size > TRK_STUDENT_MAX) { TrackUpload.label(el, "Файл больше 25 МБ — выбери поменьше", true); return; }
+    if (file.type && !/^audio\//.test(file.type)) { TrackUpload.label(el, "Это не аудиофайл", true); return; }
+    el._busy = true;
+    TrackUpload.label(el, "Читаю файл…");
+    var song = null, sess = null, tags = null;
+    var ext = (file.name.split(".").pop() || "mp3").toLowerCase().replace(/[^a-z0-9]/g, "") || "mp3";
+    var name = "tracks/" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8) + "." + ext;
+    var probeUrl = URL.createObjectURL(file), dur = 0, probe = new Audio();
+    probe.preload = "metadata"; probe.src = probeUrl;
+    probe.onloadedmetadata = function () { dur = isFinite(probe.duration) ? probe.duration : 0; };
+
+    CoverExtractor.read(file, file.name).then(function (r) {
+      tags = r;
+      return karSession();
+    }).then(function (s) {
+      sess = s;
+      return fetch(BAZA_API + "/api/player-tracks", {
+        method: "POST", headers: { "Content-Type": "application/json", "X-Player-Session": sess },
+        body: JSON.stringify({ title: tags.title, artist: tags.artist })
+      }).then(function (r) {
+        if (r.status === 409) throw new Error("limit");
+        if (!r.ok) throw new Error(r.status);
+        return r.json();
+      });
+    }).then(function (d) {
+      song = d.song;
+      return new Promise(function (res, rej) {
+        if (window.BlobClient && window.BlobClient.upload) return res(window.BlobClient);
+        var sc = document.createElement("script");
+        sc.src = "/vendor/blob-client.js";
+        sc.onload = function () { window.BlobClient ? res(window.BlobClient) : rej(new Error("no client")); };
+        sc.onerror = rej;
+        document.head.appendChild(sc);
+      });
+    }).then(function (BC) {
+      TrackUpload.label(el, "Загружаю… 0%");
+      return BC.upload(name, file, {
+        access: "public",
+        contentType: file.type || "audio/mpeg",
+        handleUploadUrl: BAZA_API + "/api/player-upload",
+        clientPayload: "ps:" + sess,
+        onUploadProgress: function (p) { TrackUpload.label(el, "Загружаю… " + Math.round(p.percentage) + "%"); }
+      });
+    }).then(function (blob) {
+      TrackUpload.label(el, "Сохраняю…");
+      return karAdmPeaks(file).catch(function () { return null; }).then(function (pk) {
+        var f = { music: { url: blob.url, name: file.name, durationSec: Math.round(dur) } };
+        if (pk) { f.peaksMusic = pk; f.peaks = pk; }
+        return trkPatch(song, f).then(function () { return blob; });
+      });
+    }).then(function (blob) {
+      URL.revokeObjectURL(probeUrl);
+      // обложку берём из уже выбранного файла — второй раз качать не нужно
+      if (tags && tags.picture) {
+        CoverExtractor.thumb(tags.picture).then(function (t) {
+          var rec = { src: blob.url, tagTitle: tags.titleFromTags ? tags.title : "", tagArtist: tags.artist || "", status: "cover", manual: false, v: 0,
+            palette: PaletteResolver.fromPixels(t.pixels, t.size, t.size), local: URL.createObjectURL(t.jpeg) };
+          return trkBlobToB64(t.jpeg).then(function (b64) { TrackCovers.tried[song.id + "|" + blob.url] = true; return TrackCovers.store(song, rec, b64); });
+        }).catch(function () {});
+      }
+      el._busy = false;
+      trkHaptic();
+      KAR.justLoaded = false;
+      if (state.screen === "karaoke") render(); // список перечитается с базы
+    }).catch(function (e) {
+      URL.revokeObjectURL(probeUrl);
+      el._busy = false;
+      if (e && e.message === "limit") { TrackUpload.label(el, "Уже 15 треков — сначала убери ненужные", true); return; }
+      TrackUpload.label(el, "Не загрузилось. Нажми, чтобы попробовать ещё раз", true);
+      if (song) trkPatch(song, { appHidden: true }).catch(function () {});
+    });
   }
 };
 

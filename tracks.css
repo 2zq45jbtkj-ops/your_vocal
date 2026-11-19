@@ -141,3 +141,22 @@ html.kp-open.kp-pal, html.kp-open.kp-pal body { background: var(--kp-page); }
 .kcol-add { opacity: 1; display: flex; align-items: center; justify-content: center; font: 600 22px Inter, sans-serif; color: var(--hi);
   background: var(--glass); box-shadow: inset 0 0 0 1.5px var(--glass-b); }
 .kcol-add input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+
+/* ==========================================================================
+   Лимит 15 треков (20.11)
+   ========================================================================== */
+.trk-warn { cursor: default; align-items: flex-start; justify-content: center; gap: 6px; padding: 14px 14px 12px;
+  --tc: var(--terra); --tc2: var(--terra); }
+.trk-warn.pressed, .trk-warn:active { box-shadow: var(--trk-up); transform: none; }
+.trk-warn-ic { width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  background: var(--bg); box-shadow: var(--raised-sm); color: var(--terra); }
+.trk-warn-t { font: 700 14px/1.25 Manrope, sans-serif; color: var(--ink); }
+.trk-warn-n { font: 700 12.5px Inter, sans-serif; color: var(--terra); }
+.trk-warn-s { font: 400 11.5px/1.35 Inter, sans-serif; color: var(--gray); }
+.trk-add-t { text-align: center; padding: 0 10px; }
+.trk-add-t.bad { color: var(--ink-red); font-size: 12px; }
+.trk-sheet-del { width: 100%; min-height: 48px; margin: 6px 0 0; border: none; border-radius: 16px; cursor: pointer;
+  background: var(--bg); box-shadow: var(--raised-sm); font: 600 14px Inter, sans-serif; color: var(--ink-red); transition: background .2s; }
+.trk-sheet-del:active { box-shadow: var(--inset-sm); }
+.trk-sheet-del.armed { background: var(--soft-red); box-shadow: var(--inset-sm); }
+html.dark .trk-sheet-del.armed { background: oklch(40% 0.1 25); color: var(--white-text); }

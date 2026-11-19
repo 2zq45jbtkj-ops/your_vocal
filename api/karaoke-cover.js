@@ -8,7 +8,8 @@
         • приложение после разбора файла (status cover/none/broken) — Николай
           (X-Site-Auth) или сам ученик, чья это песня (X-Player-Session), и
           только если src — действительно плюс или минус этой песни;
-        • Николай вручную («Заменить обложку», manual: true) — только X-Site-Auth.
+        • вручную («Заменить обложку», manual: true) — Николай (X-Site-Auth)
+          или ученик у трека, который загрузил сам.
         Автоматический разбор никогда не перезаписывает обложку, которую
         Николай поставил вручную. */
 
@@ -65,12 +66,14 @@ export default async function handler(req) {
 
   var siteAuth = req.headers.get("x-site-auth") || "";
   var teacher = await isTeacher(siteAuth);
-  if (manual && !teacher) return json({ ok: false, error: "Только преподаватель" }, 403);
   if (!teacher) {
     var songs = await sessionSongs(req.headers.get("x-player-session") || "");
     var song = (songs || []).filter(function (s) { return s.id === songId; })[0];
     var files = song ? [song.voice && song.voice.url, song.music && song.music.url] : [];
-    if (!song || !src || files.indexOf(src) === -1) return json({ ok: false, error: "Не твоя песня" }, 403);
+    if (!song) return json({ ok: false, error: "Не твоя песня" }, 403);
+    // обложку вручную ученик меняет только у треков, которые загрузил сам (20.11)
+    if (manual && song.addedBy !== "student") return json({ ok: false, error: "Только преподаватель" }, 403);
+    if (!manual && (!src || files.indexOf(src) === -1)) return json({ ok: false, error: "Не твоя песня" }, 403);
   }
 
   var palette = cleanPalette(body.palette);

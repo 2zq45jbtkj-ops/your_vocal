@@ -150,7 +150,9 @@ function karLoadSongs(force) {
   }).then(function (res) {
     KAR.loading = false;
     if (state.accessToken !== tok) return;
-    var all = (res[0] && res[0].songs) || [];
+    // убранные из приложения (20.11) — не показываем, в базе они остаются
+    var all = ((res[0] && res[0].songs) || []).filter(function (s) { return !s.appHidden; });
+    KAR.appCount = karAppCount(all);
     var songs = all.filter(function (s) { return s.music && s.music.url; });
     // Николаю видны и песни, где ещё нет минуса (ученику — нет): иначе
     // песня с текстом и плюсом «пропадала» из Караоке, хотя в базе была (17.11).
@@ -182,6 +184,14 @@ function karLoadSongs(force) {
 /* Изменить трек (20.11): долгое нажатие на карточку или карандаш в углу —
    шторка «Исполнитель / Название / Заменить обложку» (tracks.js,
    TrackEditSheet); из неё же — «Текст, минус и разметка» (прежний экран песни). */
+
+/* Лимит «Мои треки» (20.11): не больше 15 песен с файлами на ученика.
+   Сервер (baza-dannih) проверяет то же самое и отвечает 409. */
+var KAR_LIMIT = 15, KAR_WARN = 10;
+function karAppCount(all) {
+  return all.filter(function (s) { return (s.music && s.music.url) || (s.voice && s.voice.url); }).length;
+}
+var KAR_LIMIT_MSG = "У ученика в приложении уже 15 треков. Сначала убери ненужные: удерживай карточку → «Убрать из приложения».";
 
 function karSongsKey(list) {
   var cv = KAR.covers || {};
@@ -246,10 +256,13 @@ function renderKaraokeList() {
     body = '<div class="instruction-note">Не получилось загрузить песни. Проверь интернет и открой экран ещё раз.</div>';
   } else {
     // «Мои треки» (20.11): сетка карточек 2 в ряд. Черновики (нет минуса) —
-    // только Николаю; «+ Добавить трек» — последней карточкой, тоже только ему.
+    // только Николаю. Больше 10 треков — карточка «места становится меньше»;
+    // «+ Добавить трек» — последней, пока не набралось 15 (лимит для всех).
     items = KAR.songs.map(function (s) { return { kind: "song", song: s }; });
     if (state.isAdmin) (KAR.drafts || []).forEach(function (s) { items.push({ kind: "draft", song: s }); });
-    if (canAdd) items.push({ kind: "add" });
+    var n = KAR.appCount || 0;
+    if (n > KAR_WARN) items.push({ kind: "warn", count: n, limit: KAR_LIMIT });
+    if (n < KAR_LIMIT) items.push({ kind: "add" });
     body = (!KAR.songs.length ? '<div class="instruction-note" style="margin-bottom:16px;">Здесь появятся песни, над которыми ты работаешь с Николаем, когда он добавит к ним минус.</div>' : "") +
       '<div data-trk-grid></div>';
   }
@@ -265,10 +278,11 @@ function renderKaraokeList() {
       go("karaoke-play");
     },
     onEdit: function (it) {
-      if (!state.isAdmin) return;
-      TrackEditSheet.open(it.song, function () { karOpenAdmEdit(it.song); });
+      TrackEditSheet.open(it.song, state.isAdmin ? function () { karOpenAdmEdit(it.song); } : null);
     },
-    onAdd: function (el) { karAddTrack(el, ownCard); }
+    // Николай — прежний путь (экран песни); ученик — выбирает файл минуса
+    // на телефоне, остальное приложение сделает само (TrackUpload).
+    onAdd: function (el) { if (canAdd) karAddTrack(el, ownCard); else TrackUpload.pick(el); }
   });
 }
 
@@ -1370,14 +1384,14 @@ function renderAdminKaraokeSongs() {
   var nb = app.querySelector('[data-kadm="new"]');
   if (nb) nb.onclick = function () {
     nb.disabled = true; nb.textContent = "Создаю…";
-    karAdmFetch("/api/player-tracks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ studentId: st.id }) })
+    karAdmFetch("/api/player-tracks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ studentId: st.id, fromApp: true }) })
       .then(function (d) {
         KAR.adm.songs.push(d.song);
         KAR.adm.song = d.song;
         KAR.adm.editMeta = true;
         go("admin-karaoke-edit");
       })
-      .catch(function () { nb.disabled = false; nb.textContent = "Не получилось. Нажми ещё раз"; });
+      .catch(function (e) { nb.disabled = false; nb.textContent = String(e && e.message) === "409" ? "Уже 15 треков — сначала убери ненужные" : "Не получилось. Нажми ещё раз"; });
   };
 }
 
@@ -1388,14 +1402,16 @@ function karNewSong(st, btn) {
   KAR.adm.student = { id: st.id, name: st.name };
   KAR.adm.songs = null; KAR.adm.fromKar = true; KAR.songs = null;
   if (btn) { btn.disabled = true; btn.textContent = "Создаю…"; }
-  karAdmFetch("/api/player-tracks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ studentId: st.id }) })
+  karAdmFetch("/api/player-tracks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ studentId: st.id, fromApp: true }) })
     .then(function (d) {
       KAR.adm.song = d.song;
       KAR.adm.editMeta = true;
       go("admin-karaoke-edit");
     })
-    .catch(function () {
-      if (btn && document.body.contains(btn)) { btn.disabled = false; btn.textContent = "Не получилось. Нажми ещё раз"; }
+    .catch(function (e) {
+      var full = String(e && e.message) === "409";
+      if (btn && document.body.contains(btn)) { btn.disabled = false; btn.textContent = full ? "Уже 15 треков" : "Не получилось. Нажми ещё раз"; }
+      if (full) return;
       else go("karaoke");
     });
 }
@@ -1754,7 +1770,7 @@ function karAdmUpload(file, kind) {
   }).then(function (blob) {
     karAdmMsg("Сохраняю…");
     return karAdmPeaks(file).catch(function () { return null; }).then(function (pk) {
-      var f = {};
+      var f = { fromApp: true }; // первый файл песни — под лимит 15 (20.11)
       f[isVoice ? "voice" : "music"] = { url: blob.url, name: file.name, durationSec: Math.round(dur) };
       // Как на сайте: основная волна песни — с плюса, если он есть.
       if (pk) {
@@ -1771,7 +1787,8 @@ function karAdmUpload(file, kind) {
     }
     render();
     karAdmMsg(Word + " загружен ✓");
-  }).catch(function () {
+  }).catch(function (e) {
+    if (String(e && e.message) === "409") { karAdmMsg(KAR_LIMIT_MSG, true); return; }
     karAdmMsg(Word + " не загрузился. Если ты давно не входил, выйди из режима админа и войди по ключам заново.", true);
   });
 }
