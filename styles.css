@@ -320,15 +320,17 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
   --rim-hi: 255 255 255; --rim-hi-a: .95; --rim-lo: 60 50 40; --rim-lo-a: .28; --rim-base: .75;
   --rim-warm: 62% 0.13 38; --rim-cool: 66% 0.09 220; --rim-wa: .7; --rim-ca: .75;
   --dock-drop: 0 10px 28px oklch(40% 0.03 70 / .22), 0 2px 6px oklch(40% 0.03 70 / .12);
+  --dock-glint: none; /* светлая тема: без блика, только грань и тень (по просьбе Николая) */
 }
 html.dark, body.dark {
   --rim-hi: 235 242 250; --rim-hi-a: .85; --rim-lo: 0 0 0; --rim-lo-a: .55; --rim-base: .22;
   --rim-warm: 72% 0.12 38; --rim-cool: 82% 0.08 215; --rim-wa: .55; --rim-ca: .6;
   --dock-drop: 0 12px 30px oklch(10% 0.01 235 / .6), 0 2px 6px oklch(10% 0.01 235 / .4);
+  --dock-glint: block;
 }
 .dock-fx, .dock-lit { position: absolute; inset: 0; border-radius: 26px; pointer-events: none; }
 .dock-fx { z-index: 3; animation: dockDrift 26s ease-in-out infinite; }
-.dock-lit {
+.dock-lit { display: var(--dock-glint);
   -webkit-mask: linear-gradient(180deg, #000 0%, rgb(0 0 0 / .55) 55%, rgb(0 0 0 / .18) 100%);
           mask: linear-gradient(180deg, #000 0%, rgb(0 0 0 / .55) 55%, rgb(0 0 0 / .18) 100%);
 }
