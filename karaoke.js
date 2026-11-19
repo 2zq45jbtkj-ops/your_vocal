@@ -534,6 +534,7 @@ function renderKaraokePlay() {
 
   app.innerHTML =
     '<div class="kp">' +
+      '<canvas class="kfx" aria-hidden="true"></canvas>' +
       '<div class="amb"><i class="b1"></i><i class="b2"></i><i class="b3"></i></div><div class="frost"></div>' +
       '<div class="hd">' +
         (BROWSER_MODE ? '<div class="kback" data-kp="back">' + KAR_ICO.back + "</div>" : "") +
@@ -547,7 +548,7 @@ function renderKaraokePlay() {
   KP.bg = null;
   karPaintLyrics();
   karPaintBottom();
-  KarBg.apply(KP.root, s); // фон из обложки (20.11)
+  KarFx.apply(KP.root, s); // фон: стекло / слоновая кость / глубокий чёрный (20.11)
   var back = KP.root.querySelector('[data-kp="back"]');
   if (back) back.onclick = function () { handleBack(); };
   karPrepareEnvelope();
@@ -904,7 +905,7 @@ function karPaintChips() {
   chs.querySelector('[data-kp="pitch"]').onclick = function () { karOpenSheet(); };
   chs.querySelector('[data-kp="tempo"]').onclick = function () { karOpenSheet(); };
   chs.querySelector('[data-kp="marks"]').onclick = function () { KAR.showMarks = !KAR.showMarks; karPaintLyrics(); karPaintChips(); };
-  chs.querySelector('[data-kp="colors"]').onclick = function () { karOpenColors(); };
+  chs.querySelector('[data-kp="colors"]').onclick = function () { KarFx.openSheet(KP); };
 }
 
 /* Тональность и темп — вариант A (выбран Николаем 17.11): одна панель, два
@@ -1235,7 +1236,9 @@ function karTick(force, ts) {
     tr.querySelector(".t1").textContent = karFmt(t);
     tr.querySelector(".t2").textContent = "−" + karFmt(KE.dur - t);
   }
-  karGlow(t, ts || performance.now());
+  var now = ts || performance.now();
+  // фон рисует KarFx; прежние CSS-огоньки — только если WebGL недоступен
+  if (!(window.KarFx && KarFx.tick(t, now, KE))) karGlow(t, now);
 }
 
 function karSetCur(cur) {
