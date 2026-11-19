@@ -3625,7 +3625,7 @@ function renderDock() {
     // чтобы в любой момент вернуть пункт обратно одной строкой.
     { screen: "more", act: "go-more", icon: SVG.dockMore, label: "Ещё" }
   ];
-  var html = '<div class="dock">';
+  var html = '<div class="dock"><div class="dock-pill"></div>';
   items.forEach(function (it) {
     var active = activeTab === it.screen;
     var color = active ? "oklch(60% 0.13 38)" : "var(--gray)";
@@ -3634,12 +3634,133 @@ function renderDock() {
   });
   html += "</div>";
   app.insertAdjacentHTML("beforeend", html);
-  Array.prototype.forEach.call(app.querySelectorAll(".dock [data-act]"), function (el) {
+  var dock = app.querySelector(".dock");
+  var pill = dock.querySelector(".dock-pill");
+  var btns = dock.querySelectorAll(".dock-item");
+  var activeIdx = -1;
+  items.forEach(function (it, i) { if (activeTab === it.screen) activeIdx = i; });
+  dockAnimate(dock, pill, btns, activeIdx, activeTab);
+  bindDockDrag(dock, pill, btns);
+  Array.prototype.forEach.call(btns, function (el) {
     el.addEventListener("click", function () {
+      // После ведения пальцем по доку браузер присылает click — его глушим,
+      // переход уже сделан при отпускании пальца.
+      if (dockDragState.justDragged) return;
+      dockDragState.tapped = true;
       var fn = ACTS[el.getAttribute("data-act")];
       if (fn) fn();
     });
   });
+}
+
+// ---------- анимация дока (вариант «Ж + И», 20.11) ----------
+// Док перерисовывается заново на каждом render(), поэтому позицию плашки
+// помним снаружи (dockDragState.lastX) и при новой отрисовке ведём её
+// от старого места к новому. Иконка выбранного пункта «проседает и
+// отпускается»; по доку можно вести пальцем — плашка едет за ним и при
+// отпускании встаёт на ближайший пункт.
+var dockDragState = { lastX: null, lastTab: null, tapped: false, justDragged: false, run: null };
+var DOCK_SPRING = "cubic-bezier(.34,1.35,.5,1)";
+// Поворот iPad / смена ширины: старая позиция плашки уже неверна — не ведём от неё.
+window.addEventListener("resize", function () { dockDragState.lastX = null; });
+function dockReducedMotion() {
+  return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+function dockPressIcon(btn, delay) {
+  var svg = btn && btn.querySelector("svg");
+  if (!svg || !svg.animate || dockReducedMotion()) return;
+  svg.animate([
+    { transform: "scale(1)" },
+    { transform: "scale(.78)", offset: 0.35 },
+    { transform: "scale(1.08)", offset: 0.7 },
+    { transform: "scale(1)" }
+  ], { duration: 440, delay: delay || 0, easing: "ease-out" });
+}
+function dockAnimate(dock, pill, btns, idx, tab) {
+  if (idx < 0) { pill.style.display = "none"; dockDragState.lastTab = tab; dockDragState.tapped = false; return; }
+  var b = btns[idx];
+  var toX = b.offsetLeft, w = b.offsetWidth;
+  pill.style.width = w + "px";
+  var fromX = dockDragState.lastX;
+  var tabChanged = dockDragState.lastTab !== null && dockDragState.lastTab !== tab;
+  pill.style.left = toX + "px";
+  var now = Date.now(), run = dockDragState.run;
+  if (fromX !== null && Math.abs(fromX - toX) > 1 && pill.animate && !dockReducedMotion()) {
+    pill.animate([{ left: fromX + "px" }, { left: toX + "px" }], { duration: 460, easing: DOCK_SPRING });
+    dockDragState.run = { from: fromX, to: toX, start: now, icon: tabChanged ? 120 : null };
+    if (tabChanged) dockPressIcon(b, 120);
+  } else if (run && run.to === toX && now - run.start < 560 && !dockDragState.tapped) {
+    // Экран дорисовался повторно (например, кабинет после загрузки), пока
+    // плашка ещё ехала — продолжаем с того же места, а не обрываем.
+    var el = now - run.start;
+    if (el < 460 && pill.animate) {
+      var a = pill.animate([{ left: run.from + "px" }, { left: toX + "px" }], { duration: 460, easing: DOCK_SPRING });
+      a.currentTime = el;
+    }
+    var svg = b.querySelector("svg");
+    if (run.icon !== null && svg && svg.animate && el < run.icon + 440) {
+      var ia = svg.animate([
+        { transform: "scale(1)" }, { transform: "scale(.78)", offset: 0.35 },
+        { transform: "scale(1.08)", offset: 0.7 }, { transform: "scale(1)" }
+      ], { duration: 440, delay: run.icon, easing: "ease-out" });
+      ia.currentTime = el;
+    }
+  } else if (tabChanged) {
+    dockPressIcon(b, 0);
+  } else if (dockDragState.tapped) {
+    dockPressIcon(b, 0); // повторное нажатие на уже открытый пункт
+  }
+  dockDragState.lastX = toX;
+  dockDragState.lastTab = tab;
+  dockDragState.tapped = false;
+}
+function bindDockDrag(dock, pill, btns) {
+  var drag = null;
+  dock.addEventListener("pointerdown", function (e) {
+    if (pill.style.display === "none") return;
+    drag = { id: e.pointerId, sx: e.clientX, bx: pill.offsetLeft, moved: false };
+  });
+  dock.addEventListener("pointermove", function (e) {
+    if (!drag || e.pointerId !== drag.id) return;
+    var dx = e.clientX - drag.sx;
+    if (!drag.moved) {
+      if (Math.abs(dx) < 6) return;
+      drag.moved = true;
+      try { dock.setPointerCapture(e.pointerId); } catch (_) {}
+      pill.getAnimations && pill.getAnimations().forEach(function (a) { a.cancel(); });
+      pill.style.transition = "transform .15s";
+      pill.style.transform = "scale(1.06)";
+    }
+    var min = btns[0].offsetLeft, max = btns[btns.length - 1].offsetLeft;
+    var x = Math.max(min, Math.min(max, drag.bx + dx));
+    pill.style.left = x + "px";
+    dockDragState.lastX = x;
+  });
+  function end(e) {
+    if (!drag || e.pointerId !== drag.id) return;
+    var d = drag; drag = null;
+    if (!d.moved) return;
+    pill.style.transform = "";
+    dockDragState.justDragged = true;
+    setTimeout(function () { dockDragState.justDragged = false; }, 50);
+    var x = pill.offsetLeft, best = 0;
+    Array.prototype.forEach.call(btns, function (b, i) {
+      if (Math.abs(b.offsetLeft - x) < Math.abs(btns[best].offsetLeft - x)) best = i;
+    });
+    var bb = btns[best];
+    if (bb.classList.contains("active")) {
+      // Вернулись на тот же пункт — просто доводим плашку на место.
+      var toX = bb.offsetLeft;
+      pill.style.left = toX + "px";
+      if (pill.animate && !dockReducedMotion()) pill.animate([{ left: x + "px" }, { left: toX + "px" }], { duration: 420, easing: DOCK_SPRING });
+      dockDragState.lastX = toX;
+      return;
+    }
+    var fn = ACTS[bb.getAttribute("data-act")];
+    if (fn) fn();
+  }
+  dock.addEventListener("pointerup", end);
+  dock.addEventListener("pointercancel", end);
 }
 
 function stepRow(opts) {

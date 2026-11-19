@@ -22,6 +22,7 @@
   /* ---------- док ---------- */
   .dock { max-width: 460px; padding: 9px; }
   .dock-item { font-size: 11px; padding: 9px 2px; }
+  .dock-pill { top: 9px; bottom: 9px; }
   .unstar-toast { max-width: 460px; }
 
   /* ---------- Уроки ---------- */

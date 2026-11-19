@@ -296,7 +296,17 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
   background: none; border: none; padding: 8px 2px; border-radius: 18px;
   cursor: pointer; color: var(--gray); font-size: 10px; font-weight: 600; position: relative;
 }
-.dock-item.active { color: var(--terra); background: var(--bg); box-shadow: var(--inset-sm); }
+.dock { touch-action: pan-y; -webkit-user-select: none; user-select: none; }
+/* Вдавленная плашка активного пункта — отдельный слой под кнопками, чтобы
+   она могла скользить между пунктами (анимация в app.js → dockAnimate). */
+.dock-pill {
+  position: absolute; top: 8px; bottom: 8px; left: 8px; width: 0;
+  background: var(--bg); box-shadow: var(--inset-sm); border-radius: 18px;
+  pointer-events: none; z-index: 0;
+}
+.dock-item { z-index: 1; -webkit-tap-highlight-color: transparent; transition: color .3s; }
+.dock-item.active { color: var(--terra); }
+.dock-item svg { transform-origin: center; }
 .dock-item svg { display: block; }
 .dock-badge {
   position: absolute; top: -2px; right: 22%; background: var(--terra); color: var(--white-text);
