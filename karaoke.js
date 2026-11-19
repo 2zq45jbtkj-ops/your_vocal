@@ -1351,6 +1351,7 @@ function karAdmLoadSongs() {
   KAR.adm.songs = "loading"; KAR.adm.songsErr = null;
   karAdmFetch("/api/player-tracks?studentId=" + encodeURIComponent(st.id)).then(function (d) {
     KAR.adm.songs = d.songs || [];
+    karAdmLoadCovers(KAR.adm.songs);
     if (state.screen === "admin-karaoke-songs") render();
   }).catch(function () {
     KAR.adm.songs = []; KAR.adm.songsErr = true;
@@ -1370,7 +1371,9 @@ function renderAdminKaraokeSongs() {
         var n = String(s.lyrics || "").split("\n").filter(function (x) { return x.trim(); }).length;
         var m = (s.lyricTimes || []).length;
         var sub = [s.music && s.music.url ? "минус ✓" : "нет минуса", n ? "текст ✓" : "нет текста", n ? "размечено " + Math.min(m, n) + " из " + n : ""].filter(Boolean).join(" · ");
-        return '<div class="lesson-card" data-kadm-song="' + k + '"><div class="lesson-dot" style="background:oklch(60% 0.13 38);">♪</div>' +
+        var cu = trkCoverUrl(s);
+        return '<div class="lesson-card" data-kadm-song="' + k + '">' +
+          (cu ? '<div class="lesson-dot kadm-cov"><img src="' + esc(cu) + '" alt=""></div>' : '<div class="lesson-dot" style="background:oklch(60% 0.13 38);">♪</div>') +
           '<div class="lesson-body"><div class="lesson-name">' + esc(s.title || "Песня") + (s.artist ? " · " + esc(s.artist) : "") + '</div><div class="lesson-sub">' + esc(sub) + "</div></div>" + SVG.chevronRight + "</div>";
       }).join("") +
       '<button class="cta" data-kadm="new" style="margin-top:6px;">+ Новая песня</button>';
@@ -1452,6 +1455,7 @@ function renderAdminKaraokeEdit() {
       })
       .catch(function () { if (KAE) KAE.marksLoaded = true; });
   }
+  if (!(KAR.covers && KAR.covers[s.id]) && KAR.adm.covTried !== s.id) { KAR.adm.covTried = s.id; karAdmLoadCoversFor(s); }
   var hasMusic = !!(s.music && s.music.url);
   var hasVoice = !!(s.voice && s.voice.url);
   var nLines = KAE.lines.length;
@@ -1459,6 +1463,9 @@ function renderAdminKaraokeEdit() {
     '<div class="kadm">' +
       '<div class="fld" data-ka="meta"><span>Песня</span><b>' + esc(s.title || "Песня") + (s.artist ? " · " + esc(s.artist) : "") + " ▾</b></div>" +
       '<div class="kmeta"></div>' +
+      '<div class="fld kcov" data-ka="cover"><span class="kcov-img">' + (trkCoverUrl(s) ? '<img src="' + esc(trkCoverUrl(s)) + '" alt="Обложка">' : "♪") + "</span>" +
+        '<span class="kcov-t">Обложка</span><b class="ok">' + (trkCoverUrl(s) ? "Заменить фото" : "Добавить фото") + "</b></div>" +
+      '<input type="file" accept="image/*" style="display:none" data-ka="cfile">' +
       '<div class="ksteps">' +
         karAdmStep("voice", 1, hasVoice, "Плюс с голосом", hasVoice ? karAdmFileSub(s.voice) : "Ещё не загружен", hasVoice ? "Заменить" : "Загрузить", "") +
         '<input type="file" accept="audio/*,.mp3,.m4a,.wav,.aac" style="display:none" data-ka="vfile">' +
@@ -1500,6 +1507,62 @@ function karAdmStep(key, n, done, title, sub, act, extra) {
     (done ? '<div class="kstep-n done">✓</div>' : '<div class="kstep-n">' + n + "</div>") +
     '<div class="kstep-t"><b>' + title + '</b><div class="sub">' + sub + "</div></div>" +
     '<b class="kstep-a' + (done ? " ok" : "") + '">' + act + "</b></div>" + extra + "</div>";
+}
+
+/* Обложки песен ученика — для списка и экрана песни (20.11). Уже показанные
+   локально (только что выбранные) картинки не перекачиваем. */
+function karAdmLoadCovers(songs) {
+  var ids = (songs || []).map(function (x) { return x.id; }).filter(Boolean);
+  if (!ids.length) return;
+  fetch("/api/karaoke?covers=" + encodeURIComponent(ids.join(",")), { headers: bazaAuthHeaders() })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) {
+      if (!d || !d.covers) return;
+      KAR.covers = KAR.covers || {};
+      Object.keys(d.covers).forEach(function (id) {
+        var o = KAR.covers[id], n = d.covers[id];
+        if (o && o.local && o.v === n.v) n.local = o.local;
+        KAR.covers[id] = n;
+      });
+      if (state.screen === "admin-karaoke-songs") render();
+    })
+    .catch(function () { /* без обложек — нотка */ });
+}
+
+function karAdmLoadCoversFor(s) {
+  fetch("/api/karaoke?covers=" + encodeURIComponent(s.id), { headers: bazaAuthHeaders() })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) {
+      if (!d || !d.covers || !d.covers[s.id]) return;
+      KAR.covers = KAR.covers || {};
+      KAR.covers[s.id] = d.covers[s.id];
+      if (state.screen === "admin-karaoke-edit" && KAR.adm.song === s) render();
+    })
+    .catch(function () {});
+}
+
+// «Добавить фото» / «Заменить фото» обложки песни (20.11)
+function karAdmCover(file) {
+  var s = KAR.adm.song;
+  if (!file || !s) return;
+  if (!/^image\//.test(file.type)) { karAdmMsg("Это не картинка — выбери фото обложки.", true); return; }
+  karAdmMsg("Сохраняю обложку…");
+  CoverExtractor.thumb(file).then(function (t) {
+    var pal = PaletteResolver.fromPixels(t.pixels, t.size, t.size);
+    return trkBlobToB64(t.jpeg).then(function (b64) {
+      return trkCoverPost({ songId: s.id, jpeg: b64, palette: pal, status: "cover", manual: true })
+        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+        .then(function (d) {
+          var c = (KAR.covers && KAR.covers[s.id]) || {};
+          KAR.covers = KAR.covers || {};
+          KAR.covers[s.id] = { src: c.src || "", palette: pal, tagTitle: c.tagTitle || "", tagArtist: c.tagArtist || "", status: "cover", manual: true, v: d.v, local: URL.createObjectURL(t.jpeg) };
+        });
+    });
+  }).then(function () {
+    if (state.screen === "admin-karaoke-edit" && KAR.adm.song === s) { render(); karAdmMsg("Обложка сохранена ✓"); }
+  }).catch(function () {
+    karAdmMsg("Обложка не сохранилась. Если ты давно не входил, выйди из режима админа и войди по ключам заново.", true);
+  });
 }
 
 function karAdmMsg(t, err) {
@@ -1818,6 +1881,9 @@ function karAdmWire() {
   var root = app.querySelector(".kadm");
   var q = function (k) { return root.querySelector('[data-ka="' + k + '"]'); };
   q("meta").onclick = karAdmOpenMeta;
+  var cfile = q("cfile");
+  q("cover").onclick = function () { cfile.click(); };
+  cfile.onchange = function () { karAdmCover(cfile.files && cfile.files[0]); cfile.value = ""; };
   q("lyrics").onclick = karAdmOpenLyrics;
   var file = q("file");
   q("music").onclick = function () { file.click(); };

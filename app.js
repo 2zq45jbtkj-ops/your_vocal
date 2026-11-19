@@ -5534,25 +5534,41 @@ function render() {
   maybeCelebrate();
 }
 
-/* Заметная плашка сверху на ЛЮБОМ экране, пока Николай в «Режиме админа» —
-   чтобы никогда не забыть, что он сейчас не в своём кабинете. */
+/* «Режим админа» (20.11, просьба Николая): вместо широкой плашки — маленькая
+   круглая кнопка в правом верхнем углу, не закрывает интерфейс. Тап — окошко
+   «Ты в кабинете: имя» и «Выйти из режима админа». */
+var ADMIN_FAB_ICO = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" stroke="#fff" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="#fff" stroke-width="2"/></svg>';
+
 function renderAdminBanner() {
   if (!state.adminMode) return;
   var html =
-    '<div class="admin-banner">' +
-      '<span>Ты в кабинете: ' + esc(state.adminStudentName) + "</span>" +
-      '<button id="admin-exit-btn">Выйти из режима админа</button>' +
+    '<div class="admin-fab">' +
+      '<button type="button" class="admin-fab-btn" aria-expanded="false" aria-label="Режим админа: ты в кабинете ' + esc(state.adminStudentName) + '">' + ADMIN_FAB_ICO + "</button>" +
+      '<div class="admin-fab-pop" role="dialog" aria-label="Режим админа">' +
+        "<span>Ты в кабинете:<b>" + esc(state.adminStudentName) + "</b></span>" +
+        '<button type="button" id="admin-exit-btn">Выйти из режима админа</button>' +
+      "</div>" +
     "</div>";
   app.insertAdjacentHTML("afterbegin", html);
-  // Вешаем слушатель точечно только на новую кнопку — повторный wireActs()
-  // задвоил бы обработчики уже привязанных на экране элементов.
+  // Слушатели — точечно на новые элементы: повторный wireActs() задвоил бы
+  // обработчики уже привязанных на экране элементов.
+  var fab = app.querySelector(".admin-fab"), fb = fab.querySelector(".admin-fab-btn");
+  fb.addEventListener("click", function (e) {
+    e.stopPropagation();
+    var open = !fab.classList.contains("open");
+    fab.classList.toggle("open", open);
+    fb.setAttribute("aria-expanded", String(open));
+  });
+  fab.querySelector(".admin-fab-pop").addEventListener("click", function (e) { e.stopPropagation(); });
   var btn = document.getElementById("admin-exit-btn");
   if (btn) btn.addEventListener("click", exitAdminMode);
-  // Караоке открыто поверх всего экрана — опускаем его под плашку, иначе
-  // плашка закрывает название песни.
-  var kp = app.querySelector(".kp"), bn = app.querySelector(".admin-banner");
-  if (kp && bn) kp.style.top = Math.round(bn.getBoundingClientRect().bottom) + "px";
 }
+
+// тап мимо окошка — закрыть его
+document.addEventListener("click", function () {
+  var fab = document.querySelector(".admin-fab.open");
+  if (fab) { fab.classList.remove("open"); var b = fab.querySelector(".admin-fab-btn"); if (b) b.setAttribute("aria-expanded", "false"); }
+});
 
 /* ---------- запуск ---------- */
 

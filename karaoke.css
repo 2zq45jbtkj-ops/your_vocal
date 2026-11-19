@@ -302,7 +302,8 @@ html .kp.fx-ivory {
   --hi: #221c16; --gtx: #221c16; --dim: rgba(34, 28, 22, .5);
   --glass: rgba(34, 28, 22, .05); --glass-b: rgba(34, 28, 22, .13);
 }
-html .kp.fx-ivory::before { background: radial-gradient(130% 85% at 28% 0%, #fcf9f3 0%, #f5efe3 55%, #ece4d3 100%); }
+/* верх ровно в цвет страницы (#f7f2e8) — без «порога» под часами */
+html .kp.fx-ivory::before { background: radial-gradient(80% 25% at 30% 32%, rgba(255, 253, 248, .75), rgba(255, 253, 248, 0)), linear-gradient(180deg, #f7f2e8 0%, #f3ede1 50%, #ebe2d1 100%); }
 html .kp.fx-ivory .lyr p.cur { color: var(--hi); text-shadow: none; }
 html .kp.fx-ivory .mk, html .kp.fx-ivory .lyr.free p.f1 .mk, html .kp.fx-ivory .lyr.free p.f2 .mk, html .kp.fx-ivory .lyr.free p.f3 .mk { color: #9a4a2c; }
 html .kp.fx-ivory .lyr p.f1 .mk, html .kp.fx-ivory .lyr p.f2 .mk, html .kp.fx-ivory .lyr p.f3 .mk { color: transparent; text-shadow: 0 0 2.4px #9a4a2c; }
@@ -320,7 +321,8 @@ html .kp.fx-black {
   --hi: #f7f5f0; --gtx: #f7f5f0; --dim: rgba(247, 245, 240, .5);
   --glass: rgba(255, 255, 255, .07); --glass-b: rgba(255, 255, 255, .14);
 }
-html .kp.fx-black::before { background: radial-gradient(120% 75% at 50% 0%, #151c2a 0%, #0a0e16 55%, #05070b 100%); }
+/* верх ровно в цвет страницы (#0b0f17) */
+html .kp.fx-black::before { background: radial-gradient(85% 28% at 50% 34%, rgba(40, 54, 82, .35), rgba(40, 54, 82, 0)), linear-gradient(180deg, #0b0f17 0%, #080b12 55%, #05070b 100%); }
 html .kp.fx-black .lyr p.cur { color: var(--hi); text-shadow: 0 0 18px rgba(255, 255, 255, .3); }
 html .kp.fx-black .ksheet, html.dark .kp.fx-black .ksheet { background: rgba(14, 19, 30, .8); }
 
@@ -330,3 +332,12 @@ html .kp.fx-black .ksheet, html.dark .kp.fx-black .ksheet { background: rgba(14,
 .kp .kfxs .kfx-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .kp .kfxs .gch { height: 36px; padding: 0 14px; }
 .kp .kfx-sw { width: 12px; height: 12px; border-radius: 50%; display: inline-block; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .35); }
+
+/* «Разметка караоке»: обложка песни (20.11) */
+.lesson-dot.kadm-cov { padding: 0; overflow: hidden; background: var(--bg); }
+.lesson-dot.kadm-cov img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.kadm .kcov { margin-bottom: 10px; cursor: pointer; }
+.kadm .kcov .kcov-img { width: 44px; height: 44px; border-radius: 12px; overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  background: oklch(60% 0.13 38); color: var(--white-text); font-size: 18px; box-shadow: var(--raised-sm); }
+.kadm .kcov .kcov-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.kadm .kcov .kcov-t { flex: 1; min-width: 0; }

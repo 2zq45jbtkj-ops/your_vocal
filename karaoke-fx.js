@@ -7,6 +7,7 @@
        лава-лампа / цветной дым; палитры Бордо / Терракота / Индиго.
        Тёмного ~70% экрана (подстраивается само), светлые тона насыщенные,
        чтобы не сливаться с белым текстом; контраст текста ≥ 4.5 : 1.
+       Верх экрана плавно уходит в цвет страницы — без «порога» под часами.
        Свет едва «дышит» в долю песни (9% силы, плавно) — темп из karDetect.
        У каждой песни свой вариант: первая — рифлёное + лучи + Бордо,
        остальные — случайный, закрепляется за песней. Выбор в шторке тоже
@@ -111,7 +112,7 @@
     "vec2 uv=px/R;c+=HL*.05*smoothstep(.9,.2,length(uv-vec2(.15,.95)));" +
     "float tex=n(px*.35)*.5+n(px*.9)*.5;c*=.96+.06*tex;" +
     "c=fin(c,px);float gr=h(px+fract(T*9.)*511.)-.5;float l2=dot(c,vec3(.3,.59,.11));c+=gr*.09*(1.-abs(l2-.4));" +
-    "gl_FragColor=vec4(c,1.);return;}" +
+    "c=mix(D,c,smoothstep(0.,.08,1.-px.y/R.y));gl_FragColor=vec4(c,1.);return;}" +
     "float w=RW;float id=floor(px.x/w);float u=fract(px.x/w);float xc=u*2.-1.;float cx=(id+.5)*w;" +
     "float nz=sqrt(max(1.-xc*xc,0.));vec3 Nn=normalize(vec3(xc*.9,0.,nz+.05));" +
     "float sx=cx+xc*w*.5*DP;float bw=w*.12*DP;" +
@@ -122,7 +123,7 @@
     "float sp=pow(max(dot(reflect(-L,Nn),vec3(0,0,1)),0.),48.);float fr=pow(1.-nz,2.5);" +
     "c*=.78+.32*d;c=mix(c,HL*.8,fr*.18*(.5+lv));c+=sp*HL*(.14+.4*lv);" +
     "c*=1.-smoothstep(.88,1.,abs(xc))*.38;c+=(smoothstep(.93,.97,xc)-smoothstep(.97,1.,xc))*HL*.1*(.5+lv);" +
-    "c=fin(c,px);c+=(h(px+fract(T*7.)*317.)-.5)*.045;gl_FragColor=vec4(c,1.);}";
+    "c=fin(c,px);c+=(h(px+fract(T*7.)*317.)-.5)*.045;c=mix(D,c,smoothstep(0.,.08,1.-px.y/R.y));gl_FragColor=vec4(c,1.);}";
 
   /* ---------- рендер ---------- */
   function Renderer(cv) {
@@ -213,8 +214,8 @@
     var cl = rootEl.classList;
     cl.remove("fx-glass", "fx-fallback", "fx-ivory", "fx-black", "pal", "dk");
     var mode = getMode();
-    if (mode === "ivory") { cl.add("fx-ivory"); setPage("#f8f4ec"); return; }
-    if (mode === "black") { cl.add("fx-black"); setPage("#0c111b"); return; }
+    if (mode === "ivory") { cl.add("fx-ivory"); setPage("#f7f2e8"); return; }
+    if (mode === "black") { cl.add("fx-black"); setPage("#0b0f17"); return; }
     S.combo = comboFor(song.id);
     paintVars();
     var cv = rootEl.querySelector("canvas.kfx");

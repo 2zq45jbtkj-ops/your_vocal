@@ -92,6 +92,15 @@ export default async function handler(req) {
 
   if (req.method === "GET") {
     var url = new URL(req.url);
+    // обложки песен ученика для «Разметки караоке» (Николай, 20.11)
+    var cids = url.searchParams.get("covers");
+    if (cids) {
+      if (!(await isTeacher(siteAuth))) return json({ ok: false, error: "Только преподаватель" }, 403);
+      var cl = cids.split(",").map(function (x) { return x.trim().slice(0, 80); }).filter(Boolean).slice(0, 60);
+      var cv = {};
+      try { cv = await listCovers(sql, cl); } catch (e) { /* без обложек — заглушки */ }
+      return json({ ok: true, covers: cv });
+    }
     var one = url.searchParams.get("songId");
     await ensureTable(sql);
     if (one) {
