@@ -287,7 +287,8 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
   position: fixed; left: 50%; bottom: max(12px, calc(var(--tg-safe-area-inset-bottom, 0px) + 4px)); transform: translateX(-50%);
   width: calc(100% - 36px); max-width: 394px; display: flex; gap: 8px;
   background: var(--dock-bg); border-radius: 26px;
-  box-shadow: var(--raised-lg);
+  /* 20.11: вместо объёмной тени — мягкая тень снизу, грань рисует .dock-fx */
+  box-shadow: var(--dock-drop);
   padding: 8px;
   z-index: 500;
 }
@@ -308,6 +309,54 @@ h1, h2, .heading, .auth-title, .courses-title, .result-title, .celebrate-title, 
 .dock-item.active { color: var(--terra); }
 .dock-item svg { transform-origin: center; }
 .dock-item svg { display: block; }
+/* ---------- окантовка дока: стеклянная грань «D2» (20.11) ----------
+   Цвет расходится поперёк кромки, как в призме: снаружи тёплая терракотовая
+   каёмка, внутри холодная голубая, белое ядро между ними. Свет сверху —
+   блик ярче на верхней кромке и гаснет книзу (.dock-lit). Блик не крутится
+   по кругу, а медленно плавает вдоль кромки с неровным темпом (dockDrift).
+   Центр конуса опущен под док (50% 350%) — блик одной ширины по всей длине. */
+@property --dock-a { syntax: '<angle>'; inherits: true; initial-value: 0deg; }
+:root {
+  --rim-hi: 255 255 255; --rim-hi-a: .95; --rim-lo: 60 50 40; --rim-lo-a: .28; --rim-base: .75;
+  --rim-warm: 62% 0.13 38; --rim-cool: 66% 0.09 220; --rim-wa: .7; --rim-ca: .75;
+  --dock-drop: 0 10px 28px oklch(40% 0.03 70 / .22), 0 2px 6px oklch(40% 0.03 70 / .12);
+}
+html.dark, body.dark {
+  --rim-hi: 235 242 250; --rim-hi-a: .85; --rim-lo: 0 0 0; --rim-lo-a: .55; --rim-base: .22;
+  --rim-warm: 72% 0.12 38; --rim-cool: 82% 0.08 215; --rim-wa: .55; --rim-ca: .6;
+  --dock-drop: 0 12px 30px oklch(10% 0.01 235 / .6), 0 2px 6px oklch(10% 0.01 235 / .4);
+}
+.dock-fx, .dock-lit { position: absolute; inset: 0; border-radius: 26px; pointer-events: none; }
+.dock-fx { z-index: 3; animation: dockDrift 26s ease-in-out infinite; }
+.dock-lit {
+  -webkit-mask: linear-gradient(180deg, #000 0%, rgb(0 0 0 / .55) 55%, rgb(0 0 0 / .18) 100%);
+          mask: linear-gradient(180deg, #000 0%, rgb(0 0 0 / .55) 55%, rgb(0 0 0 / .18) 100%);
+}
+.dock-rim {
+  position: absolute; inset: 0; border-radius: 26px; padding: 1px;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+}
+.dock-rim-base { padding: 1.5px;
+  background: linear-gradient(180deg, rgb(var(--rim-hi) / var(--rim-base)), rgb(var(--rim-hi) / .04) 45%, rgb(var(--rim-lo) / var(--rim-lo-a))); }
+.dock-rim-out {
+  background: conic-gradient(from calc(var(--dock-a) - 24deg) at 50% 350%, transparent 0deg,
+    oklch(var(--rim-warm) / calc(var(--rim-wa) * .5)) 8deg, oklch(var(--rim-warm) / var(--rim-wa)) 18deg,
+    rgb(var(--rim-hi) / calc(var(--rim-hi-a) * .7)) 26deg, oklch(var(--rim-warm) / calc(var(--rim-wa) * .5)) 36deg,
+    transparent 50deg, transparent 185deg, oklch(var(--rim-warm) / .2) 205deg, transparent 225deg);
+}
+.dock-rim-in { inset: 1px; border-radius: 25px;
+  /* холодный край чуть отстаёт от тёплого — как у настоящей призмы */
+  background: conic-gradient(from calc(var(--dock-a) - 25deg) at 50% 350%, transparent 3deg,
+    oklch(var(--rim-cool) / calc(var(--rim-ca) * .5)) 11deg, rgb(var(--rim-hi) / var(--rim-hi-a)) 24deg,
+    oklch(var(--rim-cool) / var(--rim-ca)) 32deg, oklch(var(--rim-cool) / calc(var(--rim-ca) * .4)) 42deg,
+    transparent 54deg, transparent 188deg, oklch(var(--rim-cool) / .2) 208deg, transparent 228deg);
+}
+@keyframes dockDrift {
+  0%  { --dock-a: -46deg; } 18% { --dock-a: -12deg; } 31% { --dock-a: -20deg; }
+  52% { --dock-a: 16deg; }  64% { --dock-a: 10deg; }  83% { --dock-a: 38deg; } 100% { --dock-a: -46deg; }
+}
+@media (prefers-reduced-motion: reduce) { .dock-fx { animation: none; --dock-a: -12deg; } }
 .dock-badge {
   position: absolute; top: -2px; right: 22%; background: var(--terra); color: var(--white-text);
   font-size: 9px; font-weight: 700; border-radius: 8px; min-width: 15px; height: 15px;

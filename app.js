@@ -3632,6 +3632,12 @@ function renderDock() {
     html += '<button class="dock-item' + (active ? " active" : "") + '" data-act="' + it.act + '">' +
       (it.badge || "") + it.icon(color) + "<span>" + it.label + "</span></button>";
   });
+  // Стеклянная грань дока (вариант «D2», 20.11) — слои в styles.css → .dock-fx
+  // Док перерисовывается на каждом render() — сдвигаем анимацию по общим
+  // часам, чтобы блик не прыгал в начало при переходе между вкладками.
+  var rimDelay = -((Date.now() / 1000) % 26).toFixed(2);
+  html += '<div class="dock-fx" aria-hidden="true" style="animation-delay:' + rimDelay + 's"><i class="dock-rim dock-rim-base"></i>' +
+    '<div class="dock-lit"><i class="dock-rim dock-rim-out"></i><i class="dock-rim dock-rim-in"></i></div></div>';
   html += "</div>";
   app.insertAdjacentHTML("beforeend", html);
   var dock = app.querySelector(".dock");
