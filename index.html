@@ -40,17 +40,25 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
-  <link rel="stylesheet" href="styles.css?v=20261119c">
+  <link rel="stylesheet" href="styles.css?v=20261119e">
   <link rel="stylesheet" href="karaoke.css?v=20261117x">
   <link rel="stylesheet" href="pitch.css?v=20261117x">
   <link rel="stylesheet" href="bylo.css?v=20261117x">
   <link rel="stylesheet" href="breath-anim.css?v=20261119j">
+  <link rel="stylesheet" href="tablet.css?v=20261119a">
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
   <link rel="manifest" id="app-manifest" href="/manifest.webmanifest">
   <meta name="apple-mobile-web-app-title" content="СЕПТ · ДЗ">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <!-- iPad Air 11" / 13" и Pro 11": портрет и альбом -->
+  <link rel="apple-touch-startup-image" media="screen and (device-width: 820px) and (device-height: 1180px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="/splash/startup-820x1180@2.png">
+  <link rel="apple-touch-startup-image" media="screen and (device-width: 820px) and (device-height: 1180px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)" href="/splash/startup-1180x820@2.png">
+  <link rel="apple-touch-startup-image" media="screen and (device-width: 834px) and (device-height: 1194px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="/splash/startup-834x1194@2.png">
+  <link rel="apple-touch-startup-image" media="screen and (device-width: 834px) and (device-height: 1194px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)" href="/splash/startup-1194x834@2.png">
+  <link rel="apple-touch-startup-image" media="screen and (device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="/splash/startup-1024x1366@2.png">
+  <link rel="apple-touch-startup-image" media="screen and (device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)" href="/splash/startup-1366x1024@2.png">
   <link rel="apple-touch-startup-image" media="screen and (device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/splash/startup-440x956@3.png">
   <link rel="apple-touch-startup-image" media="screen and (device-width: 420px) and (device-height: 912px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/splash/startup-420x912@3.png">
   <link rel="apple-touch-startup-image" media="screen and (device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/splash/startup-402x874@3.png">
@@ -82,12 +90,12 @@
     <div class="sp-bar"><i></i></div>
     <video src="/splash/logo.mp4" muted playsinline webkit-playsinline autoplay preload="auto"></video>
   </div>
-  <script src="splash.js?v=20261119f"></script>
+  <script src="splash.js?v=20261119g"></script>
   <div id="app" aria-live="polite"></div>
   <!-- Тексты оферты / политики / «О преподавателе» — только данные, без логики.
        Обязательно до app.js: renderDoc() читает LEGAL_DOCS при первом рендере. -->
   <script defer src="legal.js?v=20261117x"></script>
-  <script defer src="app.js?v=20261119h"></script>
+  <script defer src="app.js?v=20261119i"></script>
   <script defer src="karaoke.js?v=20261117x"></script>
   <script defer src="pitch.js?v=20261117x"></script>
   <script defer src="bylo.js?v=20261117x"></script>
