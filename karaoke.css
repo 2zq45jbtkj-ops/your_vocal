@@ -138,14 +138,7 @@ html.dark .kp .ksheet { background: oklch(30% 0.012 235 / .7); }
 .kp .stp .v { min-width: 90px; text-align: center; font: 800 28px Manrope, sans-serif; font-variant-numeric: tabular-nums; }
 .kp .kload { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: 600 14px Inter, sans-serif; color: var(--dim); }
 
-/* ---------- список песен (в Кабинете) ---------- */
-.kar-list { display: flex; flex-direction: column; gap: 10px; }
-.kar-song { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 20px; background: var(--bg); box-shadow: var(--raised-sm); cursor: pointer; }
-.kar-song .kar-ic { width: 42px; height: 42px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(135deg, oklch(62% 0.13 38), oklch(56% 0.09 235)); color: var(--white-text); }
-.kar-song b { display: block; font: 700 15px Manrope, sans-serif; color: var(--ink); }
-.kar-song .kar-sub { font: 500 12.5px Inter, sans-serif; color: var(--gray); margin-top: 2px; }
-.kar-song.off { cursor: default; opacity: .6; }
+/* список песен — теперь сетка «Мои треки», см. tracks.css */
 
 /* ---------- наушники (общее окно для караоке и питча) ---------- */
 .hp-dim { position: fixed; inset: 0; z-index: 80; background: oklch(20% 0.02 60 / .35); display: flex; align-items: flex-end; }
@@ -285,10 +278,3 @@ html.dark .kadm .gapb { background: oklch(36% 0.03 235); }
   font: 700 22px Manrope, sans-serif; color: var(--dim); white-space: nowrap; will-change: transform; }
 .kp .wh .it.c { font-weight: 800; color: #fff; }
 
-/* Долгое нажатие на песню в Караоке (Николай, вариант C, 17.11) */
-.kar-song { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
-.kar-song.kup { position: relative; z-index: 50; }
-.kshade { position: fixed; inset: 0; background: rgba(0, 0, 0, .25); z-index: 49; }
-.kmenu { position: fixed; left: 16px; right: 16px; bottom: 110px; border-radius: 22px; padding: 6px; background: var(--bg); box-shadow: var(--raised); z-index: 50; }
-.kmenu div { padding: 15px 16px; font: 700 15px Manrope, sans-serif; color: var(--ink); border-radius: 16px; cursor: pointer; }
-.kmenu div + div { border-top: 1px solid var(--line, rgba(0, 0, 0, .06)); }

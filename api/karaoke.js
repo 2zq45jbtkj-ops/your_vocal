@@ -15,6 +15,7 @@
    Номер промежутка k — место перед k-м словом строки (k = числу слов — в конце). */
 
 import { db, json } from "./_db.js";
+import { listCovers } from "./_cover.js";
 
 export const config = { runtime: "edge" };
 
@@ -108,7 +109,7 @@ export default async function handler(req) {
     if (songsRes.status !== 200) return json({ ok: false, error: "Сессия не принята" }, 401);
     var songs = ((await songsRes.json()) || {}).songs || [];
     var ids = songs.map(function (s) { return s.id; });
-    if (!ids.length) return json({ ok: true, marks: {}, meta: {} });
+    if (!ids.length) return json({ ok: true, marks: {}, meta: {}, covers: {} });
     var rows = await sql`SELECT song_id, lines FROM karaoke_marks WHERE song_id = ANY(${ids})`;
     var marks = {};
     rows.forEach(function (row) { marks[row.song_id] = { lines: row.lines || {} }; });
@@ -120,7 +121,9 @@ export default async function handler(req) {
         meta[row.song_id] = { url: row.music_url, bpm: Number(row.bpm), root: Number(row.key_root), minor: !!row.key_minor };
       });
     } catch (e) { /* без темпа и тональности караоке работает как раньше */ }
-    return json({ ok: true, marks: marks, meta: meta });
+    var covers = {};
+    try { covers = await listCovers(sql, ids); } catch (e) { /* без обложек — заглушки */ }
+    return json({ ok: true, marks: marks, meta: meta, covers: covers });
   }
 
   if (req.method === "POST") {

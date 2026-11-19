@@ -2072,7 +2072,7 @@ function renderCabMain(data) {
     '<div class="cab-card cab-rows">' +
       '<div class="cab-row" data-act="cab-voice"><div class="cab-ico">' + CAB_ICO_VOICE + '</div><div class="cab-row-txt"><b>Мой голос</b><div>Тип голоса, диапазон и цель</div></div><div class="cab-chev">›</div></div>' +
       '<div class="cab-row" data-act="cab-wheel"><div class="cab-ico">' + CAB_ICO_WHEEL + '</div><div class="cab-row-txt"><b>Колесо баланса</b><div>' + srezLine + '</div></div><div class="cab-chev">›</div></div>' +
-      '<div class="cab-row" data-act="cab-karaoke"><div class="cab-ico">' + CAB_ICO_KARAOKE + '</div><div class="cab-row-txt"><b>Караоке</b><div>Твои песни под минус, с текстом</div></div><div class="cab-chev">›</div></div>' +
+      '<div class="cab-row" data-act="cab-karaoke"><div class="cab-ico">' + CAB_ICO_KARAOKE + '</div><div class="cab-row-txt"><b>Мои треки</b><div>Караоке: твои песни под минус, с текстом</div></div><div class="cab-chev">›</div></div>' +
       '<div class="cab-row" data-act="cab-pitch"><div class="cab-ico">' + CAB_ICO_PITCH + '</div><div class="cab-row-txt"><b>Распевки с проверкой</b><div>Поёшь с пианино, телефон слушает, попадаешь ли в ноты</div></div><div class="cab-chev">›</div></div>' +
       '<div class="cab-row" data-act="cab-bylo"><div class="cab-ico">' + CAB_ICO_BYLO + '</div><div class="cab-row-txt"><b>Было и стало</b><div>Послушай, как вырос твой голос</div></div><div class="cab-chev">›</div></div>' +
     "</div>";

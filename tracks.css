@@ -1,0 +1,143 @@
+/* ==========================================================================
+   «Мои треки» (20.11): выпуклая карточка из матового стекла.
+   Объём — тени из токенов темы (--sh-base / --sh-hi-base, как --raised),
+   стекло — подсветка цветом обложки под полупрозрачным слоем, без
+   backdrop-filter: размытие под каждой карточкой при прокрутке 500 треков
+   не держало бы 60 кадров. Нажатие — карточка вдавливается (inset) и
+   чуть уменьшается.
+   ========================================================================== */
+
+.trk-grid { position: relative; contain: layout; }
+.trk-grid > .trk-card { position: absolute; left: 0; top: 0; }
+
+.trk-card {
+  --tc: var(--blue); --tc2: var(--terra);
+  --trk-up: 7px 7px 18px oklch(var(--sh-base) / 0.42), -5px -5px 16px oklch(var(--sh-hi-base) / 0.6);
+  --trk-in: inset 5px 5px 12px oklch(var(--sh-base) / 0.4), inset -4px -4px 10px oklch(var(--sh-hi-base) / 0.55);
+  border-radius: 26px; padding: 10px; overflow: hidden; isolation: isolate;
+  background: var(--bg); box-shadow: var(--trk-up);
+  display: flex; flex-direction: column; cursor: pointer;
+  -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
+  transition: box-shadow .14s ease, transform .14s ease;
+  contain: layout paint;
+}
+html.dark .trk-card { --trk-up: 7px 7px 18px oklch(var(--sh-base) / 0.6), -5px -5px 16px oklch(var(--sh-hi-base) / 0.32);
+  --trk-in: inset 5px 5px 12px oklch(var(--sh-base) / 0.6), inset -4px -4px 10px oklch(var(--sh-hi-base) / 0.3); }
+.trk-card.pressed, .trk-card:active { box-shadow: var(--trk-in); transform: scale(.98); }
+.trk-card:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+
+/* Матовое стекло: цвет обложки светит снизу, сверху — молочный слой и блик. */
+.trk-tint { position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    linear-gradient(160deg, oklch(100% 0 0 / .34), oklch(100% 0 0 / .08) 46%, oklch(100% 0 0 / .16)),
+    radial-gradient(90% 70% at 18% 100%, color-mix(in oklab, var(--tc) 38%, transparent), transparent 70%),
+    radial-gradient(80% 60% at 100% 62%, color-mix(in oklab, var(--tc2) 26%, transparent), transparent 70%);
+  box-shadow: inset 0 1px 0 oklch(100% 0 0 / .45), inset 0 -1px 0 oklch(0% 0 0 / .04);
+  border-radius: inherit; }
+html.dark .trk-tint {
+  background:
+    linear-gradient(160deg, oklch(100% 0 0 / .08), oklch(100% 0 0 / .02) 46%, oklch(100% 0 0 / .05)),
+    radial-gradient(90% 70% at 18% 100%, color-mix(in oklab, var(--tc) 34%, transparent), transparent 70%),
+    radial-gradient(80% 60% at 100% 62%, color-mix(in oklab, var(--tc2) 22%, transparent), transparent 70%);
+  box-shadow: inset 0 1px 0 oklch(100% 0 0 / .1); }
+
+.trk-cover { position: relative; width: 100%; aspect-ratio: 1; flex-shrink: 0; border-radius: 19px; overflow: hidden;
+  background: var(--bgmuted); box-shadow: 0 4px 12px oklch(var(--sh-base) / 0.35); }
+.trk-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.trk-ph { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  background: var(--bg); box-shadow: var(--inset-sm); border-radius: inherit; color: var(--gray); text-align: center; padding: 0 10px; }
+.trk-ph span { font: 500 11px/1.3 Inter, sans-serif; color: var(--gray); }
+.trk-badge { position: absolute; left: 8px; bottom: 8px; padding: 3px 8px; border-radius: 9px; font: 600 10.5px Inter, sans-serif;
+  color: var(--white-text); background: oklch(25% 0.01 235 / .62); }
+.trk-draft .trk-cover { opacity: .75; }
+
+.trk-meta { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; padding: 6px 4px 0; }
+.trk-artist, .trk-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trk-artist { font: 500 15.5px/1.25 Inter, sans-serif; color: var(--ink); }
+.trk-title { font: 400 13px/1.3 Inter, sans-serif; color: var(--gray); margin-top: 1px; }
+
+/* карандаш: видимый кружок 32 px, зона нажатия 44 px */
+.trk-edit { position: absolute; top: 6px; right: 6px; width: 44px; height: 44px; border: none; padding: 0; background: none;
+  display: flex; align-items: center; justify-content: center; color: var(--ink); cursor: pointer; z-index: 2; }
+.trk-edit::before { content: ""; position: absolute; width: 32px; height: 32px; border-radius: 50%; z-index: -1;
+  background: color-mix(in oklab, var(--bg) 78%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  box-shadow: 0 2px 8px oklch(var(--sh-base) / .4); }
+.trk-edit:active::before { box-shadow: var(--inset-sm); }
+
+/* «+ Добавить трек» — пунктирный контур */
+.trk-add { align-items: center; justify-content: center; gap: 12px; box-shadow: none; background: transparent;
+  border: 2px dashed color-mix(in oklab, var(--gray) 45%, transparent); color: var(--gray); }
+.trk-add.pressed, .trk-add:active { box-shadow: var(--trk-in); }
+.trk-add-ic { width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: var(--bg); box-shadow: var(--raised-sm); color: var(--terra); }
+.trk-add-t { font: 600 13.5px Inter, sans-serif; }
+
+/* skeleton */
+.trk-skel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.trk-skel { cursor: default; aspect-ratio: 1 / 1.25; }
+.trk-skel .trk-cover { box-shadow: var(--inset-sm); background: var(--bg); }
+.trk-skel .trk-meta i { display: block; height: 11px; border-radius: 6px; background: var(--bgmuted); width: 72%; }
+.trk-skel .trk-meta i + i { width: 48%; margin-top: 7px; height: 9px; }
+.trk-skel .trk-cover, .trk-skel .trk-meta i { animation: trkPulse 1.3s ease-in-out infinite; }
+@keyframes trkPulse { 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .trk-skel .trk-cover, .trk-skel .trk-meta i { animation: none; } .trk-card { transition: none; } }
+
+/* шторка «Изменить трек» — та же, что у напоминания о ДЗ (.hw-sheet) */
+.trk-shade { position: fixed; inset: 0; z-index: 9998; display: flex; align-items: flex-end; justify-content: center;
+  background: oklch(20% 0.01 70 / 0.42); animation: hwFade .18s ease; }
+.trk-sheet-cover { display: flex; align-items: center; gap: 14px; margin: 8px 0 18px; }
+.trk-sheet-img { width: 76px; height: 76px; border-radius: 18px; overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  background: var(--bg); box-shadow: var(--inset-sm); color: var(--gray); }
+.trk-sheet-img img { width: 100%; height: 100%; object-fit: cover; }
+.trk-sheet-btn { min-height: 44px; padding: 0 16px; border-radius: 14px; display: inline-flex; align-items: center; cursor: pointer;
+  background: var(--bg); box-shadow: var(--raised-sm); font: 600 13.5px Inter, sans-serif; color: var(--blue); }
+.trk-sheet-btn:active { box-shadow: var(--inset-sm); }
+.field-input.bad { box-shadow: var(--inset), 0 0 0 2px var(--soft-red); }
+.trk-err { min-height: 18px; margin: 6px 2px 4px; font: 500 12.5px Inter, sans-serif; color: var(--ink-red); }
+.trk-sheet-link { width: 100%; min-height: 48px; margin: 4px 0 6px; padding: 0 16px; border: none; border-radius: 16px; cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between; background: var(--bg); box-shadow: var(--raised-sm);
+  font: 600 14px Inter, sans-serif; color: var(--ink); }
+.trk-sheet-link span { color: var(--gray); font-size: 18px; }
+.trk-sheet-row { display: flex; gap: 12px; margin-top: 14px; }
+.trk-sheet-row .cta { flex: 1.4; height: 52px; }
+.trk-sheet-cancel { flex: 1; height: 52px; border: none; border-radius: 18px; cursor: pointer; background: var(--bg); box-shadow: var(--raised-sm);
+  font: 700 15px Manrope, sans-serif; color: var(--ink); }
+.trk-sheet-cancel:active { box-shadow: var(--inset-sm); }
+
+/* ==========================================================================
+   Фон караоке из обложки (PaletteResolver): градиент base → deep, пятна
+   свечения — цвета обложки. Смена цвета — плавно, 400 мс.
+   ========================================================================== */
+@property --kb1 { syntax: "<color>"; inherits: true; initial-value: #6b4a3a; }
+@property --kb2 { syntax: "<color>"; inherits: true; initial-value: #3a2820; }
+@property --g1 { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --g2 { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --g3 { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --hi { syntax: "<color>"; inherits: true; initial-value: white; }
+@property --dim { syntax: "<color>"; inherits: true; initial-value: rgba(255,255,255,.55); }
+@property --acc { syntax: "<color>"; inherits: true; initial-value: white; }
+
+.kp.pal { transition: --kb1 .4s ease, --kb2 .4s ease, --g1 .4s ease, --g2 .4s ease, --g3 .4s ease, --hi .4s ease, --dim .4s ease, --acc .4s ease; }
+.kp.pal::before { background: linear-gradient(165deg, var(--kb1), var(--kb2)); }
+html.dark .kp.pal, .kp.pal { --frost: oklch(20% 0.01 235 / .12); }
+.kp.pal .lyr p.cur { color: var(--acc); text-shadow: 0 0 22px color-mix(in oklab, var(--acc) 55%, transparent), 0 0 2px color-mix(in oklab, var(--acc) 40%, transparent); }
+/* тёмный текст на светлом фоне: свечение текущей строки не нужно */
+.kp.pal.dk .lyr p.cur { text-shadow: none; }
+.kp.pal.dk { --glass: oklch(100% 0 0 / .32); --glass-b: oklch(100% 0 0 / .5); }
+.kp.pal.dk .pl { background: var(--hi); }
+.kp.pal.dk .pl svg path, .kp.pal.dk .pl svg rect { fill: oklch(97% 0.005 80); }
+html.kp-open.kp-pal, html.kp-open.kp-pal body { background: var(--kp-page); }
+
+/* «Цвета фона» */
+.kp .kcolors .s { line-height: 1.4; }
+.kcol-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 14px; }
+.kcol { position: relative; aspect-ratio: 1; min-height: 44px; border-radius: 50%; border: none; cursor: pointer; padding: 0;
+  background: var(--c); opacity: .35; box-shadow: inset 0 0 0 2px oklch(100% 0 0 / .25); transition: opacity .2s, transform .15s; }
+.kcol.on { opacity: 1; box-shadow: inset 0 0 0 2px oklch(100% 0 0 / .55), 0 4px 12px oklch(0% 0 0 / .25); }
+.kcol.cur::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; border: 2px solid var(--hi); }
+.kcol:active { transform: scale(.94); }
+.kcol-x { position: absolute; top: -4px; right: -4px; width: 20px; height: 20px; border-radius: 50%; font: 700 10px/20px Inter, sans-serif;
+  text-align: center; color: #fff; background: oklch(25% 0.01 235 / .8); }
+.kcol-add { opacity: 1; display: flex; align-items: center; justify-content: center; font: 600 22px Inter, sans-serif; color: var(--hi);
+  background: var(--glass); box-shadow: inset 0 0 0 1.5px var(--glass-b); }
+.kcol-add input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }

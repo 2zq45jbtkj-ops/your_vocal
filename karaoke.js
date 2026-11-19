@@ -160,6 +160,15 @@ function karLoadSongs(force) {
     KAR.songs = songs; KAR.songsFor = tok; KAR.loadedAt = Date.now();
     KAR.marks = (res[1] && res[1].marks) || {};
     KAR.meta = (res[1] && res[1].meta) || {};
+    // обложки «Мои треки»: уже показанные локально (только что разобранные)
+    // картинки не перекачиваем
+    var oldC = KAR.covers || {}, newC = (res[1] && res[1].covers) || {};
+    Object.keys(oldC).forEach(function (id) {
+      var o = oldC[id], n = newC[id];
+      if (!n) { if (o.local) newC[id] = o; return; }
+      if (o.local && o.src === n.src && o.manual === n.manual) n.local = o.local;
+    });
+    KAR.covers = newC;
     if (state.screen === "karaoke" && karSongsKey(songs) !== before) { KAR.justLoaded = true; render(); }
   }).catch(function () {
     KAR.loading = false;
@@ -170,54 +179,13 @@ function karLoadSongs(force) {
   });
 }
 
-/* Изменить уже загруженную песню — вариант C (выбран Николаем 17.11): удерживаешь
-   песню в списке Караоке, снизу «Петь» или «Изменить песню». Только Николаю.
-   «Изменить песню» открывает экран песни (название, плюс, минус, текст, разметка). */
-function karWireSongMenu(el) {
-  var t = 0, x = 0, y = 0;
-  function cancel() { clearTimeout(t); t = 0; }
-  el.addEventListener("pointerdown", function (e) {
-    x = e.clientX; y = e.clientY; el._lp = false;
-    cancel();
-    t = setTimeout(function () { t = 0; el._lp = true; karSongMenu(el); }, 500);
-  });
-  el.addEventListener("pointermove", function (e) { if (t && Math.hypot(e.clientX - x, e.clientY - y) > 8) cancel(); });
-  el.addEventListener("pointerup", cancel);
-  el.addEventListener("pointercancel", cancel);
-  el.addEventListener("contextmenu", function (e) { e.preventDefault(); });
-}
-
-function karSongMenu(el) {
-  var song = KAR.songs[parseInt(el.getAttribute("data-kar-song"), 10)];
-  if (!song) return;
-  try { if (navigator.vibrate) navigator.vibrate(10); } catch (e) {}
-  var shade = document.createElement("div"); shade.className = "kshade";
-  var menu = document.createElement("div"); menu.className = "kmenu";
-  menu.innerHTML = '<div data-km="sing">▶︎&nbsp; Петь</div><div data-km="edit">✎&nbsp; Изменить песню</div>';
-  el.classList.add("kup");
-  document.body.appendChild(shade); document.body.appendChild(menu);
-  function close() {
-    el.classList.remove("kup");
-    [shade, menu].forEach(function (n) { if (n.parentNode) n.parentNode.removeChild(n); });
-  }
-  shade.addEventListener("click", close);
-  menu.querySelector('[data-km="sing"]').onclick = function () {
-    close();
-    KAR.song = song; KAR.fromAdmEdit = false; KAR.startK = null; KAR.tapMode = false;
-    go("karaoke-play");
-  };
-  menu.querySelector('[data-km="edit"]').onclick = function () {
-    close();
-    var tok = state.accessToken;
-    var st = (state.adminStudentsList || []).filter(function (x) { return x && x.telegramToken && x.telegramToken === tok; })[0];
-    KAR.adm.student = { id: song.studentId || (st && st.id), name: st ? st.name : (state.studentPublicData && state.studentPublicData.student && state.studentPublicData.student.name) || "" };
-    KAR.adm.songs = null; KAR.adm.fromKar = true; KAR.adm.song = song; KAR.songs = null;
-    go("admin-karaoke-edit");
-  };
-}
+/* Изменить трек (20.11): долгое нажатие на карточку или карандаш в углу —
+   шторка «Исполнитель / Название / Заменить обложку» (tracks.js,
+   TrackEditSheet); из неё же — «Текст, минус и разметка» (прежний экран песни). */
 
 function karSongsKey(list) {
-  return JSON.stringify((KAR.drafts || []).map(function (s) { return [s.id, s.title, (s.lyrics || "").length, s.voice && s.voice.url]; })) + JSON.stringify((list || []).map(function (s) { return [s.id, s.title, s.artist, s.music && s.music.url, (s.lyrics || "").length, (s.lyricTimes || []).length]; }));
+  var cv = KAR.covers || {};
+  return JSON.stringify(Object.keys(cv).sort().map(function (k) { return [k, cv[k].v, cv[k].status]; })) + JSON.stringify((KAR.drafts || []).map(function (s) { return [s.id, s.title, (s.lyrics || "").length, s.voice && s.voice.url]; })) + JSON.stringify((list || []).map(function (s) { return [s.id, s.title, s.artist, s.music && s.music.url, (s.lyrics || "").length, (s.lyricTimes || []).length]; }));
 }
 
 /* Строки песни: пустые строки текста — граница куплета, в списке их нет,
@@ -263,87 +231,87 @@ function renderKaraokeList() {
   // перерисован самим ответом базы
   var force = !KAR.justLoaded; KAR.justLoaded = false;
   karLoadSongs(force);
-  var body;
-  if (KAR.songs === "loading" || (KAR.songs == null && !KAR.songsErr)) {
-    body = '<div class="instruction-note">Загружаю песни…</div>';
-  } else if (KAR.songsErr) {
-    body = '<div class="instruction-note">Не получилось загрузить песни. Проверь интернет и открой экран ещё раз.</div>';
-  } else if (!KAR.songs.length && !(state.isAdmin && (KAR.drafts || []).length)) {
-    body = '<div class="instruction-note">Здесь появятся песни, над которыми ты работаешь с Николаем, когда он добавит к ним минус.</div>';
-  } else {
-    body = '<div class="kar-list">' + KAR.songs.map(function (s, k) {
-      var timed = (s.lyricTimes || []).length > 0;
-      var sub = [s.artist, !s.lyrics ? "без текста" : timed ? "" : "текст без подсветки строк"].filter(Boolean).join(" · ");
-      return '<div class="kar-song" data-kar-song="' + k + '"><div class="kar-ic">' + KAR_ICO.note + "</div>" +
-        '<div style="flex:1;min-width:0;"><b>' + esc(s.title || "Песня") + "</b>" + (sub ? '<div class="kar-sub">' + esc(sub) + "</div>" : "") + "</div>" +
-        '<div class="cab-chev">›</div></div>';
-    }).join("") + (state.isAdmin ? (KAR.drafts || []).map(function (s, k) {
-      var n = String(s.lyrics || "").split("\n").filter(function (x) { return x.trim(); }).length;
-      var sub = ["нет минуса — ученик её пока не видит", s.voice && s.voice.url ? "плюс ✓" : "", n ? "текст ✓" : ""].filter(Boolean).join(" · ");
-      return '<div class="kar-song" data-kar-draft="' + k + '"><div class="kar-ic">' + KAR_ICO.note + "</div>" +
-        '<div style="flex:1;min-width:0;"><b>' + esc(s.title || "Песня") + "</b>" + '<div class="kar-sub">' + esc(sub) + "</div></div>" +
-        '<div class="cab-chev">›</div></div>';
-    }).join("") : "") + "</div>";
-  }
   // Николай смотрит кабинет ученика (или свой) — отсюда же добавляет песни
   // этому ученику, без захода в «Ещё → Разметка караоке».
   // Значок на телефоне открывается по личной ссылке как ученик (своя карточка
-  // Николая) — там тоже есть «+ Новая песня»: один раз просит ключи админа и
+  // Николая) — там тоже есть «+ Добавить трек»: один раз просит ключи админа и
   // возвращает сюда уже в режиме админа.
   var spName = String((state.studentPublicData && state.studentPublicData.student && state.studentPublicData.student.name) || (state.firstName || "") + " " + (state.lastName || "")).toLowerCase();
   var ownCard = !state.isAdmin && ((spName.indexOf("септ") !== -1 && spName.indexOf("никола") !== -1) || (spName.indexOf("sept") !== -1 && spName.indexOf("nikola") !== -1));
-  var admAdd = (state.isAdmin || ownCard) ? '<button class="cta" data-kar-adm-add style="margin-top:14px;">+ Новая песня</button>' : "";
+  var canAdd = state.isAdmin || ownCard;
+  var body, items = null;
+  if (KAR.songs === "loading" || (KAR.songs == null && !KAR.songsErr)) {
+    body = trkSkeletonHtml();
+  } else if (KAR.songsErr) {
+    body = '<div class="instruction-note">Не получилось загрузить песни. Проверь интернет и открой экран ещё раз.</div>';
+  } else {
+    // «Мои треки» (20.11): сетка карточек 2 в ряд. Черновики (нет минуса) —
+    // только Николаю; «+ Добавить трек» — последней карточкой, тоже только ему.
+    items = KAR.songs.map(function (s) { return { kind: "song", song: s }; });
+    if (state.isAdmin) (KAR.drafts || []).forEach(function (s) { items.push({ kind: "draft", song: s }); });
+    if (canAdd) items.push({ kind: "add" });
+    body = (!KAR.songs.length ? '<div class="instruction-note" style="margin-bottom:16px;">Здесь появятся песни, над которыми ты работаешь с Николаем, когда он добавит к ним минус.</div>' : "") +
+      '<div data-trk-grid></div>';
+  }
   app.innerHTML = '<div style="padding:var(--screen-top) 20px 130px;">' + cabBack() +
-    '<div class="cab-screen-title">Караоке</div>' + body + admAdd + "</div>";
+    '<div class="cab-screen-title">Мои треки</div>' + body + "</div>";
   wireActs();
-  var addBtn = app.querySelector("[data-kar-adm-add]");
-  if (addBtn) addBtn.addEventListener("click", function () {
-    if (!state.isAdmin) {
-      // Своя карточка Николая: входим админом по его личной ссылке, без ключей.
-      // Ключи спрашиваем, только если сервер ссылку не признал.
-      var askKeys = function () {
-        state._afterAdminLogin = "karaoke";
-        state._tokenInput = ""; state._adminKey2 = ""; state._tokenError = "";
-        go("token-entry");
-      };
-      addBtn.disabled = true; addBtn.textContent = "Открываю…";
-      fetch(BAZA_API + "/api/admin-auth", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ linkToken: state.accessToken || "" })
-      }).then(function (r) { return r.json(); }).then(function (d) {
-        if (!(d && d.ok && d.token)) { askKeys(); return; }
-        state.isAdmin = true; state._siteAuth = d.token;
-        saveAdminKey(d.token); saveState();
-        state._goKaraoke = "new";
-        openOwnCabinet();
-      }).catch(askKeys);
-      return;
-    }
-    var tok = state.accessToken;
-    var st = (state.adminStudentsList || []).filter(function (x) { return x && x.telegramToken && x.telegramToken === tok; })[0];
-    KAR.songs = null; // после разметки список ученика перечитается
-    if (!st) { go("admin-karaoke"); return; }
-    karNewSong(st, addBtn);
-  });
-  Array.prototype.forEach.call(app.querySelectorAll("[data-kar-draft]"), function (el) {
-    el.addEventListener("click", function () {
-      var d = KAR.drafts[parseInt(el.getAttribute("data-kar-draft"), 10)];
-      var tok = state.accessToken;
-      var st = (state.adminStudentsList || []).filter(function (x) { return x && x.telegramToken && x.telegramToken === tok; })[0];
-      KAR.adm.student = { id: d.studentId || (st && st.id), name: st ? st.name : "" };
-      KAR.adm.songs = null; KAR.adm.fromKar = true; KAR.adm.song = d; KAR.songs = null;
-      go("admin-karaoke-edit");
-    });
-  });
-  Array.prototype.forEach.call(app.querySelectorAll("[data-kar-song]"), function (el) {
-    if (state.isAdmin) karWireSongMenu(el);
-    el.addEventListener("click", function () {
-      if (el._lp) { el._lp = false; return; }
-      KAR.song = KAR.songs[parseInt(el.getAttribute("data-kar-song"), 10)];
+  if (!items) { TrackGrid.destroy(); return; }
+  TrackGrid.mount(app.querySelector("[data-trk-grid]"), items, {
+    onOpen: function (it) {
+      if (it.kind === "draft") { karOpenAdmEdit(it.song); return; }
+      KAR.song = it.song;
       KAR.fromAdmEdit = false; KAR.startK = null; KAR.tapMode = false;
       go("karaoke-play");
-    });
+    },
+    onEdit: function (it) {
+      if (!state.isAdmin) return;
+      TrackEditSheet.open(it.song, function () { karOpenAdmEdit(it.song); });
+    },
+    onAdd: function (el) { karAddTrack(el, ownCard); }
   });
+}
+
+/* Полный экран песни Николая: название, плюс, минус, текст, разметка. */
+function karOpenAdmEdit(song) {
+  var tok = state.accessToken;
+  var st = (state.adminStudentsList || []).filter(function (x) { return x && x.telegramToken && x.telegramToken === tok; })[0];
+  KAR.adm.student = { id: song.studentId || (st && st.id), name: st ? st.name : (state.studentPublicData && state.studentPublicData.student && state.studentPublicData.student.name) || "" };
+  KAR.adm.songs = null; KAR.adm.fromKar = true; KAR.adm.song = song; KAR.songs = null;
+  go("admin-karaoke-edit");
+}
+
+function karAddTrack(el, ownCard) {
+  var label = el.querySelector(".trk-add-t") || el;
+  if (el._busy) return;
+  if (!state.isAdmin) {
+    // Своя карточка Николая: входим админом по его личной ссылке, без ключей.
+    // Ключи спрашиваем, только если сервер ссылку не признал.
+    var askKeys = function () {
+      state._afterAdminLogin = "karaoke";
+      state._tokenInput = ""; state._adminKey2 = ""; state._tokenError = "";
+      go("token-entry");
+    };
+    if (!ownCard) return;
+    el._busy = true; label.textContent = "Открываю…";
+    fetch(BAZA_API + "/api/admin-auth", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ linkToken: state.accessToken || "" })
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (!(d && d.ok && d.token)) { askKeys(); return; }
+      state.isAdmin = true; state._siteAuth = d.token;
+      saveAdminKey(d.token); saveState();
+      state._goKaraoke = "new";
+      openOwnCabinet();
+    }).catch(askKeys);
+    return;
+  }
+  var tok = state.accessToken;
+  var st = (state.adminStudentsList || []).filter(function (x) { return x && x.telegramToken && x.telegramToken === tok; })[0];
+  KAR.songs = null; // после разметки список ученика перечитается
+  if (!st) { go("admin-karaoke"); return; }
+  el._busy = true; setTimeout(function () { el._busy = false; }, 4000);
+  karNewSong(st, label);
 }
 
 /* ==========================================================================
@@ -562,8 +530,10 @@ function renderKaraokePlay() {
       '<div class="kbottom"></div>' +
     "</div>";
   KP.root = app.querySelector(".kp");
+  KP.bg = null;
   karPaintLyrics();
   karPaintBottom();
+  KarBg.apply(KP.root, s); // фон из обложки (20.11)
   var back = KP.root.querySelector('[data-kp="back"]');
   if (back) back.onclick = function () { handleBack(); };
   karPrepareEnvelope();
@@ -913,12 +883,14 @@ function karPaintChips() {
     (hasVoice ? '<span class="gch' + (KE.voice ? " on" : "") + '" data-kp="voice">С голосом <b>' + (KE.voice ? "вкл" : "выкл") + "</b></span>" : "") +
     '<span class="gch" data-kp="pitch">Тональность <b>' + karKeyLabel(KE.pitch) + "</b></span>" +
     '<span class="gch" data-kp="tempo">Темп <b>' + karTempoLabel(KE.tempo) + "</b></span>" +
-    '<span class="gch" data-kp="marks">Пометки <b>' + (KAR.showMarks ? "вкл" : "выкл") + "</b></span>";
+    '<span class="gch" data-kp="marks">Пометки <b>' + (KAR.showMarks ? "вкл" : "выкл") + "</b></span>" +
+    '<span class="gch" data-kp="colors">Фон</span>';
   var vc = chs.querySelector('[data-kp="voice"]');
   if (vc) vc.onclick = function () { karSetVoice(!KE.voice); };
   chs.querySelector('[data-kp="pitch"]').onclick = function () { karOpenSheet(); };
   chs.querySelector('[data-kp="tempo"]').onclick = function () { karOpenSheet(); };
   chs.querySelector('[data-kp="marks"]').onclick = function () { KAR.showMarks = !KAR.showMarks; karPaintLyrics(); karPaintChips(); };
+  chs.querySelector('[data-kp="colors"]').onclick = function () { karOpenColors(); };
 }
 
 /* Тональность и темп — вариант A (выбран Николаем 17.11): одна панель, два

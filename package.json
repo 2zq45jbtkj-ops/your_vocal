@@ -4,5 +4,11 @@
   "dependencies": {
     "@neondatabase/serverless": "^0.10.0",
     "@vercel/blob": "2.8.0"
+  },
+  "scripts": {
+    "test": "node --test tests/"
+  },
+  "devDependencies": {
+    "jsmediatags": "3.9.7"
   }
 }
