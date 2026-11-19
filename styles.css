@@ -1321,16 +1321,3 @@ html.dark .cab-zone.on, body.dark .cab-zone.on { background: color-mix(in srgb, 
 .llevel-opt.deep b { color: var(--terra); }
 .banim-legend { margin: 12px 0 6px; font-size: 15.3px; }
 .banim-legend li { padding: 2px 0; }
-
-/* ---------- «Режим админа» → «Вибрация заставки» ---------- */
-.hap-card { padding: 16px 18px; }
-.hap-h { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.hap-h b { font: 700 15.5px 'Manrope', sans-serif; color: var(--ink); }
-.hap-n { width: 26px; height: 26px; border-radius: 50%; background: var(--blue); color: var(--white-text); display: flex; align-items: center; justify-content: center; font: 700 12.5px 'Manrope', sans-serif; flex-shrink: 0; }
-.hap-cur { font: 600 11px 'Inter', sans-serif; color: var(--terra); }
-.hap-sub { font-size: 12.5px; line-height: 1.45; color: var(--gray); margin: 6px 0 12px; }
-.hap-btns { display: flex; gap: 10px; }
-.hap-try { flex: 1; height: 44px; font-size: 14px; }
-.hap-snd { background: var(--bg); color: var(--ink); box-shadow: var(--raised-sm); }
-.hap-warn { font-size: 12.5px; line-height: 1.5; color: var(--ink-terra, var(--terra)); background: var(--soft-terra); border-radius: 14px; padding: 12px 16px; margin-bottom: 16px; }
-.hap-note { font-size: 12px; color: var(--gray); text-align: center; margin-top: 4px; }

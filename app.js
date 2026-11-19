@@ -437,7 +437,6 @@ function backTarget() {
     case "support": return "more";
     case "admin-hub": return "more";
     case "admin-students": return "admin-hub";
-    case "admin-haptic": return "admin-hub";
     case "admin-birthdays": return "admin-hub";
     case "admin-plans": return "admin-hub";
     case "admin-plan": return "admin-plans";
@@ -3111,10 +3110,6 @@ function renderAdminHub() {
       icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 18V5l11-2v13" stroke="var(--gray)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="18" r="3" stroke="var(--gray)" stroke-width="1.9"/><circle cx="17" cy="16" r="3" stroke="var(--gray)" stroke-width="1.9"/></svg>'
     },
     {
-      label: "Вибрация заставки", act: "admin-hub-haptic", sub: "Выбрать жужжание при ударе камертона",
-      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="5" y="2" width="6" height="12" rx="1.6" stroke="var(--gray)" stroke-width="1.3"/><path d="M2.5 5.5v5M13.5 5.5v5" stroke="var(--gray)" stroke-width="1.3" stroke-linecap="round"/></svg>'
-    },
-    {
       label: "Планы уроков", act: "admin-hub-plans", sub: "По темам срезов и колеса баланса",
       icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3.5 2.5h9a1 1 0 011 1v9a1 1 0 01-1 1h-9a1 1 0 01-1-1v-9a1 1 0 011-1z" stroke="var(--gray)" stroke-width="1.3" stroke-linejoin="round"/><path d="M5.5 6h5M5.5 8.5h5M5.5 11h3" stroke="var(--gray)" stroke-width="1.3" stroke-linecap="round"/></svg>'
     }
@@ -3137,46 +3132,6 @@ function renderAdminHub() {
     "</div>" +
     '<div style="padding:8px 16px 130px;display:flex;flex-direction:column;gap:10px;">' + itemsHtml + "</div>";
   wireActs();
-}
-
-/* «Режим админа» → «Вибрация заставки» (19.11): Николай пробует варианты
-   затухающего жужжания на своём телефоне и выбирает один. Сами варианты —
-   SPLASH_HAPTICS в splash.js; «со звуком» — тот же удар, что на заставке. */
-var hapticForkEl = null;
-function renderAdminHaptic() {
-  var ok = typeof splashHapticAvailable === "function" && splashHapticAvailable();
-  var list = typeof SPLASH_HAPTICS === "object" ? SPLASH_HAPTICS : {};
-  var cards = Object.keys(list).map(function (k) {
-    var v = list[k], cur = String(k) === String(SPLASH_HAPTIC_CHOICE);
-    return '<div class="cab-card hap-card">' +
-        '<div class="hap-h"><span class="hap-n">' + k + '</span><b>' + esc(v.name) + '</b>' +
-          (cur ? '<span class="hap-cur">сейчас на заставке</span>' : "") + "</div>" +
-        '<div class="hap-sub">' + esc(v.sub) + "</div>" +
-        '<div class="hap-btns">' +
-          '<button class="cta hap-try" data-act="haptic-try" data-n="' + k + '">Почувствовать</button>' +
-          '<button class="cta hap-try hap-snd" data-act="haptic-try-sound" data-n="' + k + '">Со звуком</button>' +
-        "</div>" +
-      "</div>";
-  }).join("");
-  app.innerHTML =
-    '<div class="top pb8">' + backBtn("back") +
-      '<div><div class="top-title lg">Вибрация заставки</div><div class="top-sub">Удар камертона при открытии приложения</div></div>' +
-    "</div>" +
-    '<div style="padding:8px 16px 130px;">' +
-      (ok ? "" : '<div class="hap-warn">Здесь вибрации нет. Открой приложение в Telegram на телефоне — на iPad нет вибромотора, а в значке «ДЗ» на экране «Домой» Safari не даёт доступа к вибрации.</div>') +
-      cards +
-      '<div class="hap-note">Понравившийся номер напиши в чат — поставлю его на заставку.</div>' +
-    "</div>";
-  wireActs();
-}
-function hapticTry(n, withSound) {
-  if (withSound) {
-    try {
-      if (!hapticForkEl) hapticForkEl = new Audio("/splash/kamerton.m4a");
-      hapticForkEl.currentTime = 0; var pr = hapticForkEl.play(); if (pr && pr.catch) pr.catch(function () {});
-    } catch (e) {}
-  }
-  if (typeof splashHaptic === "function") splashHaptic(n);
 }
 
 /* «Режим админа» → список учеников. Только для Николая — эндпоинт сам
@@ -5326,7 +5281,6 @@ var ACTS = {
   "admin-hub-students": function () { go("admin-students"); },
   "admin-hub-birthdays": function () { go("admin-birthdays"); },
   "admin-hub-plans": function () { go("admin-plans"); },
-  "admin-hub-haptic": function () { go("admin-haptic"); },
   "undo-unstar": undoUnstar,
   "cal-prev": function () {
     var m = state.calMonth - 1, y = state.calYear;
@@ -5355,10 +5309,6 @@ function wireActs() {
       // карточки/плитки разблокированных уроков без контента — номер в data-lesson-num
       if (act === "open-lesson-num") {
         openLessonByNumber(parseInt(el.getAttribute("data-lesson-num"), 10));
-        return;
-      }
-      if (act === "haptic-try" || act === "haptic-try-sound") {
-        hapticTry(parseInt(el.getAttribute("data-n"), 10), act === "haptic-try-sound");
         return;
       }
       if (act === "srez-topics-toggle") {
@@ -5439,7 +5389,6 @@ function render() {
     case "admin-hub": renderAdminHub(); break;
     case "admin-students": renderAdminStudents(); break;
     case "admin-birthdays": renderAdminBirthdays(); break;
-    case "admin-haptic": renderAdminHaptic(); break;
     case "admin-plans": renderAdminPlans(); break;
     case "admin-plan": renderAdminPlanDetail(); break;
     case "karaoke": case "karaoke-play": case "admin-karaoke": case "admin-karaoke-songs": case "admin-karaoke-edit": renderKaraokeScreen(); break;

@@ -18,7 +18,6 @@
   /* Сетки (Уроки, списки админа) шире колонки для чтения */
   html[data-screen="courses"],
   html[data-screen^="admin-"] { --tab-w: 980px; }
-  html[data-screen="admin-haptic"] { --tab-w: 720px; }
 
   /* ---------- док ---------- */
   .dock { max-width: 460px; padding: 9px; }
@@ -108,7 +107,6 @@
   :root { --tab-w: 780px; }
   html[data-screen="courses"],
   html[data-screen^="admin-"] { --tab-w: 1060px; }
-  html[data-screen="admin-haptic"] { --tab-w: 780px; }
   .courses-grid { grid-template-columns: repeat(6, 1fr); }
   /* Высота экрана в альбоме меньше — фигуру дыхания держим ниже */
   .banim-fig { width: min(100%, calc(60vh * 400 / 560)); }

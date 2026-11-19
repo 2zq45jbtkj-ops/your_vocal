@@ -1,48 +1,3 @@
-/* ---- Вибрация при ударе камертона (19.11) ----
-   Затухающее «жужжание»: серия коротких толчков Taptic Engine, которые
-   слабеют и редеют. Работает внутри Telegram на телефоне (HapticFeedback).
-   Беззвучный режим из браузера узнать нельзя, поэтому вибрация идёт вместе
-   с ударом всегда: со звуком она тихо его дополняет, без звука — заменяет.
-   В значке «ДЗ» на экране «Домой» (Safari) и на iPad вибрации нет — у Safari
-   нет такого доступа, у iPad нет вибромотора. Пробник — «Режим админа» →
-   «Вибрация заставки». Какой вариант играет — SPLASH_HAPTIC_CHOICE. */
-var SPLASH_HAPTIC_CHOICE = 1;
-var SPLASH_HAPTICS = (function () {
-  // ряд толчков: [силa, сколько, первый промежуток мс, рост промежутка мс]
-  function seq(parts) {
-    var out = [], t = 0;
-    parts.forEach(function (p) {
-      var gap = p[2];
-      for (var i = 0; i < p[1]; i++) { out.push([t, p[0]]); t += gap; gap += p[3]; }
-    });
-    return out;
-  }
-  return {
-    1: { name: "Камертон", sub: "Сильный удар и густое жужжание, которое плавно стихает · 1,6 с",
-         steps: seq([["heavy", 1, 30, 0], ["medium", 8, 30, 1], ["light", 10, 40, 3], ["soft", 9, 60, 10]]) },
-    2: { name: "Мягкий гул", sub: "Без резкого удара — тёплое гудение, тает почти незаметно · 1,3 с",
-         steps: seq([["medium", 1, 40, 0], ["light", 12, 35, 2], ["soft", 9, 55, 11]]) },
-    3: { name: "Удар и эхо", sub: "Двойной удар, затем редкие отзвуки всё дальше и тише · 1,4 с",
-         steps: seq([["rigid", 1, 70, 0], ["heavy", 1, 160, 0], ["medium", 3, 70, 15], ["light", 3, 110, 25], ["soft", 4, 150, 30]]) },
-    4: { name: "Долгое жужжание", sub: "Плотная вибрация, как звенящий камертон в руке, гаснет медленно · 2,2 с",
-         steps: seq([["heavy", 6, 25, 0], ["medium", 14, 25, 1], ["light", 18, 30, 1.5], ["soft", 12, 45, 7]]) }
-  };
-})();
-function splashHapticAvailable() {
-  var tg = window.Telegram && window.Telegram.WebApp;
-  return !!(tg && tg.HapticFeedback && tg.platform && tg.platform !== "unknown" && tg.isVersionAtLeast && tg.isVersionAtLeast("6.1"));
-}
-function splashHaptic(n) {
-  var v = SPLASH_HAPTICS[n || SPLASH_HAPTIC_CHOICE];
-  if (!v) return false;
-  var tg = window.Telegram && window.Telegram.WebApp, hf = tg && tg.HapticFeedback;
-  if (!hf || !splashHapticAvailable()) return false;
-  v.steps.forEach(function (s) {
-    setTimeout(function () { try { hf.impactOccurred(s[1]); } catch (e) {} }, s[0]);
-  });
-  return true;
-}
-
 /* Заставка при каждом открытии приложения.
    Логотип — кадры из оригинального видео (splash/logo.mp4: белый логотип на
    чёрном = маска). Каждый кадр рисуем в canvas, яркость → прозрачность,
@@ -99,7 +54,7 @@ function splashHaptic(n) {
   v.addEventListener("error", showStatic);
 
 
-  /* ---- Удар камертона: звук + вибрация (см. splashHaptic вверху) ----
+  /* ---- Удар камертона: только звук, без вибрации ----
      Оригинальная запись камертона из видео (splash/kamerton.m4a), удар —
      на 1,05 с анимации, как в видео. Телефоны запрещают звук до первого
      нажатия, поэтому пробуем по очереди Web Audio и аудио-элемент; если оба
@@ -154,12 +109,7 @@ function splashHaptic(n) {
     } catch (e) {}
   }
   root.addEventListener("pointerdown", onTouch, { once: true });
-  // Скрипт Telegram грузится отложенно — если к удару его ещё нет, ждём до 0,6 с
-  function strikeHaptic(tries) {
-    if (splashHaptic()) return;
-    if (tries > 0) setTimeout(function () { strikeHaptic(tries - 1); }, 50);
-  }
-  function strike() { if (struck) return; struck = true; strikeAt = Date.now(); forkSound(); strikeHaptic(12); }
+  function strike() { if (struck) return; struck = true; strikeAt = Date.now(); forkSound(); }
   (function watch() {
     if (struck || gone) return;
     if (v.currentTime >= STRIKE) { strike(); return; }
