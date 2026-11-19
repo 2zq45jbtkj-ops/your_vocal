@@ -896,16 +896,45 @@ function karPaintChips() {
   var hasVoice = !!(KE.song.voice && KE.song.voice.url);
   chs.innerHTML =
     (hasVoice ? '<span class="gch' + (KE.voice ? " on" : "") + '" data-kp="voice">С голосом <b>' + (KE.voice ? "вкл" : "выкл") + "</b></span>" : "") +
-    '<span class="gch" data-kp="pitch">Тональность <b>' + karKeyLabel(KE.pitch) + "</b></span>" +
-    '<span class="gch" data-kp="tempo">Темп <b>' + karTempoLabel(KE.tempo) + "</b></span>" +
-    '<span class="gch" data-kp="marks">Пометки <b>' + (KAR.showMarks ? "вкл" : "выкл") + "</b></span>" +
-    '<span class="gch" data-kp="colors">Фон</span>';
+    // редкие настройки (тональность, темп, пометки, фон) — за значком (20.11)
+    '<span class="gch kset-ch" data-kp="settings" role="button" aria-label="Настройки: тональность, темп, пометки, фон">' + KAR_SET_ICO + "Настройки</span>";
   var vc = chs.querySelector('[data-kp="voice"]');
   if (vc) vc.onclick = function () { karSetVoice(!KE.voice); };
-  chs.querySelector('[data-kp="pitch"]').onclick = function () { karOpenSheet(); };
-  chs.querySelector('[data-kp="tempo"]').onclick = function () { karOpenSheet(); };
-  chs.querySelector('[data-kp="marks"]').onclick = function () { KAR.showMarks = !KAR.showMarks; karPaintLyrics(); karPaintChips(); };
-  chs.querySelector('[data-kp="colors"]').onclick = function () { KarFx.openSheet(KP); };
+  chs.querySelector('[data-kp="settings"]').onclick = karOpenSettings;
+}
+
+var KAR_SET_ICO = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="16" cy="7" r="2.2" stroke="currentColor" stroke-width="2"/><circle cx="10" cy="17" r="2.2" stroke="currentColor" stroke-width="2"/></svg>';
+
+/* Шторка «Настройки» (20.11, просьба Николая): тональность, темп, пометки и
+   фон убраны из нижнего ряда — открываются отсюда. */
+function karOpenSettings() {
+  var old = KP.root.querySelector(".ksheet");
+  if (old) old.parentNode.removeChild(old);
+  var d = document.createElement("div");
+  d.className = "ksheet kset";
+  KP.root.appendChild(d);
+  KP.sheet = d;
+  karPaintSettings();
+}
+
+function karPaintSettings() {
+  var d = KP.sheet;
+  if (!d || !d.parentNode || !KE) return;
+  var row = function (k, t, v) { return '<div class="kset-row" data-ks="' + k + '" role="button"><span>' + t + "</span><b>" + v + "</b></div>"; };
+  d.innerHTML = '<div class="t">Настройки</div>' +
+    '<div class="kset-list">' +
+      row("pitch", "Тональность", esc(karKeyLabel(KE.pitch)) + " ›") +
+      row("tempo", "Темп", esc(karTempoLabel(KE.tempo)) + " ›") +
+      row("marks", "Пометки дыхания", KAR.showMarks ? "вкл" : "выкл") +
+      row("bg", "Фон", "›") +
+    "</div>" +
+    '<div class="row" style="display:flex;gap:10px;margin-top:14px"><div class="bt main" data-s="ok">Готово</div></div>';
+  var q = function (k) { return d.querySelector('[data-ks="' + k + '"]'); };
+  q("pitch").onclick = karOpenSheet;
+  q("tempo").onclick = karOpenSheet;
+  q("marks").onclick = function () { KAR.showMarks = !KAR.showMarks; karPaintLyrics(); karPaintSettings(); };
+  q("bg").onclick = function () { KarFx.openSheet(KP); };
+  d.querySelector('[data-s="ok"]').onclick = function () { d.parentNode.removeChild(d); KP.sheet = null; };
 }
 
 /* Тональность и темп — вариант A (выбран Николаем 17.11): одна панель, два
