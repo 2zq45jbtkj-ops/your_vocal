@@ -160,3 +160,19 @@ html.kp-open.kp-pal, html.kp-open.kp-pal body { background: var(--kp-page); }
 .trk-sheet-del:active { box-shadow: var(--inset-sm); }
 .trk-sheet-del.armed { background: var(--soft-red); box-shadow: var(--inset-sm); }
 html.dark .trk-sheet-del.armed { background: oklch(40% 0.1 25); color: var(--white-text); }
+
+/* Кабинет: яркая кнопка «Караоке» над «Мой голос» (20.11) — фирменный
+   градиент терракота → синий, выпуклая, при нажатии вдавливается. */
+.cab-kar-btn { width: 100%; display: flex; align-items: center; gap: 14px; margin: 0 0 18px; padding: 14px 16px; border: none; border-radius: 22px;
+  cursor: pointer; text-align: left; color: #fff; position: relative; overflow: hidden;
+  background: linear-gradient(120deg, oklch(64% 0.15 38), oklch(58% 0.14 20) 45%, oklch(52% 0.12 250));
+  box-shadow: 0 10px 22px oklch(55% 0.14 30 / .35), var(--raised); transition: transform .14s, box-shadow .14s; }
+.cab-kar-btn::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(160deg, oklch(100% 0 0 / .28), oklch(100% 0 0 / 0) 45%); }
+.cab-kar-btn:active { transform: scale(.98); box-shadow: inset 4px 4px 10px oklch(30% 0.08 30 / .45), inset -3px -3px 8px oklch(100% 0 0 / .18); }
+.cab-kar-ic { width: 46px; height: 46px; border-radius: 15px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  background: oklch(100% 0 0 / .2); box-shadow: inset 0 1px 0 oklch(100% 0 0 / .35); }
+.cab-kar-txt { flex: 1; min-width: 0; position: relative; }
+.cab-kar-txt b { display: block; font: 800 17px Manrope, sans-serif; }
+.cab-kar-txt span { display: block; font: 500 12.5px Inter, sans-serif; opacity: .9; margin-top: 2px; }
+.cab-kar-go { font-size: 24px; opacity: .85; position: relative; }
