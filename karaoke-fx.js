@@ -175,6 +175,7 @@
       Kt = a[Math.min(a.length - 1, Math.floor(a.length * DARK_SHARE))] || 0.3;
     }
 
+    this.cv = cv;
     this.combo = null;
     this.reset = function () { lastMeasure = 0; };
     this.draw = function (T, B, now) {
@@ -209,7 +210,10 @@
   }
 
   function apply(rootEl, song) {
-    stop();
+    var cv = rootEl.querySelector("canvas.kfx");
+    // Тот же экран (смена стиля в шторке) — WebGL того же холста не гасим:
+    // погашенный контекст обратно не оживает, и стекло не возвращалось (20.11).
+    stop(!S.r || S.r.cv !== cv);
     S.root = rootEl; S.song = song;
     var cl = rootEl.classList;
     cl.remove("fx-glass", "fx-fallback", "fx-ivory", "fx-black", "pal", "dk");
@@ -218,16 +222,19 @@
     if (mode === "black") { cl.add("fx-black"); setPage("#0b0f17"); return; }
     S.combo = comboFor(song.id);
     paintVars();
-    var cv = rootEl.querySelector("canvas.kfx");
     try {
       if (!cv) throw new Error("no canvas");
-      S.r = new Renderer(cv);
+      if (cv._kfxR && !cv._kfxR.isLost()) S.r = cv._kfxR;
+      else {
+        S.r = cv._kfxR = new Renderer(cv);
+        cv.addEventListener("webglcontextlost", function (e) {
+          e.preventDefault();
+          if (S.root !== rootEl) return;
+          S.r = null; cl.remove("fx-glass"); cl.add("fx-fallback");
+        });
+      }
       S.r.combo = S.combo;
-      cv.addEventListener("webglcontextlost", function (e) {
-        e.preventDefault();
-        if (S.root !== rootEl) return;
-        S.r = null; cl.remove("fx-glass"); cl.add("fx-fallback");
-      });
+      S.r.reset();
       cl.add("fx-glass");
     } catch (e) {
       S.r = null; cl.add("fx-fallback");
@@ -244,8 +251,8 @@
     setPage(hex(C[0]));
   }
 
-  function stop() {
-    if (S.r) S.r.destroy();
+  function stop(destroy) {
+    if (S.r && destroy !== false) { S.r.destroy(); if (S.r.cv) S.r.cv._kfxR = null; }
     S.r = null; S.root = null; S.song = null; S.combo = null;
   }
 
