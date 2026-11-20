@@ -2463,13 +2463,13 @@ function renderCabWheel(data) {
 
   return '<div class="cab-screen-title">Колесо баланса</div>' + gold +
     '<div class="cabinet-inset">' + lvTabs +
-      cabWheelSvg(order, series, sel) +
+      cabWheelSvg(order, series, sel, current.map(function (t) { return t.score; })) +
       '<div class="cab-wheel-hint">Нажми на точку — покажу, что это за зона</div>' +
       '<div class="srez-hist-title">Зоны колеса</div>' + legend + rows + hist +
     "</div>";
 }
 
-function cabWheelSvg(order, series, sel) {
+function cabWheelSvg(order, series, sel, scores) {
   var cx = 120, cy = 120, R = 88, n = order.length;
   var svg = srezWheelSvg(order, series);
   // srezWheelSvg рисует колесо в поле 220×220 с центром 110 и радиусом 92 —
@@ -2485,11 +2485,19 @@ function cabWheelSvg(order, series, sel) {
       '<circle cx="' + x + '" cy="' + y + '" r="20" fill="transparent"/>' +
       (on ? '<circle cx="' + x + '" cy="' + y + '" r="' + (dotR + 4) + '" fill="var(--terra)" fill-opacity=".18"/>' : "") +
       '<circle cx="' + x + '" cy="' + y + '" r="' + dotR + '" class="cab-wdot-c"/>' +
-      '<text x="' + x + '" y="' + (Number(y) + fs * 0.36).toFixed(1) + '" text-anchor="middle" font-size="' + fs + '" class="cab-wdot-t">' + (i + 1) + "</text></g>";
+      '<text x="' + x + '" y="' + (Number(y) + fs * 0.36).toFixed(1) + '" text-anchor="middle" font-size="' + fs + '" class="cab-wdot-t">' + wdotLabel(scores, i) + "</text></g>";
   }).join("");
   return '<svg viewBox="0 0 240 240" class="cab-wheel">' +
     '<g transform="translate(' + (cx - 110 * k).toFixed(2) + " " + (cy - 110 * k).toFixed(2) + ") scale(" + k.toFixed(4) + ')">' + inner + "</g>" +
     dots + "</svg>";
+}
+
+// 20.11 (Николай): на точках колеса — оценка зоны, а не её номер
+function wdotLabel(scores, i) {
+  if (!scores) return i + 1;
+  var v = scores[i];
+  if (v === null || v === undefined || v === "" || isNaN(Number(v))) return "—";
+  return String(Math.round(Number(v) * 10) / 10);
 }
 
 function wireCabWheelDots(root) {
