@@ -212,7 +212,8 @@ var TrackCard = {
     var cover = url
       ? '<img src="' + esc(url) + '" alt="" loading="lazy" decoding="async" draggable="false">'
       : '<div class="trk-ph">' + TRK_ICO.note + (adm ? '<span>Добавьте обложку вручную</span>' : "") + "</div>";
-    var line1 = lb.artist || lb.title, line2 = lb.artist ? lb.title : "";
+    // 20.11 (Николай): сверху название песни, под ним исполнитель
+    var line1 = lb.title || lb.artist, line2 = lb.title ? (lb.artist || "") : "";
     var badge = it.kind === "draft" ? '<span class="trk-badge">нет минуса</span>' : "";
     var label = (it.kind === "draft" ? "Открыть песню: " : "Петь: ") + (lb.artist ? lb.artist + " — " : "") + lb.title;
     return '<div class="trk-card' + (it.kind === "draft" ? " trk-draft" : "") + '"' + tint + ' role="button" tabindex="0" aria-label="' + esc(label) + '">' +
