@@ -126,6 +126,9 @@ html.dark .kp .mk { color: oklch(80% 0.08 50); }
   box-shadow: 0 8px 24px oklch(20% 0.02 40 / .3); }
 .kp .ktap:active { transform: scale(.98); }
 .kp .kundo { flex: none; margin-top: 10px; }
+/* «Исправить тап»: «Назад на строку» и «Готово» рядом */
+.kp .kfixrow { display: flex; gap: 10px; }
+.kp .kfixrow .kundo { flex: 1; }
 
 /* окно «Тональность» / «Темп» — стеклянное, поверх плеера */
 .kp .ksheet { position: absolute; left: 16px; right: 16px; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); z-index: 3; border-radius: 26px;
