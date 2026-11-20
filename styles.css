@@ -1398,3 +1398,43 @@ html.dark .cab-zone.on, body.dark .cab-zone.on { background: color-mix(in srgb, 
   font: 600 13px 'Inter', sans-serif; color: var(--gray); background: var(--bg); box-shadow: var(--raised-sm); white-space: nowrap; }
 .cab-lvl-tab.on { color: var(--white-text); background: var(--terra); box-shadow: none; }
 .cab-lvl-head { font: 700 11px 'Inter', sans-serif; letter-spacing: 0.07em; text-transform: uppercase; color: var(--terra); margin: 16px 0 4px; }
+
+/* ---------- Дашборд (режим админа, 20.11) ---------- */
+.dash { padding: 8px 16px 130px; display: flex; flex-direction: column; gap: 14px; }
+.dash-seg { display: flex; gap: 8px; }
+.dash-seg button { flex: 1; height: 36px; border: 0; border-radius: 18px; background: var(--bg); box-shadow: var(--raised-sm); font: 700 13px Manrope, sans-serif; color: var(--gray); cursor: pointer; }
+.dash-seg button.on { box-shadow: var(--inset-sm); color: var(--terra); }
+.dash-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.dash-tile { background: var(--bg); border-radius: 18px; padding: 14px; box-shadow: var(--raised); }
+.dash-tile-v { font: 800 26px Manrope, sans-serif; color: var(--ink); line-height: 1.1; }
+.dash-tile-v small { font-size: 15px; color: var(--gray); font-weight: 700; }
+.dash-tile-l { font: 600 12.5px Inter, sans-serif; color: var(--tx3); margin-top: 4px; }
+.dash-tile-s { font: 500 11.5px Inter, sans-serif; color: var(--gray); margin-top: 3px; }
+.dash-card { background: var(--bg); border-radius: 20px; padding: 16px; box-shadow: var(--raised); }
+.dash-h { font: 800 15px Manrope, sans-serif; color: var(--ink); }
+.dash-hint { font: 500 12px/1.45 Inter, sans-serif; color: var(--gray); margin-top: 4px; }
+.dash-empty { font: 500 13px Inter, sans-serif; color: var(--gray); margin-top: 8px; }
+.dash-chart { display: flex; align-items: flex-end; gap: 3px; height: 90px; margin-top: 12px; padding: 8px; border-radius: 14px; box-shadow: var(--inset-sm); }
+.dash-bar { flex: 1; height: 100%; display: flex; align-items: flex-end; }
+.dash-bar b { display: block; width: 100%; border-radius: 3px; background: var(--terra); opacity: .85; }
+.dash-axis { display: flex; justify-content: space-between; font: 500 11px Inter, sans-serif; color: var(--gray); margin-top: 6px; }
+.dash-lesson { margin-top: 14px; }
+.dash-lesson-t { font: 700 13px Manrope, sans-serif; color: var(--ink); margin-bottom: 6px; }
+.dash-step { display: grid; grid-template-columns: 74px 1fr 26px; align-items: center; gap: 8px; margin: 5px 0; }
+.dash-step span { font: 500 12px Inter, sans-serif; color: var(--tx3); }
+.dash-step em { font: 700 12px Inter, sans-serif; font-style: normal; color: var(--ink); text-align: right; }
+.dash-meter { height: 8px; border-radius: 4px; box-shadow: var(--inset-sm); overflow: hidden; }
+.dash-meter b { display: block; height: 100%; background: var(--blue); border-radius: 4px; }
+.dash-st { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.dash-st:last-child { border-bottom: 0; padding-bottom: 0; }
+.dash-st-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.dash-st-n { font: 700 14px Manrope, sans-serif; color: var(--ink); margin-right: 2px; }
+.dash-st-s { font: 500 12px/1.45 Inter, sans-serif; color: var(--gray); margin-top: 3px; }
+.dash-st-s b.warn { color: var(--terra); font-weight: 700; }
+.dash-tag { font: 700 10.5px Inter, sans-serif; padding: 3px 8px; border-radius: 10px; background: var(--bgmuted); color: var(--tx3); }
+.dash-tag.ok { background: var(--bgmuted); color: var(--blue); }
+.dash-tag.warn { background: var(--bgmuted); color: var(--terra); }
+.dash-dots { display: flex; gap: 4px; margin-top: 7px; }
+.dash-dots i { width: 12px; height: 12px; border-radius: 4px; box-shadow: var(--inset-sm); }
+.dash-dots i.on { background: var(--terra); box-shadow: none; }
+.dash-foot { font: 500 11.5px/1.45 Inter, sans-serif; color: var(--gray); text-align: center; padding: 0 8px; }

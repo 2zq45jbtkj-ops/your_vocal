@@ -322,7 +322,7 @@ function submitFile(kind, file, onStatus, filename, meta) {
   }
   fetch("/api/submit", { method: "POST", body: f })
     .then(function (r) { return r.json().catch(function () { return { ok: false }; }); })
-    .then(function (data) { onStatus(data.ok ? "sent" : "error"); })
+    .then(function (data) { if (data.ok) trackEv("hw_sent", { kind: kind, lesson: LESSON && LESSON.id ? LESSON.id : null }); onStatus(data.ok ? "sent" : "error"); })
     .catch(function () { onStatus("error"); });
 }
 
@@ -453,6 +453,7 @@ function backTarget() {
     case "admin-hub": return "more";
     case "admin-students": return "admin-hub";
     case "admin-birthdays": return "admin-hub";
+    case "admin-dash": return "admin-hub";
     case "admin-plans": return "admin-hub";
     case "admin-plan": return "admin-plans";
     case "karaoke": return "profile";
@@ -1058,6 +1059,7 @@ function loadStudentPublicData() {
     .then(function (data) {
       if (data && data.student) {
         state.studentPublicData = data;
+        if (!state._openTracked) { state._openTracked = true; trackEv("open", {}); }
         // вход по личной ссылке: имя берём отсюда (обычно его ставит экран входа)
         if (!state.adminMode && !state.firstName && data.student.name) {
           state.firstName = data.student.name.split(" ")[0] || data.student.name;
@@ -1383,7 +1385,23 @@ function deleteStudentWithConfirm(studentId, name) {
    это никак не сказывается. Ключ ученика — код доступа (токен), а не Telegram
    chat_id: в базе Николая ученик опознаётся именно по токену. Автопереход
    статуса «Пробный» → «Активный» делает сервер (см. api/student-public.js). */
+/* Событие для дашборда в «Режиме админа» (20.11). Николай сам в
+   аналитику не попадает: ни в режиме админа, ни со своей карточки. */
+function trackEv(type, data) {
+  if (!state.accessToken || state.adminMode || state.isAdmin) return;
+  var body = JSON.stringify({
+    token: state.accessToken, type: type, data: data || {},
+    name: ((state.firstName || "") + " " + (state.lastName || "")).trim()
+  });
+  try {
+    if (navigator.sendBeacon && navigator.sendBeacon("/api/track", new Blob([body], { type: "application/json" }))) return;
+  } catch (e) {}
+  fetch("/api/track", { method: "POST", headers: { "content-type": "application/json" }, body: body, keepalive: true }).catch(function () {});
+}
+window.trackEv = trackEv;
+
 function sendProgressToBaza(lessonNum, step) {
+  trackEv("step", { lesson: lessonNum, step: step });
   if (!state.accessToken) return;
   fetch(BAZA_API + "/api/student-public?token=" + encodeURIComponent(state.accessToken), {
     method: "POST",
@@ -1588,7 +1606,7 @@ function toggleHwDone(idx) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ hwDone: { title: hw.title, due: hw.due, done: next } })
   })
-    .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); })
+    .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); trackEv("hw_done", { title: hw.title, due: hw.due, done: next }); })
     .catch(function () {
       hw.done = !next;
       hw.status = prevStatus;
@@ -3301,6 +3319,10 @@ function sendSupport() {
 function renderAdminHub() {
   var items = [
     {
+      label: "Дашборд", act: "admin-hub-dash", sub: "Активность, уроки, ДЗ и результаты учеников",
+      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2.5 13.5h11" stroke="var(--gray)" stroke-width="1.4" stroke-linecap="round"/><rect x="3.5" y="8" width="2" height="4" rx=".6" stroke="var(--gray)" stroke-width="1.3"/><rect x="7" y="5" width="2" height="7" rx=".6" stroke="var(--gray)" stroke-width="1.3"/><rect x="10.5" y="2.5" width="2" height="9.5" rx=".6" stroke="var(--gray)" stroke-width="1.3"/></svg>'
+    },
+    {
       label: "Выбор ученика", act: "admin-hub-students", sub: "Пройти урок глазами ученика",
       icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="5.5" r="2.8" stroke="var(--gray)" stroke-width="1.4"/><path d="M2.8 14c0-2.9 2.3-5 5.2-5s5.2 2.1 5.2 5" stroke="var(--gray)" stroke-width="1.4" stroke-linecap="round"/></svg>'
     },
@@ -4141,6 +4163,7 @@ function renderQuiz() {
     state.quizScore = score;
     saveState();
     sendProgressToBaza((LESSON.id || 1), "quiz");
+    trackEv("quiz", { lesson: (LESSON.id || 1), score: score, total: questions.length });
     submitQuizResult(score, questions.length, wrongDetails);
     go("quiz-result");
   });
@@ -5613,6 +5636,7 @@ var ACTS = {
   "go-favorites": function () { go("favorites"); },
   "admin-hub-students": function () { go("admin-students"); },
   "admin-hub-birthdays": function () { go("admin-birthdays"); },
+  "admin-hub-dash": function () { go("admin-dash"); },
   "admin-hub-plans": function () { go("admin-plans"); },
   "undo-unstar": undoUnstar,
   "cal-prev": function () {
@@ -5729,6 +5753,7 @@ function render() {
     case "admin-hub": renderAdminHub(); break;
     case "admin-students": renderAdminStudents(); break;
     case "admin-birthdays": renderAdminBirthdays(); break;
+    case "admin-dash": if (window.renderAdminDash) renderAdminDash(); break;
     case "admin-plans": renderAdminPlans(); break;
     case "admin-plan": renderAdminPlanDetail(); break;
     case "karaoke": case "karaoke-play": case "admin-karaoke": case "admin-karaoke-songs": case "admin-karaoke-edit": renderKaraokeScreen(); break;

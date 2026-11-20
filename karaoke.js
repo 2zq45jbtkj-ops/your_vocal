@@ -462,6 +462,7 @@ function karNativePlay() {
 
 function karPlay() {
   if (!KE || KE.playing || KE.busy) return;
+  if (!KE._tracked && KAR.song && !KAR.fromAdmEdit && window.trackEv) { KE._tracked = true; trackEv("kar_play", { song: KAR.song.id, title: KAR.song.title || "" }); }
   var t = karTime();
   if (KE.dur && t >= KE.dur - 0.2) t = 0;
   if (KE.pitch === 0) { if (Math.abs(KE.el.currentTime - t) > 0.05) KE.el.currentTime = t; karNativePlay(); }
@@ -508,6 +509,7 @@ function karSetTempo(p) {
 function karOnEnded() {
   if (!KE) return;
   if (KP.loop) { karSeek(KP.loop.s); KP.loop.lap++; karPaintLoopChip(); if (!KE.playing) karPlay(); return; }
+  if (KAR.song && !KAR.fromAdmEdit && window.trackEv) trackEv("kar_end", { song: KAR.song.id });
   karKillShifter();
   KE.playing = false; KE.pos = 0;
   try { KE.el.pause(); KE.el.currentTime = 0; } catch (e) {}

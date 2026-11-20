@@ -736,6 +736,7 @@ function ptFinish(run) {
     return;
   }
   PT.res = ptResult(run);
+  if (window.trackEv) trackEv("pitch", { topic: run.ex.topic, lvl: run.ex.lvl, pct: PT.res.pct, stars: PT.res.stars });
   go("pitch-score");
 }
 
