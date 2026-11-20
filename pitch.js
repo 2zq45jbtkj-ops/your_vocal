@@ -79,10 +79,29 @@ function ptWireVoiceSeg() {
   });
 }
 
+/* Тест-драйв гостя (20.11, просьба Николая): открыта только первая тема,
+   остальные с замком — нажатие показывает подсказку. */
+var PT_LOCK_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2.5" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 018 0v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+function ptGuestLocked(topicId) {
+  if (!window.GUEST_ON) return false;
+  var first = ptTopics()[0];
+  return !!first && topicId !== first.id;
+}
+function ptGuestToast() {
+  var first = ptTopics()[0];
+  var msg = "В тест-драйве открыта только тема «" + (first ? first.name : "") + "». Остальные откроются после записи на занятия.";
+  if (window.GUEST && GUEST.toast) GUEST.toast(msg);
+}
+
 function renderPitchList() {
   var last = ptLast();
   var rows = ptTopics().map(function (tp, k) {
     var list = ptExOf(tp.id);
+    if (ptGuestLocked(tp.id)) {
+      return '<div class="pt-row" data-pt-topic="' + esc(tp.id) + '" style="opacity:.5"><div class="ic" style="background:' + esc(tp.color) + '">' + (k + 1) + "</div>" +
+        '<div style="flex:1;min-width:0;"><b>' + esc(tp.name) + '</b><div class="sub">' + esc(tp.goal) + "</div></div>" +
+        '<div class="cab-chev" style="display:flex;align-items:center">' + PT_LOCK_SVG + "</div></div>";
+    }
     var done = list.filter(function (e) { return last[ptExKey(e)] != null; }).length;
     return '<div class="pt-row" data-pt-topic="' + esc(tp.id) + '"><div class="ic" style="background:' + esc(tp.color) + '">' + (k + 1) + "</div>" +
       '<div style="flex:1;min-width:0;"><b>' + esc(tp.name) + '</b><div class="sub">' + esc(tp.goal) + "</div></div>" +
@@ -96,7 +115,11 @@ function renderPitchList() {
   wireActs();
   ptWireVoiceSeg();
   Array.prototype.forEach.call(app.querySelectorAll("[data-pt-topic]"), function (el) {
-    el.onclick = function () { PT.topic = el.getAttribute("data-pt-topic"); go("pitch-topic"); };
+    el.onclick = function () {
+      var id = el.getAttribute("data-pt-topic");
+      if (ptGuestLocked(id)) { ptGuestToast(); return; }
+      PT.topic = id; go("pitch-topic");
+    };
   });
 }
 
@@ -812,6 +835,7 @@ function renderPitchScore() {
     if (list[i + 1]) { PT.ex = list[i + 1]; go("pitch-sing"); return; }
     var tps = ptTopics(), ti = tps.indexOf(ptTopicOf(r.ex.topic));
     var nt = tps[ti + 1];
+    if (nt && ptGuestLocked(nt.id)) { ptGuestToast(); go("pitch"); return; }
     if (nt) { PT.topic = nt.id; PT.ex = ptExOf(nt.id)[0]; go("pitch-sing"); }
     else go("pitch");
   };
@@ -833,7 +857,7 @@ function renderPitchScreen() {
   }
   switch (state.screen) {
     case "pitch": renderPitchList(); break;
-    case "pitch-topic": renderPitchTopic(); break;
+    case "pitch-topic": if (ptGuestLocked(PT.topic)) { state.screen = "pitch"; renderPitchList(); break; } renderPitchTopic(); break;
     case "pitch-sing": renderPitchSing(); break;
     case "pitch-score": renderPitchScore(); break;
   }
