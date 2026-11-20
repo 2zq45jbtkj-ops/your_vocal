@@ -395,6 +395,7 @@
     if (document.querySelector(".gd-ov")) return;
     // не перебиваем, пока человек поёт
     if (["karaoke-play", "pitch-sing"].indexOf(state.screen) !== -1) return;
+    if (G.store.applied) return; // заявка уже отправлена — больше не зовём
     if (Date.now() - (G.store.popupAt || 0) < 60000) return;
     G.showTrial("auto");
   }
@@ -424,11 +425,17 @@
     closeScreen(); flush(true);
     post("trial", {});
     G.store.popupAt = Date.now(); saveStore();
+    G.store.applied = Date.now(); saveStore();
     closeSheets();
-    try {
-      if (tg && tg.openTelegramLink) tg.openTelegramLink(TRIAL_URL);
-      else window.open(TRIAL_URL, "_blank");
-    } catch (e) { location.href = TRIAL_URL; }
+    G.popupOpen = true;
+    sheet(
+      '<div class="gd-badge">✅</div>' +
+      '<div class="gd-title">Заявка отправлена</div>' +
+      '<div class="gd-sub">Ваша заявка отправлена Николаю. В ближайшее время он свяжется с вами в Telegram.</div>' +
+      '<button type="button" class="cta terra gd-cta" data-gd-close>Понятно</button>',
+      function () { G.popupOpen = false; G.store.popupAt = Date.now(); saveStore(); }
+    );
+    log({ kind: "popup", label: "Окно «Заявка отправлена»" });
   }
 
   /* ---------- шторка и подсказка ---------- */
