@@ -378,14 +378,14 @@
     var bar = H("div", "banim-bar", mount); var barFill = H("div", "", bar);
 
     var fig = H("div", "banim-fig", mount);
-    var svg = E("svg", { viewBox: "0 0 400 560", role: "img", "aria-label": "Анимация дыхательного цикла, вид спереди" }, fig);
+    var svg = E("svg", { viewBox: "0 -44 400 604", role: "img", "aria-label": "Анимация дыхательного цикла, вид спереди" }, fig);
     var pauseBadge = H("div", "banim-pause", fig, "пауза · нажми, чтобы продолжить");
 
     var defs = E("defs", null, svg);
     defs.innerHTML =
       '<radialGradient id="ba-lung" cx="50%" cy="38%" r="70%"><stop offset="0" stop-color="#f6c3bd"/><stop offset=".7" stop-color="#e59c98"/><stop offset="1" stop-color="#c5767a"/></radialGradient>' +
       '<linearGradient id="ba-heart" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c9534c"/><stop offset="1" stop-color="#8a2c2b"/></linearGradient>' +
-      '<linearGradient id="ba-torso" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a2f35"/><stop offset="1" stop-color="#22262b"/></linearGradient>' +
+      '<linearGradient id="ba-head" gradientUnits="userSpaceOnUse" x1="0" y1="-44" x2="0" y2="14"><stop offset="0" stop-color="#2a2f35" stop-opacity="0"/><stop offset=".5" stop-color="#2b3036"/><stop offset="1" stop-color="#2c3137"/></linearGradient><linearGradient id="ba-jawsh" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#15181c" stop-opacity=".55"/><stop offset="1" stop-color="#15181c" stop-opacity="0"/></linearGradient><linearGradient id="ba-jaw" gradientUnits="userSpaceOnUse" x1="0" y1="-44" x2="0" y2="0"><stop offset="0" stop-color="#4a515a" stop-opacity="0"/><stop offset=".6" stop-color="#4a515a"/></linearGradient><linearGradient id="ba-torso" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a2f35"/><stop offset="1" stop-color="#22262b"/></linearGradient>' +
       '<linearGradient id="ba-stern" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#d8c69c"/><stop offset=".5" stop-color="#f3e8cc"/><stop offset="1" stop-color="#d3c094"/></linearGradient>' +
       '<linearGradient id="ba-trach" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#7f93a0"/><stop offset=".5" stop-color="#b7c6cf"/><stop offset="1" stop-color="#7f93a0"/></linearGradient>' +
       '<pattern id="ba-alv" width="7" height="7" patternUnits="userSpaceOnUse"><circle cx="3.5" cy="3.5" r="2.2" fill="none" stroke="#b9666d" stroke-opacity=".22" stroke-width=".8"/></pattern>';
@@ -400,6 +400,17 @@
     var torso = E("path", { fill: "url(#ba-torso)", stroke: C.torsoO, "stroke-width": 1.2 }, gTorso);
     // брюшная стенка: прямые мышцы, белая линия, сухожильные перемычки, пупок
     var rectus = E("path", { fill: "none", stroke: "#3a4047", "stroke-width": 1.2 }, gTorso);
+    // шея и нижняя челюсть (вариант «мягкий», 21.11): округлая челюсть, тень под ней, мочки ушей;
+    // лицо выше подбородка растворяется в фоне
+    var JAW = "M" + (X0 - 60) + " -44 Q" + (X0 - 66) + " -24 " + (X0 - 50) + " -4 Q" + X0 + " 30 " + (X0 + 50) + " -4 Q" + (X0 + 66) + " -24 " + (X0 + 60) + " -44";
+    var NECK_W = [48, 46, 50];
+    E("path", { fill: "url(#ba-jawsh)", d: "M" + (X0 - 48) + " -10 L" + (X0 + 48) + " -10 L" + (X0 + 47) + " 40 L" + (X0 - 47) + " 40 Z" }, gTorso);
+    E("path", { fill: "url(#ba-head)", stroke: "none", d: JAW + " Z" }, gTorso);
+    [-1, 1].forEach(function (s) {
+      E("path", { fill: "url(#ba-head)", stroke: "url(#ba-jaw)", "stroke-width": 1.2,
+        d: "M" + (X0 + s * 64) + " -44 Q" + (X0 + s * 78) + " -40 " + (X0 + s * 74) + " -26 Q" + (X0 + s * 70) + " -18 " + (X0 + s * 63) + " -22" }, gTorso);
+    });
+    E("path", { fill: "none", stroke: "url(#ba-jaw)", "stroke-width": 1.4, "stroke-linecap": "round", d: JAW }, gTorso);
     var umb = E("ellipse", { cx: X0, cy: 456, rx: 3, ry: 4, fill: "#1b1e22" }, gTorso);
     // органы живота
     var liver = E("path", { fill: "#7e3c33", "fill-opacity": 0.42, stroke: "#5c2a24", "stroke-width": 1 }, gAbd);
@@ -554,9 +565,10 @@
       '<span class="banim-gx-ico">' + GX_ICON + '</span><span><b>Газообмен в альвеолах</b><small>Как O₂ попадает в кровь, а CO₂ выходит</small></span><span class="banim-gx-go">›</span>');
     gxBtn.type = "button";
     gxBtn.addEventListener("click", function () { openGasExchange(); });
-    if (mount.getAttribute("data-gx") === "0" || MUS) gxBtn.remove();   // упрощённая лекция / карточка мышц
+    var QZ = mount.getAttribute("data-quiz");          // картинка-вопрос в тесте: один режим, без кнопок и подписей режима
+    if (mount.getAttribute("data-gx") === "0" || MUS || QZ) gxBtn.remove();   // упрощённая лекция / карточка мышц
     // «Дыхательные мышцы» — кнопка рядом с газообменом (в упрощённой лекции — только главные мышцы)
-    if (!MUS) {
+    if (!MUS && !QZ) {
       var musWrap = H("div", "bmus-mount", mount);
       musWrap.setAttribute("data-level", mount.getAttribute("data-gx") === "0" ? "basic" : "deep");
       musWrap.setAttribute("data-banim", "1");
@@ -642,6 +654,10 @@
         '<span class="banim-cap-ex">Выдох: диафрагма расслабляется и поднимается куполом, рёбра опускаются, воздух выходит.</span>' +
         (MODES[st.mode].voc ? '<span class="banim-cap-voc"><b>В вокале</b>' + MODES[st.mode].voc + "</span>" : "");
     }
+    if (QZ) {
+      modesEl.style.display = "none"; cap.style.display = "none";
+      MODES.forEach(function (m, i) { if (m.key === QZ) st.mode = i; });
+    }
     syncModes();
     fig.addEventListener("click", function () {
       if (st.paused) { st.t0 += performance.now() - st.pauseAt; st.paused = false; mount.classList.remove("paused"); kick(); }
@@ -664,7 +680,7 @@
 
       // туловище: плечи поднимаются при ключичном, живот шире при диафрагмальном
       var side = function (s) {
-        return [[X0 + s * 26, -2], [X0 + s * 29, 90], [X0 + s * 78, 111 - p.c * 9], [X0 + s * 148, 134 - p.c * 13],
+        return [[X0 + s * NECK_W[0], -14], [X0 + s * NECK_W[1], 30], [X0 + s * NECK_W[2], 80], [X0 + s * 78, 111 - p.c * 9], [X0 + s * 148, 134 - p.c * 13],
           [X0 + s * 156, 176 - p.c * 6], [X0 + s * 133, 206], [X0 + s * (131 + p.r * 4), 300],
           [X0 + s * (123 + p.d * 3), 398], [X0 + s * (127 + p.d * 6), 470], [X0 + s * (131 + p.d * 3), 564]];
       };

@@ -499,6 +499,12 @@ html.dark, body.dark {
 .quiz-radio { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--disabled); background: transparent; flex-shrink: 0; }
 .quiz-opt.sel .quiz-radio { border-color: var(--blue); background: var(--blue); }
 .quiz-opt span { font-size: 13px; color: var(--ink); }
+.quiz-opt.right span { color: oklch(72% 0.14 150); font-weight: 600; }
+.quiz-opt.right .quiz-radio { border-color: oklch(65% 0.14 150); background: oklch(65% 0.14 150); }
+.quiz-opt.wrong span { color: oklch(68% 0.15 28); text-decoration: line-through; }
+.quiz-opt.wrong .quiz-radio { border-color: oklch(62% 0.16 28); background: oklch(62% 0.16 28); }
+.quiz-explain { margin-top: 8px; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,.05); font-size: 13px; line-height: 1.45; color: var(--ink); }
+.quiz-anim { margin: 0 0 12px; }
 .quiz-cta-wrap { padding: 12px 20px 120px; }
 .quiz-cta-wrap .cta { height: 52px; font-size: 15px; }
 .cta.terra { background: var(--terra); }

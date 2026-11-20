@@ -4024,7 +4024,7 @@ function renderLessonHome() {
     "</div>" +
     '<div class="stepper">' +
       stepRow({ act: "go-lecture", dotBg: "oklch(60% 0.13 38)", icon: SVG.stepCheck, name: "Лекция «" + esc(LESSON.title) + "»", sub: subs.lecture }) +
-      stepRow({ act: "go-quiz", dotBg: s.quizDone ? "oklch(60% 0.13 38)" : "oklch(56% 0.09 235)", icon: s.quizDone ? SVG.stepCheck : SVG.doc, name: "Тест", sub: s.quizDone ? "Пройден · " + s.quizScore + "/" + LESSON.quiz.questions.length : subs.quiz }) +
+      stepRow({ act: "go-quiz", dotBg: s.quizDone ? "oklch(60% 0.13 38)" : "oklch(56% 0.09 235)", icon: s.quizDone ? SVG.stepCheck : SVG.doc, name: "Тест", sub: s.quizDone ? "Пройден · " + s.quizScore + "/" + quizQuestions().length : subs.quiz }) +
       stepRow({ act: "go-warmups", locked: false, lockedText: false,
         dotBg: s.warmupsDone ? "oklch(60% 0.13 38)" : (s.quizDone ? "oklch(56% 0.09 235)" : "var(--bg)"),
         icon: s.warmupsDone ? SVG.stepCheck : SVG.micIcon(s.quizDone ? "var(--white-text)" : "var(--locked)"),
@@ -4108,9 +4108,19 @@ function renderLecture() {
   if (llOv) wireSheetSwipe(llOv.querySelector(".llevel-card"), function () { state._llevelSkip = true; if (llOv.parentNode) llOv.parentNode.removeChild(llOv); }, llOv);
 }
 
+/* Новый тест урока 1 (quizNew) — пока только на устройствах Николая (есть ключ админа):
+   10 вопросов, в подробной лекции +5. Там же сразу показываем правильный ответ. */
+function quizPreview() { return !!readAdminKey() && !!(LESSON && LESSON.quizNew); }
+function quizQuestions() {
+  if (!quizPreview()) return LESSON.quiz.questions;
+  return LESSON.quizNew.questions.concat(state._lectureLevel === "deep" ? (LESSON.quizNew.deep || []) : []);
+}
+
 function renderQuiz() {
   var s = state;
-  var questions = LESSON.quiz.questions;
+  var questions = quizQuestions();
+  if (s.quizIndex >= questions.length) s.quizIndex = questions.length - 1;
+  var preview = quizPreview();
   var cq = questions[s.quizIndex];
   var answered = s.quizAnswers[s.quizIndex];
   var hasAnswer = answered !== null && answered !== undefined;
@@ -4118,7 +4128,9 @@ function renderQuiz() {
 
   var optsHtml = "";
   cq.opts.forEach(function (text, i) {
-    optsHtml += '<div class="quiz-opt' + (answered === i ? " sel" : "") + '" data-opt="' + i + '">' +
+    var mark = "";
+    if (preview && hasAnswer) mark = i === cq.correct ? " right" : (answered === i ? " wrong" : "");
+    optsHtml += '<div class="quiz-opt' + (answered === i ? " sel" : "") + mark + '" data-opt="' + i + '">' +
       '<div class="quiz-radio"></div><span>' + esc(text) + "</span></div>";
   });
 
@@ -4133,7 +4145,9 @@ function renderQuiz() {
         '<span class="quiz-counter">Вопрос ' + (s.quizIndex + 1) + " из " + questions.length + "</span>" +
       "</div>" +
       '<div class="quiz-card">' +
+        (cq.anim ? '<div class="banim-mount quiz-anim" data-quiz="' + esc(cq.anim) + '" data-gx="0"></div>' : "") +
         '<div class="quiz-q">' + esc(cq.q) + "</div>" + optsHtml +
+        (preview && hasAnswer && answered !== cq.correct && cq.explain ? '<div class="quiz-explain">' + esc(cq.explain) + "</div>" : "") +
       "</div>" +
       '<div class="quiz-ring-big-wrap">' +
         '<div class="quiz-ring-big" style="background:conic-gradient(oklch(56% 0.09 235) ' + quizPct + '%, oklch(87% 0.01 70) 0);">' +
@@ -4184,7 +4198,7 @@ function renderQuizResult() {
     '<div class="result-screen">' +
       '<div class="result-badge">' + SVG.resultCheck + "</div>" +
       '<div class="result-title">Тест пройден</div>' +
-      '<div class="result-sub">Результат: ' + state.quizScore + " из " + LESSON.quiz.questions.length + "</div>" +
+      '<div class="result-sub">Результат: ' + state.quizScore + " из " + quizQuestions().length + "</div>" +
       '<div class="spacer"></div>' +
       '<button class="cta terra" data-act="go-warmups-free">Продолжить: распевки</button>' +
     "</div>";
