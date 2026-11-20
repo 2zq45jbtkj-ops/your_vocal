@@ -100,7 +100,8 @@ var state = {
   _adminStudentsErr: false,  // список учеников не загрузился (а не «пуст»)
   _srezCompare: [],          // id срезов, выбранных для сравнения на колесе
   _srezTopicsOpen: false,    // список тем под колесом: раскрыт/свёрнут (жмём по колесу)
-  _wheelZone: null,          // номер зоны, подсвеченной после нажатия на точку колеса
+  _wheelZone: null,
+  _wheelLvl: null,           // выбранный блок колеса (уровень A–D), null — все          // номер зоны, подсвеченной после нажатия на точку колеса
   _ownCabinetMsg: null,      // "not-found" | "no-token" | "net" — почему не открылась своя карточка
   feedbackMood: null, feedbackText: "", coursesFilter: null,
   pendingUnstar: null, pendingUnstarData: null, pendingUnstarSecs: 0,
@@ -2362,6 +2363,24 @@ function renderCabWheel(data) {
   current.forEach(function (t) { if (hasScore(t.score)) filled[t.name] = 1; });
   list.forEach(function (z) { (z.topics || []).forEach(function (t) { if (hasScore(t.score)) filled[t.name] = 1; }); });
   current = current.filter(function (t) { return filled[t.name]; });
+  // 20.11: зоны по блокам — уровни A–D, как на сайте; порядок A→D
+  var LV = ["A", "B", "C", "D"];
+  var lvOf = function (t) { return LV.indexOf(t.level) > -1 ? t.level : ""; };
+  current = current.map(function (t, i) { return { t: t, i: i }; }).sort(function (a, b) {
+    var x = LV.indexOf(lvOf(a.t)), y = LV.indexOf(lvOf(b.t));
+    return (x < 0 ? 9 : x) - (y < 0 ? 9 : y) || a.i - b.i;
+  }).map(function (o) { return o.t; });
+  var levels = [];
+  current.forEach(function (t) { var l = lvOf(t); if (levels.indexOf(l) < 0) levels.push(l); });
+  if (state._wheelLvl && levels.indexOf(state._wheelLvl) < 0) state._wheelLvl = null;
+  var lvName = function (l) { return l ? "Уровень " + l : "Другое"; };
+  var lvTabs = levels.length > 1
+    ? '<div class="cab-lvl-tabs">' + [null].concat(levels).map(function (l) {
+        var on = (state._wheelLvl || null) === (l === null ? null : l);
+        return '<span class="cab-lvl-tab' + (on ? " on" : "") + '" data-act="wheel-lvl" data-lvl="' + (l === null ? "*" : (l || "-")) + '">' + (l === null ? "Все" : lvName(l)) + "</span>";
+      }).join("") + "</div>"
+    : "";
+  if (state._wheelLvl) current = current.filter(function (t) { return lvOf(t) === state._wheelLvl; });
   if (!current.length) {
     return '<div class="cab-screen-title">Колесо баланса</div>' + gold +
       '<div class="instruction-note">Колесо заполним вместе на первом срезе.</div>';
@@ -2379,7 +2398,10 @@ function renderCabWheel(data) {
   });
   var sel = state._wheelZone;
 
+  var showHeads = !state._wheelLvl && levels.length > 1, prevLv = null;
   var rows = current.map(function (t, i) {
+    var head = "";
+    if (showHeads && lvOf(t) !== prevLv) { prevLv = lvOf(t); head = '<div class="cab-lvl-head">' + lvName(prevLv) + "</div>"; }
     var score = (t.score === null || t.score === undefined) ? null : Number(t.score);
     var cmp = picked.map(function (z, k) {
       var pv = null;
@@ -2405,7 +2427,7 @@ function renderCabWheel(data) {
             SREZ_COMPARE_COLORS[o.k % SREZ_COMPARE_COLORS.length] + ';"></div>';
         });
     }
-    return '<div class="cab-zone' + (sel === i ? " on" : "") + '" id="cab-zone-' + i + '">' +
+    return head + '<div class="cab-zone' + (sel === i ? " on" : "") + '" id="cab-zone-' + i + '">' +
       '<div class="cab-zone-num">' + (i + 1) + "</div>" +
       '<div style="flex:1;min-width:0;"><div class="srez-row-head">' +
         '<span class="srez-name">' + esc(t.name) + "</span>" + cmp +
@@ -2439,7 +2461,7 @@ function renderCabWheel(data) {
   }
 
   return '<div class="cab-screen-title">Колесо баланса</div>' + gold +
-    '<div class="cabinet-inset">' +
+    '<div class="cabinet-inset">' + lvTabs +
       cabWheelSvg(order, series, sel) +
       '<div class="cab-wheel-hint">Нажми на точку — покажу, что это за зона</div>' +
       '<div class="srez-hist-title">Зоны колеса</div>' + legend + rows + hist +
@@ -5566,6 +5588,13 @@ function wireActs() {
       }
       if (act === "srez-topics-toggle") {
         state._srezTopicsOpen = !state._srezTopicsOpen;
+        render();
+        return;
+      }
+      if (act === "wheel-lvl") {
+        var lv = el.getAttribute("data-lvl");
+        state._wheelLvl = lv === "*" ? null : (lv === "-" ? "" : lv);
+        state._wheelZone = null;
         render();
         return;
       }

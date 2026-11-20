@@ -1389,3 +1389,11 @@ html.dark .cab-zone.on, body.dark .cab-zone.on { background: color-mix(in srgb, 
 .llevel-opt.deep b { color: var(--terra); }
 .banim-legend { margin: 12px 0 6px; font-size: 15.3px; }
 .banim-legend li { padding: 2px 0; }
+
+/* Колесо баланса по блокам (уровни A–D), 20.11 */
+.cab-lvl-tabs { display: flex; gap: 6px; overflow-x: auto; margin: 0 -4px 12px; padding: 2px 4px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.cab-lvl-tabs::-webkit-scrollbar { display: none; }
+.cab-lvl-tab { flex: 0 0 auto; height: 34px; padding: 0 14px; border-radius: 17px; display: inline-flex; align-items: center; cursor: pointer;
+  font: 600 13px 'Inter', sans-serif; color: var(--gray); background: var(--bg); box-shadow: var(--raised-sm); white-space: nowrap; }
+.cab-lvl-tab.on { color: var(--white-text); background: var(--terra); box-shadow: none; }
+.cab-lvl-head { font: 700 11px 'Inter', sans-serif; letter-spacing: 0.07em; text-transform: uppercase; color: var(--terra); margin: 16px 0 4px; }
