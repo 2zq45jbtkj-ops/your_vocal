@@ -3804,7 +3804,7 @@ function renderAdminPlanDetail() {
 
 function renderComingSoon(title, icon) {
   app.innerHTML =
-    '<div class="result-screen" style="padding-bottom:130px;">' +
+    '<div class="result-screen">' +
       '<div class="result-badge">' + icon + "</div>" +
       '<div class="result-title">' + esc(title) + "</div>" +
       '<div class="result-sub">Скоро</div>' +

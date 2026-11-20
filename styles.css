@@ -512,8 +512,10 @@ html.dark, body.dark {
 
 /* результат теста */
 .result-screen {
-  min-height: 100vh; display: flex; flex-direction: column;
-  padding: var(--screen-top) 24px 130px; align-items: center; text-align: center;
+  /* 21.11: высота — реально видимая область Telegram (100vh в полноэкранном режиме длиннее экрана,
+     и кнопка внизу уезжала под док); снизу — место под док + безопасную зону */
+  min-height: 100vh; min-height: var(--tg-viewport-stable-height, 100dvh); display: flex; flex-direction: column;
+  padding: var(--screen-top) 24px calc(var(--tg-safe-area-inset-bottom, 0px) + 124px); align-items: center; text-align: center;
 }
 .result-badge {
   width: 68px; height: 68px; border-radius: 50%; background: var(--bg);
