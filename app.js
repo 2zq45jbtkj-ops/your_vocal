@@ -3846,15 +3846,11 @@ function activeDockTab() {
 
 function renderDock() {
   if (NO_DOCK_SCREENS.indexOf(state.screen) !== -1) return;
-  var stats = lessonStats();
   var activeTab = activeDockTab();
-  // По просьбе Николая: бейдж на доке показывает не «пройдено», а сколько
-  // уроков начаты, но не закрыты до конца (1-3 из 4 шагов) — сколько ещё
-  // доделать ученику, а не сколько уже сдано.
-  var badge = stats.inProgress ? '<span class="dock-badge">' + stats.inProgress + "</span>" : "";
+  // Бейдж с числом на доке «Уроки» убран по просьбе Николая (21.11) — неактуален.
   var items = [
     { screen: "profile", act: "go-profile", icon: SVG.dockPerson, label: "Кабинет" },
-    { screen: "courses", act: "go-courses", icon: SVG.dockLessons, label: "Уроки", badge: badge },
+    { screen: "courses", act: "go-courses", icon: SVG.dockLessons, label: "Уроки" },
     // "Запись" (календарь записи на занятие) скрыта по просьбе Николая — функционал
     // (renderQuestions, ACTS["go-questions"], case "questions") оставлен нетронутым,
     // чтобы в любой момент вернуть пункт обратно одной строкой.
