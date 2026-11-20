@@ -197,7 +197,7 @@ function loadState() {
       state.isAdmin = true; state._siteAuth = t; state.screen = "profile";
     } else {
       state.isAdmin = adminOnGet(); state._siteAuth = state.isAdmin ? t : "";
-      state.screen = state.isAdmin ? "admin-hub" : "courses";
+      state.screen = "courses"; // 21.11: Николай просил открывать сразу «Уроки», а не админ-панель
     }
   } else if (state.isAdmin && state._siteAuth) {
     saveAdminKey(state._siteAuth); // вход, сохранённый до отдельного ключа
