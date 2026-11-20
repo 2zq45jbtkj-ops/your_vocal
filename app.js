@@ -182,7 +182,7 @@ function loadState() {
   loadStateRaw();
   var t = readAdminKey();
   if (t) {
-    if (!state.isAdmin || !state._siteAuth) { state.isAdmin = true; state._siteAuth = t; state.screen = "admin-hub"; }
+    if (!state.isAdmin || !state._siteAuth) { state.isAdmin = true; state._siteAuth = t; state.screen = state.accessToken ? "courses" : "profile"; }
   } else if (state.isAdmin && state._siteAuth) {
     saveAdminKey(state._siteAuth); // вход, сохранённый до отдельного ключа
   }
@@ -197,7 +197,8 @@ function loadStateRaw() {
     // Вход админа, сохранённый до того, как начали хранить токен: без токена
     // база ничего не даёт загрузить — один раз просим ключи заново.
     if (state.isAdmin && !state._siteAuth) { state.isAdmin = false; state.screen = "token-entry"; return; }
-    if (state.isAdmin) state.screen = "admin-hub";
+    // 20.11: админ и своя карточка — один аккаунт: сразу кабинет ученика
+    if (state.isAdmin) state.screen = state.accessToken ? "courses" : "profile";
     else if (state.accessToken) state.screen = "courses";
     else if (state.tgId && state.firstName && state.lastName) state.screen = "courses";
   } catch (e) {}
@@ -560,7 +561,7 @@ function renderTokenEntry() {
               openOwnCabinet();
               return;
             }
-            go("admin-hub");
+            openOwnCabinet(); // 20.11: сразу своя карточка ученика, админка — в «Ещё»
           } else {
             state._tokenError = "Неверные ключи. Попробуй ещё раз.";
             btn.disabled = false;
@@ -1230,7 +1231,7 @@ function openOwnCabinet() {
   var proceed = function () {
     state._openingOwnCabinet = false;
     var me = findOwnStudentRecord();
-    if (me && me.telegramToken) { state._ownCabinetMsg = null; enterAdminMode(me); return; }
+    if (me && me.telegramToken) { state._ownCabinetMsg = null; becomeOwnStudent(me); return; }
     state._ownCabinetMsg = me ? "no-token" : "not-found";
     go("admin-students");
   };
@@ -1247,6 +1248,24 @@ function openOwnCabinet() {
       go("admin-students");
     }
   }, 150);
+}
+
+/* 20.11 (просьба Николая): админ и своя карточка «Nikolai Sept» — один
+   аккаунт. Своя карточка открывается не «режимом админа» (с глазом и
+   плашкой «Ты в кабинете»), а как обычный вход ученика: код карточки
+   сохраняется на телефоне, и приложение выглядит ровно как у ученика.
+   Админские функции — в «Ещё → Режим админа»; чужие карточки по-прежнему
+   открываются режимом админа и по выходу возвращают сюда. */
+function becomeOwnStudent(me) {
+  var nm = String(me.name || "").replace(/\s*\(admin\)\s*/ig, " ").trim();
+  state.accessToken = me.telegramToken;
+  state.studentPublicData = null;
+  state.firstName = nm.split(" ")[0] || nm;
+  state.lastName = nm.split(" ").slice(1).join(" ");
+  saveState();
+  if (state._goKaraoke === "new") { state._goKaraoke = false; KAR.songs = null; go("karaoke"); karNewSong({ id: me.id, name: me.name }); return; }
+  if (state._goKaraoke) { state._goKaraoke = false; KAR.songs = null; go("karaoke"); return; }
+  go("profile");
 }
 
 function exitAdminMode() {
