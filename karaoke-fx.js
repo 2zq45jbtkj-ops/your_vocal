@@ -312,7 +312,8 @@
     S.prev = ts;
     var playing = !!(ke && ke.playing), bpm = ke && ke.meta && ke.meta.bpm > 0 ? ke.meta.bpm : 0;
     var rate = ke && ke.tempo ? ke.tempo / 100 : 1;
-    S.tAcc += dt * (playing ? (bpm || 100) / 60 * 0.6 * rate : 0.25);
+    // фон движется сразу, с той же скоростью, что и под музыку (20.11, просьба Николая)
+    S.tAcc += dt * (bpm || 100) / 60 * 0.6 * (playing ? rate : 1);
     if (ts - S.last < 33) return true;
     S.last = ts;
     var B = 0;
