@@ -929,19 +929,29 @@ function karOpenSettings() {
   karPaintSettings();
 }
 
+/* «Настройки» караоке капсулами, как шторка «Фон» (20.11, просьба Николая):
+   слева шарик — значение или живой пример, рядом название. */
+var KSET_ICO = {
+  marks: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 8h11a3 3 0 1 0-3-3M3 12h15a3 3 0 1 1-3 3M3 16h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  fixtap: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 11V5.5a1.5 1.5 0 0 1 3 0V11m0-1.5a1.5 1.5 0 0 1 3 0V12m0-1a1.5 1.5 0 0 1 3 0v4.5A5.5 5.5 0 0 1 12.5 21h-.7a5.5 5.5 0 0 1-4.4-2.2L4.6 15a1.5 1.5 0 0 1 2.3-1.9L9 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+};
 function karPaintSettings() {
   var d = KP.sheet;
   if (!d || !d.parentNode || !KE) return;
-  var row = function (k, t, v) { return '<div class="kset-row" data-ks="' + k + '" role="button"><span>' + t + "</span><b>" + v + "</b></div>"; };
+  var pill = function (k, ball, t, on, ballCls) {
+    return '<span class="kfx-pill kset-pill' + (on ? " on" : "") + '" data-ks="' + k + '" role="button">' +
+      '<span class="kfx-ball kset-ball' + (ballCls ? " " + ballCls : "") + '">' + ball + "</span>" + t + "</span>";
+  };
+  var key = esc(karKeyLabel(KE.pitch)), tl = String(karTempoLabel(KE.tempo)), tnum = esc(tl.replace(/\s*BPM$/i, ""));
   d.innerHTML = '<div class="t">Настройки</div>' +
-    '<div class="kset-list">' +
-      row("pitch", "Тональность", esc(karKeyLabel(KE.pitch)) + " ›") +
-      row("tempo", "Темп", esc(karTempoLabel(KE.tempo)) + " ›") +
-      row("marks", "Пометки дыхания", KAR.showMarks ? "вкл" : "выкл") +
-      row("bg", "Фон", "›") +
-      (KP.lines.length && !KP.tap ? row("fixtap", "Исправить тап", "›") : "") +
-    "</div>" +
-    '<div class="row" style="display:flex;gap:10px;margin-top:14px"><div class="bt main" data-s="ok">Готово</div></div>';
+    '<div class="kfxs-in"><div class="kfx-row kset-pills">' +
+      pill("pitch", '<b class="kset-v' + (key.length > 2 ? " sm" : "") + '">' + key + "</b>", "Тональность") +
+      pill("tempo", '<b class="kset-v' + (tnum.length > 3 ? " sm" : "") + '">' + tnum + "</b>", /bpm/i.test(tl) ? "Темп, BPM" : "Темп") +
+      pill("marks", KSET_ICO.marks, "Пометки дыхания", KAR.showMarks, "ico") +
+      pill("bg", (window.KarFx && KarFx.currentBall) ? KarFx.currentBall() : "", "Фон") +
+      (KP.lines.length && !KP.tap ? pill("fixtap", KSET_ICO.fixtap, "Исправить тап", false, "ico") : "") +
+    "</div></div>" +
+    '<div class="row" style="display:flex;gap:10px;margin-top:16px"><div class="bt main" data-s="ok">Готово</div></div>';
   var q = function (k) { return d.querySelector('[data-ks="' + k + '"]'); };
   q("pitch").onclick = karOpenSheet;
   q("tempo").onclick = karOpenSheet;
@@ -949,6 +959,7 @@ function karPaintSettings() {
   q("bg").onclick = function () { KarFx.openSheet(KP); };
   if (q("fixtap")) q("fixtap").onclick = karFixTapPick;
   d.querySelector('[data-s="ok"]').onclick = function () { d.parentNode.removeChild(d); KP.sheet = null; };
+  if (window.KarFx && KarFx.liveBalls) KarFx.liveBalls(KP);
 }
 
 /* Тональность и темп — вариант A (выбран Николаем 17.11): одна панель, два

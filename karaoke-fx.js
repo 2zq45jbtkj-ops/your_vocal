@@ -30,8 +30,55 @@
     { name: "Терракота", c: [[.08, .025, .015], [.60, .24, .14], [.98, .56, .20], [.82, .30, .14]] },
     { name: "Индиго",    c: [[.025, .025, .09], [.20, .20, .55], [.52, .46, 1.0], [.58, .26, .78]] },
     // «Спектр» (20.11): глубокий синий + оранжевый, как на фото со световыми полосами
-    { name: "Спектр",    c: [[.012, .016, .045], [.10, .26, .80], [1.0, .55, .22], [.36, .62, 1.0]] }
+    { name: "Спектр",    c: [[.012, .016, .045], [.10, .26, .80], [1.0, .55, .22], [.36, .62, 1.0]], n: 2 }
   ];
+  PAL[0].n = PAL[1].n = PAL[2].n = 1;
+
+  /* Палитры по числу цветов (20.11): «1 цвет», «2 цвета», «3 цвета» и «Свои».
+     Палитру фона (C0 тёмная основа, C1 основной, C2 яркий, C3 акцент) строим
+     из 1–3 цветов: насыщенность не ниже 50%, светлота ограничена — светлые
+     тона не сливаются с белым текстом (и шейдер дополнительно держит яркость). */
+  function h2rgb(h) { h = String(h || "#000").replace("#", ""); return [0, 2, 4].map(function (i) { return parseInt(h.substr(i, 2), 16) / 255 || 0; }); }
+  function rgb2hsl(c) {
+    var r = c[0], g = c[1], b = c[2], mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, h = 0, s2 = 0;
+    if (mx !== mn) {
+      var d = mx - mn; s2 = l > .5 ? d / (2 - mx - mn) : d / (mx + mn);
+      h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h /= 6;
+    }
+    return [h, s2, l];
+  }
+  function hsl2rgb(h, s2, l) {
+    h = ((h % 1) + 1) % 1;
+    function f(n) { var k = (n + h * 12) % 12, a = s2 * Math.min(l, 1 - l); return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)); }
+    return [f(0), f(8), f(4)];
+  }
+  function palFrom(hexes) {
+    var hs = (hexes || []).slice(0, 3).map(function (x) { return rgb2hsl(h2rgb(x)); });
+    if (!hs.length) hs = [[0, .7, .4]];
+    var a = hs[0], b = hs[1], c = hs[2];
+    function mk(x, l, dh) { return hsl2rgb(x[0] + (dh || 0), Math.max(x[1], .5), l); }
+    var C0 = hsl2rgb(a[0], .6, .045), C1 = mk(a, .42);
+    var C3 = b ? mk(b, .46) : mk(a, .40, -0.05);
+    var C2 = c ? mk(c, .64) : b ? mk(b, .66) : mk(a, .66, 0.04);
+    return [C0, C1, C2, C3];
+  }
+  [
+    [1, "Изумруд", ["#1fa37a"]], [1, "Янтарь", ["#e0901f"]], [1, "Сапфир", ["#2f5fe0"]], [1, "Фуксия", ["#d6338f"]],
+    [2, "Закат", ["#d8342c", "#f28a1e"]], [2, "Неон", ["#e0338f", "#22b8e0"]], [2, "Океан", ["#14a3a0", "#2340c8"]], [2, "Вишня и фиолет", ["#c41e4a", "#7a35d6"]],
+    [3, "Радуга", ["#f28a1e", "#e8458f", "#3aa0ff"]], [3, "Северное сияние", ["#16b07a", "#22c0d8", "#8a3ce0"]],
+    [3, "Карнавал", ["#e0338f", "#f28a1e", "#f2c21e"]], [3, "Ночной город", ["#3a2bd8", "#d6338f", "#22c0d8"]]
+  ].forEach(function (x) { PAL.push({ n: x[0], name: x[1], hx: x[2], c: palFrom(x[2]) }); });
+
+  // свои палитры — на телефоне ученика; в варианте песни это p = 100 + номер
+  var K_CUSTOM = "kar.fx.custom", CUST = 100, EDIT = 99, ED = null;
+  function customs() { try { var a = JSON.parse(lsGetEarly(K_CUSTOM) || "[]"); return Array.isArray(a) ? a.filter(function (x) { return x && Array.isArray(x.hx) && x.hx.length; }) : []; } catch (e) { return []; } }
+  function saveCustoms(a) { try { localStorage.setItem(K_CUSTOM, JSON.stringify(a)); } catch (e) {} }
+  function lsGetEarly(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function getPal(p) {
+    if (p === EDIT && ED) return { name: "Своя", n: "c", c: palFrom(ED.hx) };
+    if (p >= CUST) { var cu = customs()[p - CUST]; if (cu) return { name: "Моя " + (p - CUST + 1), n: "c", c: palFrom(cu.hx), hx: cu.hx }; }
+    return PAL[p] || PAL[0];
+  }
   var UNDER = ["Лучи софитов", "Лава-лампа", "Цветной дым", "Круглые софиты", "Световые полосы"];
   var UNDER_ORDER = [0, 3, 1, 2, 4];
   var GLASS = ["Рифлёное", "Матовое", "Квадратное"];
@@ -49,13 +96,14 @@
   function setMode(m) { lsSet(K_MODE, m === "ivory" || m === "black" ? m : null); }
 
   function validCombo(o) {
-    return o && o.g >= 0 && o.g <= 2 && o.u >= 0 && o.u <= 4 && o.p >= 0 && o.p <= 3 &&
+    return o && o.g >= 0 && o.g <= 2 && o.u >= 0 && o.u <= 4 &&
+      ((o.p >= 0 && o.p < PAL.length) || (o.p >= CUST && o.p - CUST < customs().length)) &&
       o.g === Math.floor(o.g) && o.u === Math.floor(o.u) && o.p === Math.floor(o.p);
   }
   function randomCombo(rnd, not) {
     rnd = rnd || Math.random;
     for (var i = 0; i < 8; i++) {
-      var c = { g: Math.floor(rnd() * 3), u: Math.floor(rnd() * 5), p: Math.floor(rnd() * 4)};
+      var c = { g: Math.floor(rnd() * 3), u: Math.floor(rnd() * 5), p: Math.floor(rnd() * PAL.length)};
       if (!not || c.g !== not.g || c.u !== not.u || c.p !== not.p) return c;
     }
     return { g: 0, u: 0, p: 0};
@@ -219,7 +267,7 @@
     this.kSet = function (v) { K = Kt = v; lastMeasure = 1e15; };
     this.draw = function (T, B, now) {
       if (!this.combo || !size()) return;
-      var C = PAL[this.combo.p].c, P = UP[this.combo.u], A = W / H;
+      var C = getPal(this.combo.p).c, P = UP[this.combo.u], A = W / H;
       gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.viewport(0, 0, fw, fh); gl.useProgram(P.p);
       gl.uniform1f(P.u.T, T); gl.uniform1f(P.u.A, A); gl.uniform1f(P.u.B, B); gl.uniform1f(P.u.SL, STREAK_SLOW);
       gl.uniform3fv(P.u.C0, C[0]); gl.uniform3fv(P.u.C1, C[1]); gl.uniform3fv(P.u.C2, C[2]); gl.uniform3fv(P.u.C3, C[3]);
@@ -283,7 +331,7 @@
 
   // цвета для запасных CSS-огоньков и полосы под часами
   function paintVars() {
-    var C = PAL[S.combo.p].c, st = S.root.style;
+    var C = getPal(S.combo.p).c, st = S.root.style;
     st.setProperty("--kfx-d", hex(C[0]));
     st.setProperty("--g1", hex(C[1]));
     st.setProperty("--g2", hex(C[3]));
@@ -331,6 +379,7 @@
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
 
   function openSheet(kp) {
+    TAB = null; ED = null;
     var old = kp.root.querySelector(".ksheet");
     if (old) old.parentNode.removeChild(old);
     var d = document.createElement("div");
@@ -384,12 +433,93 @@
   function card(attr, val, label, on, combo, bg) {
     var pic = combo && !THfail
       ? '<canvas class="kfx-bc" width="' + BALL + '" height="' + BALL + '" data-c="' + combo.g + "," + combo.u + "," + combo.p + '"></canvas>'
-      : '<i style="background:' + (bg || hex(PAL[(combo && combo.p) || 0].c[1])) + '"></i>';
+      : '<i style="background:' + (bg || hex(getPal((combo && combo.p) || 0).c[1])) + '"></i>';
     // пилюля, как переключатель режима админа: слева шарик с примером узора, рядом название
     return '<span class="kfx-pill' + (on ? " on" : "") + '" ' + attr + '="' + val + '" role="button" aria-pressed="' + on + '">' +
       '<span class="kfx-ball">' + pic + "</span>" + esc(label) + "</span>";
   }
   function withK(c, k, v) { var o = { g: c.g, u: c.u, p: c.p }; o[k] = v; return o; }
+
+  var TAB = null;
+  var TABS = [[1, "1 цвет"], [2, "2 цвета"], [3, "3 цвета"], ["c", "Свои"]];
+  function colorBlock(c) {
+    if (TAB == null) TAB = c.p >= CUST || c.p === EDIT ? "c" : (getPal(c.p).n || 1);
+    var h = '<div class="kfx-l">Цвет</div><div class="kfx-tabs">' + TABS.map(function (t) {
+      return '<span class="kfx-tab' + (String(TAB) === String(t[0]) ? " on" : "") + '" data-ft="' + t[0] + '" role="button">' + t[1] + "</span>";
+    }).join("") + '</div><div class="kfx-row">';
+    if (TAB === "c") {
+      h += customs().map(function (cu, i) { return card("data-fp", CUST + i, "Моя " + (i + 1), c.p === CUST + i, withK(c, "p", CUST + i)); }).join("");
+      if (customs().length < 6) h += '<span class="kfx-pill kfx-new" data-fnew role="button"><span class="kfx-ball kfx-plus">+</span>Создать палитру</span>';
+    } else {
+      PAL.forEach(function (p, i) { if (p.n === TAB) h += card("data-fp", i, p.name, c.p === i, withK(c, "p", i)); });
+    }
+    h += "</div>";
+    if (TAB === "c" && ED) {
+      h += '<div class="kfx-ed"><div class="kfx-ed-t">' + (ED.i >= 0 ? "Моя " + (ED.i + 1) : "Новая палитра") + '</div>' +
+        '<div class="kfx-mute">Нажми на кружок и выбери цвет — фон меняется сразу. Можно 1, 2 или 3 цвета.</div><div class="kfx-sls">' +
+        ED.hx.map(function (x, k) {
+          return '<div class="kfx-slw"><label class="kfx-sl" style="background:' + x + '"><input type="color" value="' + x + '" data-fi="' + k + '" aria-label="Цвет ' + (k + 1) + '"></label>' +
+            (ED.hx.length > 1 ? '<span class="kfx-x" data-fx="' + k + '" role="button">убрать</span>' : '<span class="kfx-x off">цвет ' + (k + 1) + "</span>") + "</div>";
+        }).join("") +
+        (ED.hx.length < 3 ? '<div class="kfx-slw"><span class="kfx-sl add" data-fadd role="button">+</span><span class="kfx-x off">добавить</span></div>' : "") +
+        '</div><div class="kfx-edrow">' +
+        (ED.i >= 0 ? '<div class="bt" data-fdel>Удалить</div>' : '<div class="bt" data-fcancel>Отмена</div>') +
+        '<div class="bt main" data-fsave>Сохранить</div></div></div>';
+    }
+    return h;
+  }
+  function wireColor(kp, d) {
+    function each(sel, fn) { Array.prototype.forEach.call(d.querySelectorAll(sel), fn); }
+    each("[data-ft]", function (b) {
+      b.onclick = function () { var t = b.getAttribute("data-ft"); TAB = t === "c" ? "c" : +t; if (TAB !== "c") stopEdit(); paintSheet(kp); };
+    });
+    each("[data-fp]", function (b) {
+      b.onclick = function () {
+        var p = +b.getAttribute("data-fp");
+        if (p >= CUST && S.combo && S.combo.p === p && !ED) { ED = { i: p - CUST, hx: customs()[p - CUST].hx.slice(), back: S.combo.p }; previewEdit(); paintSheet(kp); return; }
+        stopEdit(); setCombo(withK(S.combo, "p", p)); paintSheet(kp);
+      };
+    });
+    var nb = d.querySelector("[data-fnew]");
+    if (nb) nb.onclick = function () {
+      var base = getPal(S.combo ? S.combo.p : 0);
+      ED = { i: -1, hx: (base.hx || [hex(base.c[1])]).slice(0, 3), back: S.combo ? S.combo.p : 0 };
+      previewEdit(); paintSheet(kp);
+    };
+    each("[data-fi]", function (inp) {
+      inp.addEventListener("input", function () {
+        var k = +inp.getAttribute("data-fi"); ED.hx[k] = inp.value;
+        inp.parentNode.style.background = inp.value; previewEdit();
+      });
+    });
+    each("[data-fx]", function (b) { b.onclick = function () { ED.hx.splice(+b.getAttribute("data-fx"), 1); previewEdit(); paintSheet(kp); }; });
+    var ad = d.querySelector("[data-fadd]");
+    if (ad) ad.onclick = function () {
+      var last = rgb2hsl(h2rgb(ED.hx[ED.hx.length - 1]));
+      ED.hx.push(hex(hsl2rgb(last[0] + .18, Math.max(last[1], .6), .5))); previewEdit(); paintSheet(kp);
+    };
+    var cn = d.querySelector("[data-fcancel]");
+    if (cn) cn.onclick = function () { var b = ED.back; stopEdit(); setCombo(withK(S.combo, "p", b)); paintSheet(kp); };
+    var dl = d.querySelector("[data-fdel]");
+    if (dl) dl.onclick = function () {
+      var a = customs(), i = ED.i; a.splice(i, 1); saveCustoms(a); ED = null; KC = {};
+      setCombo(withK(S.combo, "p", 0)); TAB = 1; paintSheet(kp);
+    };
+    var sv = d.querySelector("[data-fsave]");
+    if (sv) sv.onclick = function () {
+      var a = customs(), i = ED.i;
+      if (i >= 0) a[i] = { hx: ED.hx.slice() }; else { a.push({ hx: ED.hx.slice() }); i = a.length - 1; }
+      saveCustoms(a); ED = null; KC = {};
+      setCombo(withK(S.combo, "p", CUST + i)); paintSheet(kp);
+    };
+  }
+  // пока палитру собирают — фон показывает её сразу, но за песней не закрепляется
+  function previewEdit() {
+    if (!S.combo || !ED) return;
+    var c = withK(S.combo, "p", EDIT); S.combo = c; paintVars();
+    if (S.r) { S.r.combo = c; S.r.reset(); }
+  }
+  function stopEdit() { if (ED && S.combo && S.combo.p === EDIT) S.combo = withK(S.combo, "p", ED.back); ED = null; }
 
   function paintSheet(kp) {
     var d = kp.sheet;
@@ -407,8 +537,7 @@
         GLASS.map(function (n, i) { return card("data-fg", i, n, c.g === i, withK(c, "g", i)); }).join("") + "</div>" +
         '<div class="kfx-l">Свет под стеклом</div><div class="kfx-row">' +
         UNDER_ORDER.map(function (i) { return card("data-fu", i, UNDER[i], c.u === i, withK(c, "u", i)); }).join("") + "</div>" +
-        '<div class="kfx-l">Цвет</div><div class="kfx-row">' +
-        PAL.map(function (p, i) { return card("data-fp", i, p.name, c.p === i, withK(c, "p", i)); }).join("") + "</div>";
+        colorBlock(c);
     }
     html += '<div class="row" style="display:flex;gap:10px;margin-top:16px">' +
       (mode === "auto" ? '<div class="bt" data-s="rnd">Случайный</div>' : "") +
@@ -434,17 +563,35 @@
     });
     function upd(key, attr) {
       each("[" + attr + "]", function (b) {
-        b.onclick = function () { setCombo(withK(S.combo, key, +b.getAttribute(attr))); paintSheet(kp); };
+        b.onclick = function () {
+          var nc = withK(S.combo, key, +b.getAttribute(attr));
+          if (ED) { var pc = withK(nc, "p", ED.back); pin(S.song.id, pc); S.combo = nc; paintVars(); if (S.r) { S.r.combo = nc; S.r.reset(); } }
+          else setCombo(nc);
+          paintSheet(kp);
+        };
       });
     }
-    if (mode === "auto" && S.combo) { upd("g", "data-fg"); upd("u", "data-fu"); upd("p", "data-fp"); }
+    if (mode === "auto" && S.combo) { upd("g", "data-fg"); upd("u", "data-fu"); wireColor(kp, d); }
     var rb = d.querySelector('[data-s="rnd"]');
-    if (rb) rb.onclick = function () { if (S.combo) { setCombo(randomCombo(null, S.combo)); paintSheet(kp); } };
-    d.querySelector('[data-s="ok"]').onclick = function () { d.parentNode.removeChild(d); kp.sheet = null; };
+    if (rb) rb.onclick = function () { if (S.combo) { stopEdit(); var r = randomCombo(null, S.combo); TAB = getPal(r.p).n; setCombo(r); paintSheet(kp); } };
+    d.querySelector('[data-s="ok"]').onclick = function () {
+      if (ED) { var b = ED.back; stopEdit(); setCombo(withK(S.combo, "p", b)); }
+      d.parentNode.removeChild(d); kp.sheet = null; TAB = null;
+    };
   }
 
+  // шарик с текущим фоном — для капсулы «Фон» в «Настройках» (20.11)
+  function currentBall() {
+    var mode = getMode();
+    if (mode !== "auto" || !S.combo) return '<i style="background:' + (CALM[mode] || "#111") + '"></i>';
+    var c = S.combo;
+    return THfail ? '<i style="background:' + hex(getPal(c.p).c[1]) + '"></i>'
+      : '<canvas class="kfx-bc" width="' + BALL + '" height="' + BALL + '" data-c="' + c.g + "," + c.u + "," + c.p + '"></canvas>';
+  }
+  function liveBalls(kp) { if (kp.sheet) { paintBalls(kp.sheet, performance.now()); ballLoop(kp); } }
+
   return {
-    apply: apply, tick: tick, openSheet: openSheet, stop: stop,
+    apply: apply, tick: tick, openSheet: openSheet, stop: stop, currentBall: currentBall, liveBalls: liveBalls,
     // для тестов
     _comboFor: comboFor, _randomCombo: randomCombo, _validCombo: validCombo, PAL: PAL, UNDER: UNDER
   };
