@@ -41,6 +41,8 @@
 .banim-cap { margin: 12px 4px 0; font-size: 16.3px; line-height: 1.5; color: #c9d0d7; }
 .banim-cap b { color: #fff; font-weight: 600; }
 .banim-cap-ex { display: block; margin-top: 6px; color: #9aa3ad; font-size: 15.3px; }
+.banim-cap-voc { display: block; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.08); }
+.banim-cap-voc b { display: block; margin-bottom: 4px; color: oklch(70% 0.12 38); font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
 .banim-gx {
   display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 12px;
   padding: 12px 14px; border-radius: 14px; border: 1px solid #5a3a30;
