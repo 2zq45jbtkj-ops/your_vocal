@@ -33,11 +33,50 @@ async function selfCheck() {
   return new Response(JSON.stringify(out), { headers: { "content-type": "application/json", "cache-control": "no-store" } });
 }
 
+/* GET ?resend=1 — coupons she activated whose message never reached Nick (msg_id is empty,
+   e.g. while the bot token was outdated) are sent again with «✅ Выполнил». Safe to repeat:
+   a coupon gets msg_id once its message is delivered, so it is never sent twice. */
+async function resendLost(req) {
+  var token = String(process.env.TELEGRAM_BOT_TOKEN || "").trim();
+  var chatId = String(process.env.ADMIN_CHAT_ID || "").trim();
+  var sql = await giftSql();
+  if (!token || !chatId || !sql) return new Response("{}", { status: 500 });
+  var rows = await sql`SELECT id, title, icon, extras, note, created_at FROM gift_tasks
+    WHERE done_at IS NULL AND msg_id IS NULL AND created_at >= '2026-10-09T19:00:00Z'
+    ORDER BY created_at ASC LIMIT 30`;
+  var base = new URL(req.url).origin;
+  var sent = 0, failed = [];
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    var when = new Date(r.created_at).toLocaleString("ru-RU", { timeZone: "Asia/Yekaterinburg", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
+    var lines = ["🎟 Бусинка активировала талон (" + when + ", уведомление не дошло вовремя)",
+      (r.icon ? r.icon + " " : "") + r.title];
+    if (r.extras) lines.push("✨ Допы: " + r.extras);
+    if (r.note) lines.push("💬 Пожелание: " + r.note);
+    var link = base + "/api/gift-done?id=" + encodeURIComponent(r.id) + "&s=" + (await signTask(r.id));
+    var res = await fetch("https://api.telegram.org/bot" + token + "/sendMessage", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text: lines.join("\n"),
+        reply_markup: { inline_keyboard: [[{ text: "✅ Выполнил", url: link }]] } })
+    });
+    var d = await res.json().catch(function () { return {}; });
+    if (d.ok && d.result) {
+      await sql`UPDATE gift_tasks SET msg_id = ${d.result.message_id} WHERE id = ${r.id}`;
+      sent++;
+    } else {
+      failed.push(r.title + ": " + (d.description || res.status));
+    }
+  }
+  return new Response(JSON.stringify({ found: rows.length, sent: sent, failed: failed }),
+    { headers: { "content-type": "application/json", "cache-control": "no-store" } });
+}
+
 export default async function handler(req) {
   var origin = req.headers.get("origin") || "";
   var headers = giftCors(origin);
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: headers });
   if (req.method === "GET" && new URL(req.url).searchParams.get("check") === "1") return selfCheck();
+  if (req.method === "GET" && new URL(req.url).searchParams.get("resend") === "1") return resendLost(req);
   if (req.method !== "POST" || GIFT_ORIGINS.indexOf(origin) === -1) {
     return new Response("forbidden", { status: 403, headers: headers });
   }
