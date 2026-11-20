@@ -300,6 +300,9 @@ export default async function handler(req) {
       if (action === "list" || action === "events") {
         if (!(await isTeacher(siteAuth))) return json({ ok: false, error: "Только преподаватель" }, 403);
         if (action === "list") {
+          // 20.11: убрать запись «Проверка», которую оставила проверка входа без кода (не настоящий гость)
+          await sql`DELETE FROM guest_events WHERE gid = 'tg:111222333'`;
+          await sql`DELETE FROM guest_users WHERE id = 'tg:111222333' AND verified = false AND username = 'probe_guest'`;
           var users = await sql`SELECT id, tg_id, first_name, last_name, username, verified, is_owner, src,
               first_at, last_at, visits, explored, trial_clicks, trial_at
             FROM guest_users ORDER BY last_at DESC LIMIT 200`;
