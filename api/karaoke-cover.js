@@ -71,8 +71,7 @@ export default async function handler(req) {
     var song = (songs || []).filter(function (s) { return s.id === songId; })[0];
     var files = song ? [song.voice && song.voice.url, song.music && song.music.url] : [];
     if (!song) return json({ ok: false, error: "Не твоя песня" }, 403);
-    // обложку вручную ученик меняет только у треков, которые загрузил сам (20.11)
-    if (manual && song.addedBy !== "student") return json({ ok: false, error: "Только преподаватель" }, 403);
+    // обложку ученик меняет у любой своей песни, и у трека от Николая тоже (20.11)
     if (!manual && (!src || files.indexOf(src) === -1)) return json({ ok: false, error: "Не твоя песня" }, 403);
   }
 

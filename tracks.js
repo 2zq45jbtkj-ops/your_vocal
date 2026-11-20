@@ -387,13 +387,13 @@ function trkHide(song) {
 
 /* ---------- TrackEditSheet ----------
    Николай: исполнитель, название, обложка, «Текст, минус и разметка», убрать.
-   Ученик, свой трек: исполнитель, название, обложка, убрать.
-   Ученик, трек Николая: только «Убрать из приложения». */
+   Ученик (любой свой трек, и от Николая тоже): исполнитель, название, обложка, убрать. */
 
 var TrackEditSheet = {
   open: function (song, onFull) {
     var lb = trkLabels(song), url = trkCoverUrl(song);
-    var canEdit = trkTeacher() || song.addedBy === "student";
+    // 20.11: ученик правит обложку, название и исполнителя у любой своей песни
+    var canEdit = true;
     var ov = document.createElement("div");
     ov.className = "trk-shade";
     ov.innerHTML =
