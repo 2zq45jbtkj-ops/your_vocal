@@ -882,7 +882,9 @@ function renderCourses() {
   loadStudentPublicData(); // подтягивает unlockedLessons/progressByLesson для разблокировки
   loadLessonPlans();       // уроки 2+ живут в планах, нужны не только на админ-экранах
   var stats = lessonStats();
-  var filter = state.coursesFilter; // "inProgress" | "completed" | null — переключатель фильтра дорожной карты
+  // 20.11 (Николай): кнопки «В работе / Завершено» убраны — всегда видны все уроки
+  state.coursesFilter = null;
+  var filter = null;
   var favCount = Object.keys(state.favorites || {}).length;
 
   var roadmapInner = roadmapScrollHtml(filter);
@@ -905,10 +907,7 @@ function renderCourses() {
         '<span class="fav-warmups-count">' + favCount + "</span>" +
       "</button>" +
     "</div>" +
-    '<div class="filter-row">' +
-      '<button class="filter-btn' + (filter === "inProgress" ? " active-blue" : "") + '" data-act="filter-inprogress">В работе · ' + stats.inProgress + "</button>" +
-      '<button class="filter-btn' + (filter === "completed" ? " active-terra" : "") + '" data-act="filter-completed">✓ Завершено · ' + stats.completed + "</button>" +
-    "</div>" +
+
     '<div class="roadmap-wrap' + (roadmapCollapsed() ? " collapsed" : "") + '">' +
       '<button class="roadmap-toggle" data-act="toggle-roadmap">' +
         '<span>Дорожная карта урока</span>' +
