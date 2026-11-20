@@ -353,3 +353,13 @@ html .kp.fx-black .ksheet, html.dark .kp.fx-black .ksheet { background: rgba(14,
 .kp .kset-row:last-child { border-bottom: 0; }
 .kp .kset-row:active { background: var(--glass); }
 .kp .kset-row b { font: 700 13.5px Manrope, sans-serif; color: var(--dim); white-space: nowrap; }
+
+/* шторка «Фон»: пилюли — в пилюле шарик с примером узора, рядом название (20.11) */
+.kp .kfxs .kfx-row { flex-wrap: wrap; gap: 8px; }
+.kp .kfx-pill { height: 36px; padding: 0 14px 0 4px; border-radius: 18px; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap;
+  background: var(--glass); border: 1px solid var(--glass-b); font: 600 12.5px Inter, sans-serif; color: var(--gtx); box-sizing: border-box; }
+.kp .kfx-ball { width: 28px; height: 28px; border-radius: 50%; overflow: hidden; flex-shrink: 0; display: block; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .25); }
+.kp .kfx-ball img, .kp .kfx-ball i { width: 100%; height: 100%; display: block; object-fit: cover; }
+.kp .kfx-pill.on { background: var(--hi); border-color: var(--hi); color: oklch(35% 0.08 40); }
+.kp .kfx-pill.on .kfx-ball { box-shadow: 0 0 0 1px rgba(0, 0, 0, .12); }
+.kp .kfx-pill:active { transform: scale(.97); }

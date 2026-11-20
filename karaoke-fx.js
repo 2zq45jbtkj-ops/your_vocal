@@ -2,9 +2,12 @@
    KarFx — фон караоке (20.11, утверждён Николаем).
 
    Стиль фона выбирает ученик в шторке «Фон», выбор хранится на телефоне:
-     • «Стекло» (по умолчанию) — WebGL: рифлёное (ширина ребра 20, глубина 2.8)
-       или матовое стекло, под ним свет: лучи софитов / круглые софиты /
-       лава-лампа / цветной дым; палитры Бордо / Терракота / Индиго.
+     • «Стекло» (по умолчанию) — WebGL: рифлёное (ширина ребра 20, глубина 2.8),
+       матовое или квадратное (плитки-линзы 64px на весь экран, 20.11), под ним
+       свет: лучи софитов / круглые софиты / лава-лампа / цветной дым /
+       световые полосы (20.11, движутся на 79% медленнее); палитры Бордо /
+       Терракота / Индиго / Спектр (20.11). В шторке — пилюли: шарик с
+       примером узора и название.
        Тёмного ~70% экрана (подстраивается само), светлые тона насыщенные,
        чтобы не сливаться с белым текстом; контраст текста ≥ 4.5 : 1.
        Верх экрана плавно уходит в цвет страницы — без «порога» под часами.
@@ -25,13 +28,17 @@
   var PAL = [
     { name: "Бордо",     c: [[.07, .012, .025], [.50, .12, .20], [.95, .40, .38], [.74, .16, .26]] },
     { name: "Терракота", c: [[.08, .025, .015], [.60, .24, .14], [.98, .56, .20], [.82, .30, .14]] },
-    { name: "Индиго",    c: [[.025, .025, .09], [.20, .20, .55], [.52, .46, 1.0], [.58, .26, .78]] }
+    { name: "Индиго",    c: [[.025, .025, .09], [.20, .20, .55], [.52, .46, 1.0], [.58, .26, .78]] },
+    // «Спектр» (20.11): глубокий синий + оранжевый, как на фото со световыми полосами
+    { name: "Спектр",    c: [[.012, .016, .045], [.10, .26, .80], [1.0, .55, .22], [.36, .62, 1.0]] }
   ];
-  var UNDER = ["Лучи софитов", "Лава-лампа", "Цветной дым", "Круглые софиты"];
-  var UNDER_ORDER = [0, 3, 1, 2];
-  var GLASS = ["Рифлёное", "Матовое"];
+  var UNDER = ["Лучи софитов", "Лава-лампа", "Цветной дым", "Круглые софиты", "Световые полосы"];
+  var UNDER_ORDER = [0, 3, 1, 2, 4];
+  var GLASS = ["Рифлёное", "Матовое", "Квадратное"];
   var MODES = [["auto", "Стекло"], ["ivory", "Слоновая кость"], ["black", "Глубокий чёрный"]];
-  var FLASH = 0.09, DARK_SHARE = 0.70, RIB = 20, DEPTH = 2.8;
+  var FLASH = 0.09, DARK_SHARE = 0.70, RIB = 20, DEPTH = 2.8, TILE = 64;
+  // «Световые полосы» движутся на 79% медленнее обычного (просьба Николая 20.11)
+  var STREAK_SLOW = 0.21;
   var K_MODE = "kar.fx.mode", K_FIRST = "kar.fx.first", K_SONG = "kar.fx.song.";
 
   /* ---------- хранение ---------- */
@@ -42,16 +49,16 @@
   function setMode(m) { lsSet(K_MODE, m === "ivory" || m === "black" ? m : null); }
 
   function validCombo(o) {
-    return o && o.g >= 0 && o.g <= 1 && o.u >= 0 && o.u <= 3 && o.p >= 0 && o.p <= 2 &&
+    return o && o.g >= 0 && o.g <= 2 && o.u >= 0 && o.u <= 4 && o.p >= 0 && o.p <= 3 &&
       o.g === Math.floor(o.g) && o.u === Math.floor(o.u) && o.p === Math.floor(o.p);
   }
   function randomCombo(rnd, not) {
     rnd = rnd || Math.random;
     for (var i = 0; i < 8; i++) {
-      var c = { g: Math.floor(rnd() * 2), u: Math.floor(rnd() * 4), p: Math.floor(rnd() * 3) };
+      var c = { g: Math.floor(rnd() * 3), u: Math.floor(rnd() * 5), p: Math.floor(rnd() * 4)};
       if (!not || c.g !== not.g || c.u !== not.u || c.p !== not.p) return c;
     }
-    return { g: 0, u: 0, p: 0 };
+    return { g: 0, u: 0, p: 0};
   }
   // Вариант песни: закреплённый → он; самая первая песня → рифлёное + лучи + Бордо; иначе случайный.
   function comboFor(songId, store, rnd) {
@@ -59,7 +66,7 @@
     var key = K_SONG + songId, c = null;
     try { c = JSON.parse(store.get(key) || "null"); } catch (e) { c = null; }
     if (validCombo(c)) return c;
-    if (!store.get(K_FIRST)) { c = { g: 0, u: 0, p: 0 }; store.set(K_FIRST, "1"); }
+    if (!store.get(K_FIRST)) { c = { g: 0, u: 0, p: 0}; store.set(K_FIRST, "1"); }
     else c = randomCombo(rnd);
     store.set(key, JSON.stringify(c));
     return c;
@@ -101,18 +108,46 @@
     "float disc=smoothstep(r,r*.82,dd);float hot=exp(-dd*dd/(r*r*.18));float halo=exp(-dd*dd/(r*r*1.6))*.25;" +
     "vec3 col=fi<.5?C2:(fi<1.5?C3:(fi<2.5?C1*1.6:(fi<3.5?C3*1.1:C2*.85)));" +
     "c+=col*(disc*(.55+.25*hz)+hot*.35+halo)*(1.+B*.6);}" +
+    "gl_FragColor=vec4(c,1.);}",
+    // 4 световые полосы (фото 3): много вытянутых размытых мазков — синее тело, горячая оранжево-белая сердцевина,
+    // тонкая радужная кайма; дрейф на 79% медленнее (SL = 0.21)
+    HEAD + "uniform float SL;void main(){vec2 p=vec2(v.x*A,v.y);float t=T*SL;" +
+    "vec3 c=C0*.8+C1*.06*fbm(p*1.4+vec2(t*.04,0.));" +
+    "for(int i=0;i<22;i++){float fi=float(i);float r1=h(vec2(fi,1.)),r2=h(vec2(fi,2.)),r3=h(vec2(fi,3.)),r4=h(vec2(fi,4.)),r5=h(vec2(fi,5.));" +
+    "float an=-.30+.38*r3+.08*sin(t*.25+fi);vec2 dr=vec2(cos(an),sin(an));" +
+    "vec2 ce=vec2(fract(r1+t*(.02+.025*r2)*(r5<.5?1.:-1.))*(A+.6)-.3,.04+.92*r2+.04*sin(t*.35+fi*1.3));" +
+    "vec2 d=p-ce;d.y+=.025*sin(d.x*6.+t*.45+fi);float a=dot(d,dr);float b=d.x*dr.y-d.y*dr.x;" +
+    "float ln=.07+.17*r4;float wd=.006+.016*r5;float al=exp(-a*a/(ln*ln));" +
+    "float bd=exp(-b*b/(wd*wd*4.));float core=exp(-pow((b+wd*.6*sign(r3-.5))/(wd*.55),2.))*exp(-a*a/(ln*ln*.25));" +
+    "float rr=exp(-pow((b-wd*1.8)/(wd*.6),2.)),bb=exp(-pow((b+wd*1.8)/(wd*.6),2.));" +
+    "float warm=step(.68,r5*.6+r1*.6);vec3 body=warm>.5?C2*vec3(1.,.62,.45):mix(C1*1.25,C3*.8,r4*.4);vec3 hot=warm>.5?mix(C2,vec3(1.,.82,.55),.25):mix(C3,vec3(.75,.9,1.),.2);" +
+    "vec3 col=body*bd*.75+hot*core*.8+vec3(rr*.9,0.,bb)*core*.25;c+=col*al*(.45+.55*r4)*(1.+B*.5);}" +
     "gl_FragColor=vec4(c,1.);}"
   ];
-  var FS_GLASS = "precision highp float;uniform sampler2D S;uniform vec2 R;uniform float T,RW,DP,K,M;uniform vec3 D,HL;" + NOISE +
+  var FS_GLASS = "precision highp float;uniform sampler2D S;uniform vec2 R;uniform float T,RW,DP,K,M,TS;uniform vec3 D,HL;" + NOISE +
     "vec3 sm(float x,float y){return texture2D(S,vec2(x,y)/R).rgb;}" +
     "vec3 fin(vec3 c,vec2 px){c=clamp(c,0.,1.);vec3 li=pow(c,vec3(2.2));float Lm=dot(li,vec3(.2126,.7152,.0722));if(Lm>.16)c*=pow(.16/Lm,1./2.2);vec2 q=px/R-.5;c*=1.-dot(q,q)*.3;return c;}" +
     "void main(){vec2 px=gl_FragCoord.xy;" +
-    "if(M>.5){float rr=R.x*.045;vec3 c=vec3(0.);for(int i=0;i<20;i++){float fi=float(i);float a=fi*2.39996;float r=sqrt((fi+.5)/20.)*rr;c+=sm(px.x+cos(a)*r,px.y+sin(a)*r);}c/=20.;" +
+    "if(M>.5&&M<1.5){float rr=R.x*.045;vec3 c=vec3(0.);for(int i=0;i<20;i++){float fi=float(i);float a=fi*2.39996;float r=sqrt((fi+.5)/20.)*rr;c+=sm(px.x+cos(a)*r,px.y+sin(a)*r);}c/=20.;" +
     "float lu=dot(c,vec3(.3,.59,.11));float g=smoothstep(K,K+.1,lu);c=mix(D+c*.12,c,g);" +
     "vec2 uv=px/R;c+=HL*.05*smoothstep(.9,.2,length(uv-vec2(.15,.95)));" +
     "float tex=n(px*.35)*.5+n(px*.9)*.5;c*=.96+.06*tex;" +
+    // блики на матовом: мягкие косые мазки, медленно плывут
     "c=fin(c,px);float gr=h(px+fract(T*9.)*511.)-.5;float l2=dot(c,vec3(.3,.59,.11));c+=gr*.09*(1.-abs(l2-.4));" +
     "c=mix(D,c,smoothstep(0.,.08,1.-px.y/R.y));gl_FragColor=vec4(c,1.);return;}" +
+    "if(M>1.5){float ts=TS;vec2 id=floor(px/ts);vec2 l=fract(px/ts)*2.-1.;vec2 cp=(id+.5)*ts;" +
+    "float e=max(abs(l.x),abs(l.y));float bv=smoothstep(.62,1.,e);" +
+    "vec2 nr=l*bv*.9;vec3 Nn=normalize(vec3(nr,1.));" +
+    // каждая плитка — как линза: показывает пятно шире себя, сжатым к центру (как на референсе)
+    "vec2 sp0=cp+l*ts*.5*1.75+nr*ts*.35;float br=ts*.15;" +
+    "vec3 c=vec3(0.);for(int i=0;i<14;i++){float fi=float(i);float a=fi*2.39996;float r=sqrt((fi+.5)/14.)*br;c+=sm(sp0.x+cos(a)*r,sp0.y+sin(a)*r);}c/=14.;" +
+    "float lu=dot(c,vec3(.3,.59,.11));float g=smoothstep(K,K+.1,lu);c=mix(D+c*.12,c,g);" +
+    "vec3 L=normalize(vec3(-.5,.45,.75));float dl=dot(Nn,L);float sp=pow(max(dot(reflect(-L,Nn),vec3(0,0,1)),0.),30.);" +
+    "float tex=n(px*.4)*.5+n(px*1.1)*.5;c*=.94+.08*tex;" +
+    "c*=.80+.28*dl;c+=sp*HL*.22*bv;" +
+    "c*=1.-smoothstep(.86,.96,e)*.35;c+=smoothstep(.955,.99,e)*HL*.09;" +
+    // блики: волна света идёт по сетке наискосок и скользит по скосам плиток
+    "c=fin(c,px);c+=(h(px+fract(T*7.)*317.)-.5)*.04;c=mix(D,c,smoothstep(0.,.08,1.-px.y/R.y));gl_FragColor=vec4(c,1.);return;}" +
     "float w=RW;float id=floor(px.x/w);float u=fract(px.x/w);float xc=u*2.-1.;float cx=(id+.5)*w;" +
     "float nz=sqrt(max(1.-xc*xc,0.));vec3 Nn=normalize(vec3(xc*.9,0.,nz+.05));" +
     "float sx=cx+xc*w*.5*DP;float bw=w*.12*DP;" +
@@ -123,10 +158,12 @@
     "float sp=pow(max(dot(reflect(-L,Nn),vec3(0,0,1)),0.),48.);float fr=pow(1.-nz,2.5);" +
     "c*=.78+.32*d;c=mix(c,HL*.8,fr*.18*(.5+lv));c+=sp*HL*(.14+.4*lv);" +
     "c*=1.-smoothstep(.88,1.,abs(xc))*.38;c+=(smoothstep(.93,.97,xc)-smoothstep(.97,1.,xc))*HL*.1*(.5+lv);" +
+    // блики: по каждому ребру медленно скользит цветная полоса света, у края ребра — радужная кайма
     "c=fin(c,px);c+=(h(px+fract(T*7.)*317.)-.5)*.045;c=mix(D,c,smoothstep(0.,.08,1.-px.y/R.y));gl_FragColor=vec4(c,1.);}";
 
   /* ---------- рендер ---------- */
-  function Renderer(cv) {
+  function Renderer(cv, opt) {
+    opt = opt || {};
     var gl = null;
     try { gl = cv.getContext("webgl", { antialias: false, alpha: false, premultipliedAlpha: false, preserveDrawingBuffer: false }); } catch (e) {}
     if (!gl) throw new Error("no webgl");
@@ -136,7 +173,7 @@
       gl.attachShader(p, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs));
       gl.bindAttribLocation(p, 0, "a"); gl.linkProgram(p);
       if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error("link");
-      var u = {}; ["T", "A", "B", "C0", "C1", "C2", "C3", "S", "R", "RW", "DP", "K", "M", "D", "HL"].forEach(function (k) { u[k] = gl.getUniformLocation(p, k); });
+      var u = {}; ["T", "A", "B", "C0", "C1", "C2", "C3", "S", "R", "RW", "DP", "K", "M", "D", "HL", "TS", "SL"].forEach(function (k) { u[k] = gl.getUniformLocation(p, k); });
       return { p: p, u: u };
     }
     var UP = FS_UNDER.map(pr), PG = pr(FS_GLASS);
@@ -147,9 +184,9 @@
     var W = 0, H = 0, fw = 0, fh = 0, dpr = 1, buf = null, K = 0.3, Kt = 0.3, lastMeasure = 0;
 
     function size() {
-      var r = cv.getBoundingClientRect();
+      var r = opt.w ? { width: opt.w, height: opt.h } : cv.getBoundingClientRect();
       if (!r.width || !r.height) return false;
-      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      dpr = opt.w ? 1 : Math.min(window.devicePixelRatio || 1, 2);
       var px = r.width * r.height * dpr * dpr, cap = 1.6e6;
       if (px > cap) dpr *= Math.sqrt(cap / px);
       var w = Math.round(r.width * dpr), hh = Math.round(r.height * dpr);
@@ -182,7 +219,7 @@
       if (!this.combo || !size()) return;
       var C = PAL[this.combo.p].c, P = UP[this.combo.u], A = W / H;
       gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.viewport(0, 0, fw, fh); gl.useProgram(P.p);
-      gl.uniform1f(P.u.T, T); gl.uniform1f(P.u.A, A); gl.uniform1f(P.u.B, B);
+      gl.uniform1f(P.u.T, T); gl.uniform1f(P.u.A, A); gl.uniform1f(P.u.B, B); gl.uniform1f(P.u.SL, STREAK_SLOW);
       gl.uniform3fv(P.u.C0, C[0]); gl.uniform3fv(P.u.C1, C[1]); gl.uniform3fv(P.u.C2, C[2]); gl.uniform3fv(P.u.C3, C[3]);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       if (now - lastMeasure > 700) { var first = !lastMeasure; measure(); if (first) K = Kt; lastMeasure = now; }
@@ -190,7 +227,8 @@
       gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, W, H); gl.useProgram(PG.p);
       gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tx);
       gl.uniform1i(PG.u.S, 0); gl.uniform2f(PG.u.R, W, H); gl.uniform1f(PG.u.T, T);
-      gl.uniform1f(PG.u.RW, RIB * dpr); gl.uniform1f(PG.u.DP, DEPTH); gl.uniform1f(PG.u.M, this.combo.g);
+      var sc = opt.scale || 1;
+      gl.uniform1f(PG.u.RW, RIB * dpr * sc); gl.uniform1f(PG.u.TS, TILE * dpr * sc); gl.uniform1f(PG.u.DP, DEPTH); gl.uniform1f(PG.u.M, this.combo.g);
       gl.uniform1f(PG.u.K, K); gl.uniform3fv(PG.u.D, C[0]);
       gl.uniform3fv(PG.u.HL, [(1 + C[2][0]) / 2, (1 + C[2][1]) / 2, (1 + C[2][2]) / 2]);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -299,48 +337,72 @@
     paintSheet(kp);
   }
 
-  function chip(attr, val, label, on, extra) {
-    return '<span class="gch' + (on ? " on" : "") + '" ' + attr + '="' + val + '" role="button" aria-pressed="' + on + '">' + (extra || "") + esc(label) + "</span>";
+  /* мини-превью: один маленький холст, рисует вариант и отдаёт картинку */
+  var TH = null, THC = {}, THT = 3;
+  function thumb(c) {
+    var key = c.g + "" + c.u + c.p;
+    if (THC[key]) return THC[key];
+    try {
+      if (!TH) { var cv = document.createElement("canvas"); TH = new Renderer(cv, { w: 84, h: 84, scale: 0.5 }); }
+      TH.combo = c; TH.reset(); TH.draw(THT, 0, 1);
+      THC[key] = TH.cv.toDataURL("image/jpeg", 0.85);
+    } catch (e) { THC[key] = ""; }
+    return THC[key];
   }
+  var CALM = {
+    ivory: "radial-gradient(80% 25% at 30% 32%, rgba(255,253,248,.75), rgba(255,253,248,0)), linear-gradient(180deg,#f7f2e8,#f3ede1 50%,#ebe2d1)",
+    black: "radial-gradient(85% 28% at 50% 34%, rgba(40,54,82,.35), rgba(40,54,82,0)), linear-gradient(180deg,#0b0f17,#080b12 55%,#05070b)"
+  };
+  function card(attr, val, label, on, img, bg) {
+    var pic = img ? '<img alt="" src="' + img + '">' : '<i style="background:' + (bg || "#111") + '"></i>';
+    // пилюля, как переключатель режима админа: слева шарик с примером узора, рядом название
+    return '<span class="kfx-pill' + (on ? " on" : "") + '" ' + attr + '="' + val + '" role="button" aria-pressed="' + on + '">' +
+      '<span class="kfx-ball">' + pic + "</span>" + esc(label) + "</span>";
+  }
+  function withK(c, k, v) { var o = { g: c.g, u: c.u, p: c.p }; o[k] = v; return o; }
 
   function paintSheet(kp) {
     var d = kp.sheet;
     if (!d || !d.parentNode) return;
-    var mode = getMode(), c = S.combo || { g: 0, u: 0, p: 0 };
+    var mode = getMode(), c = S.combo || { g: 0, u: 0, p: 0};
+    var cur = S.combo || (S.song ? comboFor(S.song.id) : c);
     var html = '<div class="t">Фон</div>' +
       '<div class="s">' + (mode === "auto" ? "У каждой песни свой вариант. Выбери здесь — и он закрепится за этой песней." : "Спокойный фон без эффектов — для всех песен.") + "</div>" +
       '<div class="kfx-l">Стиль</div><div class="kfx-row">' +
-      MODES.map(function (m) { return chip("data-fm", m[0], m[1], mode === m[0]); }).join("") + "</div>";
+      MODES.map(function (m) {
+        return card("data-fm", m[0], m[1], mode === m[0], m[0] === "auto" ? thumb(cur) : "", CALM[m[0]]);
+      }).join("") + "</div>";
     if (mode === "auto") {
       html += '<div class="kfx-l">Стекло</div><div class="kfx-row">' +
-        GLASS.map(function (n, i) { return chip("data-fg", i, n, c.g === i); }).join("") + "</div>" +
+        GLASS.map(function (n, i) { return card("data-fg", i, n, c.g === i, thumb(withK(c, "g", i))); }).join("") + "</div>" +
         '<div class="kfx-l">Свет под стеклом</div><div class="kfx-row">' +
-        UNDER_ORDER.map(function (i) { return chip("data-fu", i, UNDER[i], c.u === i); }).join("") + "</div>" +
+        UNDER_ORDER.map(function (i) { return card("data-fu", i, UNDER[i], c.u === i, thumb(withK(c, "u", i))); }).join("") + "</div>" +
         '<div class="kfx-l">Цвет</div><div class="kfx-row">' +
-        PAL.map(function (p, i) { return chip("data-fp", i, p.name, c.p === i, '<i class="kfx-sw" style="background:' + hex(p.c[1]) + '"></i>'); }).join("") + "</div>";
+        PAL.map(function (p, i) { return card("data-fp", i, p.name, c.p === i, thumb(withK(c, "p", i))); }).join("") + "</div>";
     }
     html += '<div class="row" style="display:flex;gap:10px;margin-top:16px">' +
       (mode === "auto" ? '<div class="bt" data-s="rnd">Случайный</div>' : "") +
       '<div class="bt main" data-s="ok">Готово</div></div>';
+    var keep = {};
+    Array.prototype.forEach.call(d.querySelectorAll(".kfx-row"), function (r, i) { keep[i] = r.scrollLeft; });
+    var top = d.scrollTop;
     d.innerHTML = html;
+    Array.prototype.forEach.call(d.querySelectorAll(".kfx-row"), function (r, i) { if (keep[i]) r.scrollLeft = keep[i]; });
+    d.scrollTop = top;
     function each(sel, fn) { Array.prototype.forEach.call(d.querySelectorAll(sel), fn); }
     each("[data-fm]", function (b) {
       b.onclick = function () {
         var m = b.getAttribute("data-fm");
         if (m === getMode()) return;
         setMode(m);
-        var song = S.song;
+        var song = S.song || kp.song;
         if (song) apply(kp.root, song);
         paintSheet(kp);
       };
     });
     function upd(key, attr) {
       each("[" + attr + "]", function (b) {
-        b.onclick = function () {
-          var nc = { g: S.combo.g, u: S.combo.u, p: S.combo.p };
-          nc[key] = +b.getAttribute(attr);
-          setCombo(nc); paintSheet(kp);
-        };
+        b.onclick = function () { setCombo(withK(S.combo, key, +b.getAttribute(attr))); paintSheet(kp); };
       });
     }
     if (mode === "auto" && S.combo) { upd("g", "data-fg"); upd("u", "data-fu"); upd("p", "data-fp"); }

@@ -15,7 +15,7 @@ test("следующие песни — случайный вариант, то�
   const st = mem();
   F._comboFor("a", st);
   const c = F._comboFor("b", st, () => 0.99);
-  assert.deepEqual(c, { g: 1, u: 3, p: 2 });
+  assert.deepEqual(c, { g: 2, u: 4, p: 3 }); // 20.11: 3 стекла, 5 видов света, 4 цвета
   assert.deepEqual(F._comboFor("b", st, () => 0), c);
 });
 
