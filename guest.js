@@ -3,6 +3,8 @@
    Как включается: ссылка https://t.me/your_vocal_teacher_bot?startapp=testdrive
    (главное мини-приложение бота, start_param = "testdrive") или кнопка
    «Посмотреть приложение» в боте (?td=1). Кода доступа не нужно, срока нет.
+   С 20.11 тест-драйв открывается и у всех, кто открыл приложение в Telegram
+   без кода (кнопка «Меню»): см. G.boot.
 
    Что видит гость:
    — кабинет и караоке «как у Николая» (его карточка «Nikolai Sept (тест)»,
@@ -22,6 +24,7 @@
 (function () {
   var GUEST_TOKEN = "00000000-0000-4000-8000-0000guest000";
   var LS_KEY = "vocal-guest";
+  var OWNER_KEY = "vocal-owner";
   var API = "/api/guest";
   var TRIAL_URL = "https://t.me/your_vocal_teacher_bot?start=trial";
 
@@ -84,7 +87,20 @@
 
   /* Вызывается из app.js сразу после loadState(). true — включили гостя. */
   G.boot = function () {
-    if (startParam() !== "testdrive") return false;
+    var src = startParam();
+    if (src !== "testdrive") {
+      // 20.11 (Николай): кто открыл приложение в Telegram без кода (кнопка «Меню»,
+      // профиль бота), сразу видит тест-драйв, а не экран кода. Ученики входят по
+      // личной ссылке из бота (?k=), у Николая сохранён ключ админа. В браузере
+      // и со значка на экране «Домой» вход по коду остаётся как был.
+      if (!tg || !tg.initData) return false;
+      if (typeof LINK_TOKEN !== "undefined" && LINK_TOKEN) return false;
+      if (state.accessToken || state.isAdmin) return false;
+      if (typeof readAdminKey === "function" && readAdminKey()) return false;
+      try { if (localStorage.getItem(OWNER_KEY) === "1") return false; } catch (e) {}
+      src = "menu";
+      G.auto = true;
+    }
     // настоящий ученик с кодом доступа открыл ссылку — просто его приложение
     if (state.accessToken && !state.isAdmin && state.accessToken !== GUEST_TOKEN) return false;
     loadStore();
@@ -107,7 +123,14 @@
     installFetch();
     installActs();
     G.allDone = SECTIONS.every(function (s) { return G.store.explored.indexOf(s.id) !== -1; });
-    post("hello", { src: startParam() });
+    post("hello", { src: src }).then(function (r) { return r && r.json ? r.json() : null; }).then(function (d) {
+      // Николай открыл приложение без кода на новом телефоне: это его бот, а не гость.
+      // Запоминаем и открываем обычный вход, где он вводит пароль сайта.
+      if (G.auto && d && d.owner) {
+        try { localStorage.setItem(OWNER_KEY, "1"); } catch (e) {}
+        location.reload();
+      }
+    }).catch(function () {});
     log({ kind: "open", label: "Открыл тест-драйв" });
     document.addEventListener("click", onClickCapture, true);
     document.addEventListener("visibilitychange", onVis);
