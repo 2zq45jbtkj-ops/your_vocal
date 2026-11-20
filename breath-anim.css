@@ -27,6 +27,7 @@
   color: #e9edf1; font: 600 15px 'Inter', sans-serif; text-align: left; cursor: pointer;
   transition: background .2s, border-color .2s;
 }
+.banim-mgroup { grid-column: 1 / -1; margin: 8px 4px 0; font: 600 13px Inter, sans-serif; letter-spacing: .06em; text-transform: uppercase; color: #9aa3ad; }
 .banim-mode.on { background: rgba(108,145,166,.28); border-color: #6C91A6; }
 /* карточка «Дыхательные мышцы» (в полноэкранном слое) */
 .bmus-mount .bmus-open { margin: 10px 0 0; border-color: #5a3a30; }

@@ -134,19 +134,28 @@
       voc: "Самое стабильное и полезное для пения: гортань остаётся свободной, а снаружи дыхание работает мягко и почти незаметно. Цель — дышать животом, а не шеей и плечами." },
     { key: "w", name: "4. Двойной (W)", c: 0.04, r: 1, d: 1, w: true,
       text: "<b>Двойной вдох.</b> Сначала диафрагма (живот), сразу следом, без паузы, — рёбра. На выдохе всё возвращается вместе.",
-      voc: "Набирает больше воздуха, чем обычный глубокий вдох (V), но без резкости и зажима, как у короткого вдоха. Используем перед особенно длинными фразами или кульминацией, когда нужен больший запас дыхания." }
+      voc: "Набирает больше воздуха, чем обычный глубокий вдох (V), но без резкости и зажима, как у короткого вдоха. Используем перед особенно длинными фразами или кульминацией, когда нужен больший запас дыхания." },
+    // типы вдоха — своя скорость цикла (ti/th/to/tr), группа «Типы вдоха» над кнопками
+    { key: "V", group: "Типы вдоха", name: "V · Глубокий", c: 0, r: 0.06, d: 1, ti: 3.2, th: 0.4, to: 3.6, tr: 0.7,
+      text: "<b>Глубокий, плавный вдох (V).</b> Работает только диафрагма: купол медленно опускается, живот мягко выходит вперёд. Рёбра, плечи и грудь остаются спокойными.",
+      voc: "Гортань свободна. Используем там, где у артиста есть время и пространство для дыхания. Этот знак, V, встретится дальше — в разметке дыхания песен." },
+    { key: "v", name: "v · Короткий", c: 0, r: 0.8, d: 0.8, ti: 0.45, th: 0.2, to: 2.6, tr: 0.6,
+      text: "<b>Короткий, быстрый вдох (v).</b> Диафрагма и межрёберные мышцы включаются одновременно и резко — за долю секунды воздух уходит и в живот, и в рёбра.",
+      voc: "Резкий вдох для акцентов, а также для цепного дыхания — когда воздух добирается почти незаметно между словами или фразами. Не делаем привычкой — быстро зажимает гортань. Знак v тоже встретится в разметке песен." }
   ];
   var T_IN = 2.6, T_HOLD = 0.35, T_OUT = 3.6, T_REST = 0.7;
   var T_CYC = T_IN + T_HOLD + T_OUT + T_REST;
 
   function breathParams(mode, t) {
-    t = ((t % T_CYC) + T_CYC) % T_CYC;
+    var TI = mode.ti || T_IN, TH = mode.th != null ? mode.th : T_HOLD, TO = mode.to || T_OUT,
+        TC = TI + TH + TO + (mode.tr != null ? mode.tr : T_REST);
+    t = ((t % TC) + TC) % TC;
     var f, u = -1;
-    if (t < T_IN) { u = t / T_IN; f = eio(u); }
-    else if (t < T_IN + T_HOLD) f = 1;
-    else if (t < T_IN + T_HOLD + T_OUT) f = 1 - eio((t - T_IN - T_HOLD) / T_OUT);
+    if (t < TI) { u = t / TI; f = eio(u); }
+    else if (t < TI + TH) f = 1;
+    else if (t < TI + TH + TO) f = 1 - eio((t - TI - TH) / TO);
     else f = 0;
-    var p = { c: mode.c * f, r: mode.r * f, d: mode.d * f, f: f, inhale: t < T_IN + T_HOLD, u: u, t: t };
+    var p = { c: mode.c * f, r: mode.r * f, d: mode.d * f, f: f, inhale: t < TI + TH, u: u, t: t, cyc: TC };
     if (mode.w && u >= 0) {           // двойной: сначала диафрагма, затем рёбра
       p.d = mode.d * eio(u / 0.55);
       p.r = mode.r * eio((u - 0.42) / 0.58);
@@ -616,6 +625,7 @@
       setTimeout(function () { pickMuscle(list[0]); }, 0);
     }
     var btns = (MUS ? [] : MODES).map(function (m, i) {
+      if (m.group) H("div", "banim-mgroup", modesEl, m.group);
       var b = H("button", "banim-mode", modesEl, m.name);
       b.type = "button";
       b.addEventListener("click", function () {
@@ -872,7 +882,7 @@
       if (MUS) subEl.textContent = st.mus ? st.mus.name.toLowerCase() : "дыхательные мышцы";
       else if (mode.w && p.u >= 0) subEl.textContent = p.u < 0.5 ? "① диафрагма" : "② рёбра";
       else subEl.textContent = "вид спереди";
-      barFill.style.width = (p.t / T_CYC * 100).toFixed(1) + "%";
+      barFill.style.width = (p.t / p.cyc * 100).toFixed(1) + "%";
     }
 
     function drawMuscles(p, G, D, sdy, t) {
