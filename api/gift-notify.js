@@ -16,10 +16,28 @@ function clip(s, n) {
   return String(s == null ? "" : s).replace(/[\u0000-\u001f]/g, " ").slice(0, n);
 }
 
+/* GET ?check=1 — yes/no check that the bot can reach Nick's chat (no secrets, no message sent):
+   sendChatAction shows "печатает…" for a few seconds and fails the same way sendMessage would. */
+async function selfCheck() {
+  var token = String(process.env.TELEGRAM_BOT_TOKEN || "").trim();
+  var chatId = String(process.env.ADMIN_CHAT_ID || "").trim();
+  var out = { token: !!token, chat: !!chatId };
+  if (token && chatId) {
+    var r = await fetch("https://api.telegram.org/bot" + token + "/sendChatAction", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, action: "typing" })
+    });
+    var d = await r.json().catch(function () { return {}; });
+    out.telegram = { ok: !!d.ok, error: d.description || null };
+  }
+  return new Response(JSON.stringify(out), { headers: { "content-type": "application/json", "cache-control": "no-store" } });
+}
+
 export default async function handler(req) {
   var origin = req.headers.get("origin") || "";
   var headers = giftCors(origin);
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: headers });
+  if (req.method === "GET" && new URL(req.url).searchParams.get("check") === "1") return selfCheck();
   if (req.method !== "POST" || GIFT_ORIGINS.indexOf(origin) === -1) {
     return new Response("forbidden", { status: 403, headers: headers });
   }
@@ -85,6 +103,7 @@ export default async function handler(req) {
     body: JSON.stringify(payload)
   });
   var data = await res.json().catch(function () { return {}; });
+  if (!data.ok) console.error("gift-notify: telegram refused", res.status, data.description || "");
 
   if (data.ok && sql && taskId && data.result) {
     await sql`UPDATE gift_tasks SET msg_id = ${data.result.message_id} WHERE id = ${taskId}`;
