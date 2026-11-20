@@ -59,6 +59,7 @@
     popupOpen: false,
     allDone: false
   };
+  G.trkShown = {};
   window.GUEST = G;
   window.GUEST_ON = false;
 
@@ -276,7 +277,14 @@
     });
     paintDots();
     paintChip();
-    if (!G.store.welcomed && (sc === "profile" || sc === "courses")) { G.store.welcomed = true; saveStore(); setTimeout(G.openTracker, 400, true); }
+    // окно тест-драйва «что посмотреть»: при первом входе в Кабинет и в «Домашние задания»
+    // за каждое открытие приложения, пока не посмотрены все 7 разделов (Коля, 20.11)
+    if ((sc === "profile" || sc === "cab-hw") && !G.allDone && !G.trkShown[sc] && !document.querySelector(".gd-sheet")) {
+      G.trkShown[sc] = true;
+      var first = !G.store.welcomed;
+      if (first) { G.store.welcomed = true; saveStore(); }
+      setTimeout(G.openTracker, 400, first);
+    }
   };
 
   function lockUploads() {
