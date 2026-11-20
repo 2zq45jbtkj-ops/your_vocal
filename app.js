@@ -101,7 +101,7 @@ var state = {
   _srezCompare: [],          // id срезов, выбранных для сравнения на колесе
   _srezTopicsOpen: false,    // список тем под колесом: раскрыт/свёрнут (жмём по колесу)
   _wheelZone: null,
-  _wheelLvl: null,           // выбранный блок колеса (уровень A–D), null — все          // номер зоны, подсвеченной после нажатия на точку колеса
+  _wheelLvl: null,           // выбранный блок колеса (уровень A–D); null — первый по порядку          // номер зоны, подсвеченной после нажатия на точку колеса
   _ownCabinetMsg: null,      // "not-found" | "no-token" | "net" — почему не открылась своя карточка
   feedbackMood: null, feedbackText: "", coursesFilter: null,
   pendingUnstar: null, pendingUnstarData: null, pendingUnstarSecs: 0,
@@ -2372,15 +2372,16 @@ function renderCabWheel(data) {
   }).map(function (o) { return o.t; });
   var levels = [];
   current.forEach(function (t) { var l = lvOf(t); if (levels.indexOf(l) < 0) levels.push(l); });
-  if (state._wheelLvl && levels.indexOf(state._wheelLvl) < 0) state._wheelLvl = null;
+  // 20.11: вкладки «Все» нет — всегда открыт один уровень, по умолчанию первый
+  if (state._wheelLvl == null || levels.indexOf(state._wheelLvl) < 0) state._wheelLvl = levels[0];
   var lvName = function (l) { return l ? "Уровень " + l : "Другое"; };
   var lvTabs = levels.length > 1
-    ? '<div class="cab-lvl-tabs">' + [null].concat(levels).map(function (l) {
-        var on = (state._wheelLvl || null) === (l === null ? null : l);
-        return '<span class="cab-lvl-tab' + (on ? " on" : "") + '" data-act="wheel-lvl" data-lvl="' + (l === null ? "*" : (l || "-")) + '">' + (l === null ? "Все" : lvName(l)) + "</span>";
+    ? '<div class="cab-lvl-tabs">' + levels.map(function (l) {
+        var on = state._wheelLvl === l;
+        return '<span class="cab-lvl-tab' + (on ? " on" : "") + '" data-act="wheel-lvl" data-lvl="' + (l || "-") + '">' + lvName(l) + "</span>";
       }).join("") + "</div>"
     : "";
-  if (state._wheelLvl) current = current.filter(function (t) { return lvOf(t) === state._wheelLvl; });
+  current = current.filter(function (t) { return lvOf(t) === state._wheelLvl; });
   if (!current.length) {
     return '<div class="cab-screen-title">Колесо баланса</div>' + gold +
       '<div class="instruction-note">Колесо заполним вместе на первом срезе.</div>';
@@ -2398,7 +2399,7 @@ function renderCabWheel(data) {
   });
   var sel = state._wheelZone;
 
-  var showHeads = !state._wheelLvl && levels.length > 1, prevLv = null;
+  var showHeads = false, prevLv = null;
   var rows = current.map(function (t, i) {
     var head = "";
     if (showHeads && lvOf(t) !== prevLv) { prevLv = lvOf(t); head = '<div class="cab-lvl-head">' + lvName(prevLv) + "</div>"; }
@@ -5593,7 +5594,7 @@ function wireActs() {
       }
       if (act === "wheel-lvl") {
         var lv = el.getAttribute("data-lvl");
-        state._wheelLvl = lv === "*" ? null : (lv === "-" ? "" : lv);
+        state._wheelLvl = lv === "-" ? "" : lv;
         state._wheelZone = null;
         render();
         return;
