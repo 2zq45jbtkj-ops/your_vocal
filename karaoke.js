@@ -939,7 +939,7 @@ function karPaintSettings() {
       row("tempo", "Темп", esc(karTempoLabel(KE.tempo)) + " ›") +
       row("marks", "Пометки дыхания", KAR.showMarks ? "вкл" : "выкл") +
       row("bg", "Фон", "›") +
-      (karIsAdm() && KP.lines.length && !KP.tap ? row("fixtap", "Исправить тап", "›") : "") +
+      (KP.lines.length && !KP.tap ? row("fixtap", "Исправить тап", "›") : "") +
     "</div>" +
     '<div class="row" style="display:flex;gap:10px;margin-top:14px"><div class="bt main" data-s="ok">Готово</div></div>';
   var q = function (k) { return d.querySelector('[data-ks="' + k + '"]'); };
@@ -1758,7 +1758,9 @@ function karAdmSave() {
   lines.forEach(function (l) {
     if (Object.keys(l.mk).length || (l.hint && l.hint.trim())) marks[l.i] = { text: l.text, mk: l.mk, hint: (l.hint || "").trim() };
   });
-  Promise.all([
+  // Ученик (20.11): «Исправить тап» есть и у него — пишется только время строк
+  // его песни, по сессии ученика; пометки и подсказки трогает только Николай.
+  Promise.all(!karIsAdm() ? [karStudentPatchTimes(s, times)] : [
     karAdmPatch({ lyricTimes: times }),
     fetch("/api/karaoke", {
       method: "POST", headers: bazaAuthHeaders({ "Content-Type": "application/json" }),
@@ -1774,6 +1776,15 @@ function karAdmSave() {
     clearTimeout(KAE.saveT);
     KAE.saveT = setTimeout(karAdmSave, 5000);
   });
+}
+
+function karStudentPatchTimes(s, times) {
+  return karSession().then(function (sess) {
+    return fetch(BAZA_API + "/api/player-tracks?id=" + encodeURIComponent(s.id), {
+      method: "PATCH", headers: { "Content-Type": "application/json", "X-Player-Session": sess },
+      body: JSON.stringify({ lyricTimes: times })
+    });
+  }).then(function (r) { if (!r.ok) throw new Error(r.status); });
 }
 
 function karAdmOpenMeta() {
