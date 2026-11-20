@@ -2850,8 +2850,10 @@ function renderMore() {
       iconBg: "var(--soft-red)"
     }
   ];
+  // Тест-драйв: никаких входов по коду (Николай, 20.11)
+  if (window.GUEST_ON) items = items.filter(function (it) { return !it.reset; });
   // Виден только Николаю (chatId === ADMIN_CHAT_ID на сервере) — скрыт от учеников.
-  if (readAdminKey()) {
+  if (readAdminKey() && !window.GUEST_ON) {
     items.push({
       label: "Режим админа", isToggle: true, on: !!s.isAdmin, adminToggle: true,
       icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1.5l5.5 2v4c0 3.6-2.3 6-5.5 7-3.2-1-5.5-3.4-5.5-7v-4L8 1.5z" stroke="var(--gray)" stroke-width="1.4" stroke-linejoin="round"/></svg>',

@@ -91,9 +91,11 @@
     if (src !== "testdrive") {
       // 20.11 (Николай): кто открыл приложение в Telegram без кода (кнопка «Меню»,
       // профиль бота), сразу видит тест-драйв, а не экран кода. Ученики входят по
-      // личной ссылке из бота (?k=), у Николая сохранён ключ админа. В браузере
-      // и со значка на экране «Домой» вход по коду остаётся как был.
-      if (!tg || !tg.initData) return false;
+      // личной ссылке из бота (?k=), у Николая сохранён ключ админа.
+      // То же в обычном браузере (ссылка на сайт открылась во встроенном
+      // браузере Telegram, Safari и т. п.). Экран входа по коду и паролю
+      // остаётся по адресу /?login=1.
+      try { if (new URLSearchParams(location.search).get("login") === "1") return false; } catch (e) {}
       if (typeof LINK_TOKEN !== "undefined" && LINK_TOKEN) return false;
       if (state.accessToken || state.isAdmin) return false;
       if (typeof readAdminKey === "function" && readAdminKey()) return false;
@@ -122,6 +124,9 @@
     state.screen = "profile";
     installFetch();
     installActs();
+    // экран кода доступа гостю не показываем никогда: вместо него кабинет
+    var appGo = window.go;
+    window.go = function (screen) { return appGo(screen === "token-entry" || screen === "tg" ? "profile" : screen); };
     G.allDone = SECTIONS.every(function (s) { return G.store.explored.indexOf(s.id) !== -1; });
     post("hello", { src: src }).then(function (r) { return r && r.json ? r.json() : null; }).then(function (d) {
       // Николай открыл приложение без кода на новом телефоне: это его бот, а не гость.
