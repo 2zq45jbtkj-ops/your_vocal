@@ -5853,11 +5853,22 @@ if (tg) {
   tg.BackButton.onClick(handleBack);
 }
 
+// 20.11: ждём, пока загрузятся все скрипты страницы (guest.js и др.). Иначе при
+// первом открытии (скрипт ещё не в кэше) данные урока приходили раньше guest.js,
+// тест-драйв не включался и гость видел экран кода доступа.
+var DOM_READY = document.readyState === "complete";
+if (!DOM_READY) document.addEventListener("DOMContentLoaded", function () { DOM_READY = true; });
+function whenScriptsReady(v) {
+  if (DOM_READY) return v;
+  return new Promise(function (res) { document.addEventListener("DOMContentLoaded", function () { res(v); }); });
+}
+
 fetch("data/lesson-01.json")
   .then(function (r) {
     if (!r.ok) throw new Error("HTTP " + r.status);
     return r.json();
   })
+  .then(whenScriptsReady)
   .then(function (data) {
     LESSON = data;
     LESSON_ONE = data;
