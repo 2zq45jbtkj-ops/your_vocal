@@ -118,6 +118,8 @@ function saveState() {
   // ничего не пишем в общий localStorage, иначе тестовые действия админа
   // перезаписали бы его собственный логин/прогресс на этом устройстве.
   if (state.adminMode) return;
+  // Тест-драйв гостя (guest.js) — только в памяти, общий вход не трогаем
+  if (window.GUEST_ON) return;
   try {
     localStorage.setItem("vocal-app", JSON.stringify({
       accessToken: state.accessToken,
@@ -454,6 +456,7 @@ function backTarget() {
     case "admin-students": return "admin-hub";
     case "admin-birthdays": return "admin-hub";
     case "admin-dash": return "admin-hub";
+    case "admin-guests": return "admin-hub";
     case "admin-plans": return "admin-hub";
     case "admin-plan": return "admin-plans";
     case "karaoke": return "profile";
@@ -481,6 +484,8 @@ function handleBack() {
     else go("lesson-home");
     return;
   }
+  // «Тестовые клиенты»: из истории гостя — сначала к списку
+  if (window.GUEST && GUEST.adminBack()) return;
   var t = backTarget();
   if (t) go(t);
 }
@@ -1388,7 +1393,7 @@ function deleteStudentWithConfirm(studentId, name) {
 /* Событие для дашборда в «Режиме админа» (20.11). Николай сам в
    аналитику не попадает: ни в режиме админа, ни со своей карточки. */
 function trackEv(type, data) {
-  if (!state.accessToken || state.adminMode || state.isAdmin) return;
+  if (!state.accessToken || state.adminMode || state.isAdmin || window.GUEST_ON) return;
   var body = JSON.stringify({
     token: state.accessToken, type: type, data: data || {},
     name: ((state.firstName || "") + " " + (state.lastName || "")).trim()
@@ -1430,6 +1435,8 @@ function isAdminStudent() {
 
 function lessonUnlocked(n) {
   if (n === 1) return true;
+  // тест-драйв: открыт только урок «Дыхание»
+  if (window.GUEST_ON) return false;
   if (isAdminStudent()) return true;
   if (state.unlockedLessons && state.unlockedLessons.indexOf(n) !== -1) return true;
   return lessonFullyDone(n - 1);
@@ -3321,6 +3328,10 @@ function renderAdminHub() {
     {
       label: "Дашборд", act: "admin-hub-dash", sub: "Активность, уроки, ДЗ и результаты учеников",
       icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2.5 13.5h11" stroke="var(--gray)" stroke-width="1.4" stroke-linecap="round"/><rect x="3.5" y="8" width="2" height="4" rx=".6" stroke="var(--gray)" stroke-width="1.3"/><rect x="7" y="5" width="2" height="7" rx=".6" stroke="var(--gray)" stroke-width="1.3"/><rect x="10.5" y="2.5" width="2" height="9.5" rx=".6" stroke="var(--gray)" stroke-width="1.3"/></svg>'
+    },
+    {
+      label: "Тестовые клиенты", act: "admin-hub-guests", sub: "Кто открыл тест-драйв из Instagram: экраны, время, нажатия",
+      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="6" cy="5.5" r="2.4" stroke="var(--gray)" stroke-width="1.4"/><path d="M1.8 13.5c0-2.4 1.9-4.2 4.2-4.2s4.2 1.8 4.2 4.2" stroke="var(--gray)" stroke-width="1.4" stroke-linecap="round"/><path d="M11 3.2l.6 1.3 1.4.2-1 1 .2 1.4-1.2-.7-1.2.7.2-1.4-1-1 1.4-.2z" stroke="var(--terra)" stroke-width="1.1" stroke-linejoin="round"/></svg>'
     },
     {
       label: "Выбор ученика", act: "admin-hub-students", sub: "Пройти урок глазами ученика",
@@ -5637,6 +5648,7 @@ var ACTS = {
   "admin-hub-students": function () { go("admin-students"); },
   "admin-hub-birthdays": function () { go("admin-birthdays"); },
   "admin-hub-dash": function () { go("admin-dash"); },
+  "admin-hub-guests": function () { if (window.GUEST) GUEST.adminOpenList(); },
   "admin-hub-plans": function () { go("admin-plans"); },
   "undo-unstar": undoUnstar,
   "cal-prev": function () {
@@ -5754,6 +5766,7 @@ function render() {
     case "admin-students": renderAdminStudents(); break;
     case "admin-birthdays": renderAdminBirthdays(); break;
     case "admin-dash": if (window.renderAdminDash) renderAdminDash(); break;
+    case "admin-guests": if (window.renderAdminGuests) renderAdminGuests(); break;
     case "admin-plans": renderAdminPlans(); break;
     case "admin-plan": renderAdminPlanDetail(); break;
     case "karaoke": case "karaoke-play": case "admin-karaoke": case "admin-karaoke-songs": case "admin-karaoke-edit": renderKaraokeScreen(); break;
@@ -5773,6 +5786,7 @@ function render() {
   renderAdminBanner();
   renderDock();
   maybeCelebrate();
+  if (window.GUEST_ON) GUEST.afterRender();
 }
 
 /* «Режим админа» (20.11, просьба Николая): вместо широкой плашки — маленькая
@@ -5847,8 +5861,11 @@ fetch("data/lesson-01.json")
     LESSON_ONE = data;
     state.quizAnswers = new Array(data.quiz.questions.length).fill(null);
     loadState();
-    autoMergeOwnCards();
-    if (LINK_TOKEN && !state.isAdmin) {
+    // Тест-драйв из Instagram (guest.js): гость без кода доступа
+    var guestOn = !!(window.GUEST && GUEST.boot());
+    if (!guestOn) autoMergeOwnCards();
+    if (!guestOn && window.GUEST) GUEST.adminPing();
+    if (LINK_TOKEN && !state.isAdmin && !guestOn) {
       if (state.accessToken !== LINK_TOKEN) {
         state.accessToken = LINK_TOKEN;
         state.firstName = ""; state.lastName = "";
@@ -5860,7 +5877,7 @@ fetch("data/lesson-01.json")
     // Данные из baza-dannih не кэшируются между сессиями — загружаем заново
     state.studentPublicData = null;
     // подставляем Telegram-username, если открыто внутри Telegram
-    if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
+    if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user && !guestOn) {
       var u = tg.initDataUnsafe.user;
       state.chatId = u.id || state.chatId;
       if (!state.tgId) state.tgId = u.username ? "@" + u.username : String(u.id || "");

@@ -264,7 +264,8 @@ function renderKaraokeList() {
     if (state.isAdmin) (KAR.drafts || []).forEach(function (s) { items.push({ kind: "draft", song: s }); });
     var n = KAR.appCount || 0;
     if (n > KAR_WARN) items.push({ kind: "warn", count: n, limit: KAR_LIMIT });
-    if (n < KAR_LIMIT) items.push({ kind: "add" });
+    // тест-драйв (guest.js): гость только смотрит и поёт — без «Добавить трек»
+    if (n < KAR_LIMIT && !window.GUEST_ON) items.push({ kind: "add" });
     body = (!KAR.songs.length ? '<div class="instruction-note" style="margin-bottom:16px;">Здесь появятся песни, над которыми ты работаешь с Николаем, когда он добавит к ним минус.</div>' : "") +
       '<div data-trk-grid></div>';
   }
@@ -272,7 +273,7 @@ function renderKaraokeList() {
     '<div class="cab-screen-title">Мои треки</div>' + body + "</div>";
   wireActs();
   if (!items) { TrackGrid.destroy(); return; }
-  TrackGrid.mount(app.querySelector("[data-trk-grid]"), items, {
+  var trkOpts = {
     onOpen: function (it) {
       if (it.kind === "draft") { karOpenAdmEdit(it.song); return; }
       KAR.song = it.song;
@@ -285,7 +286,9 @@ function renderKaraokeList() {
     // Николай — прежний путь (экран песни); ученик — выбирает файл минуса
     // на телефоне, остальное приложение сделает само (TrackUpload).
     onAdd: function (el) { if (canAdd) karAddTrack(el, ownCard); else TrackUpload.pick(el); }
-  });
+  };
+  if (window.GUEST_ON) delete trkOpts.onEdit;
+  TrackGrid.mount(app.querySelector("[data-trk-grid]"), items, trkOpts);
 }
 
 /* Полный экран песни Николая: название, плюс, минус, текст, разметка. */
