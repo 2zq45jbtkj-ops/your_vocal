@@ -215,6 +215,8 @@
     this.cv = cv;
     this.combo = null;
     this.reset = function () { lastMeasure = 0; };
+    this.kGet = function () { return K; };
+    this.kSet = function (v) { K = Kt = v; lastMeasure = 1e15; };
     this.draw = function (T, B, now) {
       if (!this.combo || !size()) return;
       var C = PAL[this.combo.p].c, P = UP[this.combo.u], A = W / H;
@@ -338,24 +340,51 @@
     paintSheet(kp);
   }
 
-  /* мини-превью: один маленький холст, рисует вариант и отдаёт картинку */
-  var TH = null, THC = {}, THT = 3;
-  function thumb(c) {
-    var key = c.g + "" + c.u + c.p;
-    if (THC[key]) return THC[key];
-    try {
-      if (!TH) { var cv = document.createElement("canvas"); TH = new Renderer(cv, { w: 84, h: 84, scale: 0.5 }); }
-      TH.combo = c; TH.reset(); TH.draw(THT, 0, 1);
-      THC[key] = TH.cv.toDataURL("image/jpeg", 0.85);
-    } catch (e) { THC[key] = ""; }
-    return THC[key];
+  /* Живые шарики в пилюлях (20.11): один маленький WebGL-холст рисует по
+     очереди каждый вариант и копирует кадр в холстик шарика. ~15 кадров/с,
+     только пока шторка открыта; время то же, что у фона, — скорость совпадает. */
+  var TH = null, THfail = false, BALL = 72, ballRaf = 0, ballLast = 0, KC = {};
+  function thR() {
+    if (TH || THfail) return TH;
+    try { var cv = document.createElement("canvas"); TH = new Renderer(cv, { w: BALL, h: BALL, scale: 0.5 }); }
+    catch (e) { THfail = true; TH = null; }
+    return TH;
+  }
+  function paintBalls(d, ts) {
+    var r = thR(); if (!r) return;
+    var list = d.querySelectorAll("canvas.kfx-bc");
+    var T = S.tAcc || ts / 1000;
+    for (var i = 0; i < list.length; i++) {
+      var el = list[i], c = el.getAttribute("data-c").split(",").map(Number);
+      r.combo = { g: c[0], u: c[1], p: c[2] };
+      // порог тёмного меряем один раз на вариант — readPixels каждый кадр тормозил бы телефон
+      var key = c.join(","), k = KC[key];
+      try {
+        if (k == null) { r.reset(); r.draw(T, 0, 1e12); KC[key] = r.kGet(); }
+        else { r.kSet(k); r.draw(T, 0, 1); }
+      } catch (e) { continue; }
+      var cx = el._cx || (el._cx = el.getContext("2d"));
+      if (cx) cx.drawImage(r.cv, 0, 0, BALL, BALL);
+    }
+  }
+  function ballLoop(kp) {
+    cancelAnimationFrame(ballRaf);
+    var step = function (ts) {
+      var d = kp.sheet;
+      if (!d || !d.isConnected) { ballRaf = 0; return; }
+      if (ts - ballLast > 66) { ballLast = ts; paintBalls(d, ts); }
+      ballRaf = requestAnimationFrame(step);
+    };
+    ballRaf = requestAnimationFrame(step);
   }
   var CALM = {
     ivory: "radial-gradient(80% 25% at 30% 32%, rgba(255,253,248,.75), rgba(255,253,248,0)), linear-gradient(180deg,#f7f2e8,#f3ede1 50%,#ebe2d1)",
     black: "radial-gradient(85% 28% at 50% 34%, rgba(40,54,82,.35), rgba(40,54,82,0)), linear-gradient(180deg,#0b0f17,#080b12 55%,#05070b)"
   };
-  function card(attr, val, label, on, img, bg) {
-    var pic = img ? '<img alt="" src="' + img + '">' : '<i style="background:' + (bg || "#111") + '"></i>';
+  function card(attr, val, label, on, combo, bg) {
+    var pic = combo && !THfail
+      ? '<canvas class="kfx-bc" width="' + BALL + '" height="' + BALL + '" data-c="' + combo.g + "," + combo.u + "," + combo.p + '"></canvas>'
+      : '<i style="background:' + (bg || hex(PAL[(combo && combo.p) || 0].c[1])) + '"></i>';
     // пилюля, как переключатель режима админа: слева шарик с примером узора, рядом название
     return '<span class="kfx-pill' + (on ? " on" : "") + '" ' + attr + '="' + val + '" role="button" aria-pressed="' + on + '">' +
       '<span class="kfx-ball">' + pic + "</span>" + esc(label) + "</span>";
@@ -371,15 +400,15 @@
       '<div class="s">' + (mode === "auto" ? "У каждой песни свой вариант. Выбери здесь — и он закрепится за этой песней." : "Спокойный фон без эффектов — для всех песен.") + "</div>" +
       '<div class="kfx-l">Стиль</div><div class="kfx-row">' +
       MODES.map(function (m) {
-        return card("data-fm", m[0], m[1], mode === m[0], m[0] === "auto" ? thumb(cur) : "", CALM[m[0]]);
+        return card("data-fm", m[0], m[1], mode === m[0], m[0] === "auto" ? cur : null, CALM[m[0]]);
       }).join("") + "</div>";
     if (mode === "auto") {
       html += '<div class="kfx-l">Стекло</div><div class="kfx-row">' +
-        GLASS.map(function (n, i) { return card("data-fg", i, n, c.g === i, thumb(withK(c, "g", i))); }).join("") + "</div>" +
+        GLASS.map(function (n, i) { return card("data-fg", i, n, c.g === i, withK(c, "g", i)); }).join("") + "</div>" +
         '<div class="kfx-l">Свет под стеклом</div><div class="kfx-row">' +
-        UNDER_ORDER.map(function (i) { return card("data-fu", i, UNDER[i], c.u === i, thumb(withK(c, "u", i))); }).join("") + "</div>" +
+        UNDER_ORDER.map(function (i) { return card("data-fu", i, UNDER[i], c.u === i, withK(c, "u", i)); }).join("") + "</div>" +
         '<div class="kfx-l">Цвет</div><div class="kfx-row">' +
-        PAL.map(function (p, i) { return card("data-fp", i, p.name, c.p === i, thumb(withK(c, "p", i))); }).join("") + "</div>";
+        PAL.map(function (p, i) { return card("data-fp", i, p.name, c.p === i, withK(c, "p", i)); }).join("") + "</div>";
     }
     html += '<div class="row" style="display:flex;gap:10px;margin-top:16px">' +
       (mode === "auto" ? '<div class="bt" data-s="rnd">Случайный</div>' : "") +
@@ -390,6 +419,8 @@
     d.innerHTML = html;
     Array.prototype.forEach.call(d.querySelectorAll(".kfx-row"), function (r, i) { if (keep[i]) r.scrollLeft = keep[i]; });
     d.scrollTop = top;
+    paintBalls(d, performance.now());
+    ballLoop(kp);
     function each(sel, fn) { Array.prototype.forEach.call(d.querySelectorAll(sel), fn); }
     each("[data-fm]", function (b) {
       b.onclick = function () {

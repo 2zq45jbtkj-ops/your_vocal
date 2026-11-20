@@ -177,12 +177,25 @@ var ADMIN_KEY = "vocal-admin";
 function saveAdminKey(t) { try { if (t) localStorage.setItem(ADMIN_KEY, JSON.stringify({ t: t })); } catch (e) {} }
 function readAdminKey() { try { var a = JSON.parse(localStorage.getItem(ADMIN_KEY) || "null"); return (a && a.t) || ""; } catch (e) { return ""; } }
 function forgetAdminKey() { try { localStorage.removeItem(ADMIN_KEY); } catch (e) {} }
+/* 20.11 (Николай): ключи админа запоминаются, но сам режим админа
+   включается и выключается вручную в «Ещё». По умолчанию выключен —
+   Николай в своём аккаунте такой же ученик, как все. */
+var ADMIN_ON_KEY = "vocal-admin-on";
+function adminOnGet() { try { return localStorage.getItem(ADMIN_ON_KEY) === "1"; } catch (e) { return false; } }
+function adminOnSet(on) { try { if (on) localStorage.setItem(ADMIN_ON_KEY, "1"); else localStorage.removeItem(ADMIN_ON_KEY); } catch (e) {} }
+function cleanOwnName(n) { return String(n || "").replace(/\s*\((admin|тест|test)\)\s*/ig, " ").replace(/\s+/g, " ").trim(); }
 
 function loadState() {
   loadStateRaw();
   var t = readAdminKey();
   if (t) {
-    if (!state.isAdmin || !state._siteAuth) { state.isAdmin = true; state._siteAuth = t; state.screen = state.accessToken ? "courses" : "profile"; }
+    if (!state.accessToken) {
+      // своей карточки на телефоне ещё нет — находим её (нужен доступ админа)
+      state.isAdmin = true; state._siteAuth = t; state.screen = "profile";
+    } else {
+      state.isAdmin = adminOnGet(); state._siteAuth = state.isAdmin ? t : "";
+      state.screen = state.isAdmin ? "admin-hub" : "courses";
+    }
   } else if (state.isAdmin && state._siteAuth) {
     saveAdminKey(state._siteAuth); // вход, сохранённый до отдельного ключа
   }
@@ -1171,6 +1184,8 @@ function loadAdminBirthdays() {
    через baza-dannih по токену и показываем его профиль («глазами ученика»).
    saveState() во время adminMode в localStorage не пишет — см. защиту там. */
 function enterAdminMode(student) {
+  // своя карточка — не «режим админа», а просто свой кабинет
+  if (student.telegramToken && student.telegramToken === state.accessToken && !state.adminMode) { go("profile"); return; }
   if (!student.telegramToken) {
     alert("У ученика «" + student.name + "» нет токена доступа — сначала зайди на сайт и убедись что токен сгенерирован.");
     return;
@@ -1257,8 +1272,12 @@ function openOwnCabinet() {
    Админские функции — в «Ещё → Режим админа»; чужие карточки по-прежнему
    открываются режимом админа и по выходу возвращают сюда. */
 function becomeOwnStudent(me) {
-  var nm = String(me.name || "").replace(/\s*\(admin\)\s*/ig, " ").trim();
+  var nm = cleanOwnName(me.name);
   state.accessToken = me.telegramToken;
+  // режим админа остаётся только если Николай сам его включил (или пришёл добавлять песню)
+  if (state._goKaraoke) adminOnSet(true);
+  state.isAdmin = adminOnGet();
+  state._siteAuth = state.isAdmin ? readAdminKey() : "";
   state.studentPublicData = null;
   state.firstName = nm.split(" ")[0] || nm;
   state.lastName = nm.split(" ").slice(1).join(" ");
@@ -1266,6 +1285,65 @@ function becomeOwnStudent(me) {
   if (state._goKaraoke === "new") { state._goKaraoke = false; KAR.songs = null; go("karaoke"); karNewSong({ id: me.id, name: me.name }); return; }
   if (state._goKaraoke) { state._goKaraoke = false; KAR.songs = null; go("karaoke"); return; }
   go("profile");
+}
+
+function setAdminOn(on) {
+  if (!on && state.adminMode && state.adminSnapshot) {
+    var sn = state.adminSnapshot; for (var k in sn) { state[k] = sn[k]; }
+  }
+  state.adminMode = false; state.adminStudentName = ""; state.adminSnapshot = null;
+  adminOnSet(on);
+  state.isAdmin = !!on;
+  state._siteAuth = on ? readAdminKey() : "";
+  state.adminStudentsList = null;
+  saveState();
+  if (on) go("admin-hub"); else render();
+}
+
+/* 20.11 (Николай): две свои карточки в базе — «Николай Септ (admin)» и
+   «Nikolai Sept» — сливаются в одну «Nikolai Sept (тест)». Делается один
+   раз сам, на телефоне Николая (там лежат его ключи админа): база переносит
+   занятия, ДЗ, доступ к урокам, прогресс и треки, пустые поля дополняет
+   из второй карточки, вторую удаляет (baza-dannih, students?merge=run). */
+var OWN_NAME = "Nikolai Sept (тест)", OWN_MERGED_KEY = "vocal-own-merged";
+function isOwnName(n) {
+  n = String(n || "").toLowerCase();
+  return (n.indexOf("никола") !== -1 && n.indexOf("септ") !== -1) || (n.indexOf("nikola") !== -1 && n.indexOf("sept") !== -1);
+}
+function autoMergeOwnCards() {
+  var t = readAdminKey();
+  if (!t) return;
+  try { if (localStorage.getItem(OWN_MERGED_KEY) === "1") return; } catch (e) {}
+  var H = { "X-Site-Auth": t, "Content-Type": "application/json" };
+  fetch(BAZA_API + "/api/students", { headers: { "X-Site-Auth": t } })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      var mine = ((d && d.students) || []).filter(function (x) { return isOwnName(x.name); });
+      var done = function (keep) {
+        try { localStorage.setItem(OWN_MERGED_KEY, "1"); } catch (e) {}
+        if (keep && keep.telegramToken) {
+          state.accessToken = keep.telegramToken;
+          var nm = cleanOwnName(OWN_NAME);
+          state.firstName = nm.split(" ")[0]; state.lastName = nm.split(" ").slice(1).join(" ");
+        }
+        state.studentPublicData = null; state.adminStudentsList = null;
+        saveState(); render();
+      };
+      if (mine.length === 1) {
+        if (mine[0].name === OWN_NAME) { done(mine[0]); return; }
+        return fetch(BAZA_API + "/api/students?id=" + encodeURIComponent(mine[0].id), { method: "PATCH", headers: H, body: JSON.stringify({ name: OWN_NAME }) })
+          .then(function (r) { if (r.ok) done(mine[0]); });
+      }
+      if (mine.length !== 2) return; // 0 или больше двух — не гадаем
+      // остаётся та, с которой телефон уже входит; иначе — «(admin)»
+      var keep = mine.filter(function (x) { return x.telegramToken && x.telegramToken === state.accessToken; })[0] ||
+        mine.filter(function (x) { return /\(admin\)/i.test(x.name); })[0] || mine[0];
+      var drop = mine[0] === keep ? mine[1] : mine[0];
+      return fetch(BAZA_API + "/api/students?merge=run", { method: "POST", headers: H, body: JSON.stringify({ keep: keep.id, drop: drop.id, name: OWN_NAME }) })
+        .then(function (r) { return r.json(); })
+        .then(function (res) { if (res && res.ok) done(keep); });
+    })
+    .catch(function () {});
 }
 
 function exitAdminMode() {
@@ -1328,7 +1406,8 @@ function lessonFullyDone(n) {
    как на сайте: по «(admin)» в имени ученика. */
 function isAdminStudent() {
   var name = ((state.firstName || "") + " " + (state.lastName || ""));
-  return /\(admin\)/i.test(name) || state.isAdmin === true;
+  var base = state.studentPublicData && state.studentPublicData.student ? state.studentPublicData.student.name : "";
+  return /\((admin|тест)\)/i.test(name + " " + base) || state.isAdmin === true;
 }
 
 function lessonUnlocked(n) {
@@ -1898,7 +1977,7 @@ function renderProfile() {
   var homework = data ? (data.homework || []) : [];
 
   // Шапка
-  var name = student ? student.name : "Загружаю…";
+  var name = student ? cleanOwnName(student.name) : "Загружаю…";
   var initials = name.split(" ").filter(Boolean).slice(0,2).map(function(w){return w[0];}).join("").toUpperCase();
   var status = student ? student.status : "";
   var statusLabel = { active: "Активный", trial: "Пробный", pause: "Пауза" }[status] || status;
@@ -2664,6 +2743,13 @@ function renderMore() {
     }
   ];
   // Виден только Николаю (chatId === ADMIN_CHAT_ID на сервере) — скрыт от учеников.
+  if (readAdminKey()) {
+    items.push({
+      label: "Режим админа", isToggle: true, on: !!s.isAdmin, adminToggle: true,
+      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1.5l5.5 2v4c0 3.6-2.3 6-5.5 7-3.2-1-5.5-3.4-5.5-7v-4L8 1.5z" stroke="var(--gray)" stroke-width="1.4" stroke-linejoin="round"/></svg>',
+      iconBg: "var(--bgmuted)"
+    });
+  }
   if (s.isAdmin) {
     // Единая точка входа для всего, что видно только преподавателю — сейчас
     // внутри выбор ученика (имперсонация) и дни рождения, дальше сюда же
@@ -2672,7 +2758,7 @@ function renderMore() {
     // тут был var(--soft-blue), который в тёмной теме не темнеет (акцентные
     // цвета для .dark сознательно не переопределены) и «горел» слишком ярко.
     items.push({
-      label: "Режим админа", isLink: true, adminEntry: true,
+      label: "Панель админа", isLink: true, adminEntry: true,
       icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1.5l5.5 2v4c0 3.6-2.3 6-5.5 7-3.2-1-5.5-3.4-5.5-7v-4L8 1.5z" stroke="var(--gray)" stroke-width="1.4" stroke-linejoin="round"/><path d="M6 8l1.5 1.5L10.5 6" stroke="var(--gray)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
       iconBg: "var(--bgmuted)"
     });
@@ -2709,6 +2795,7 @@ function renderMore() {
       if (item.reset) { resetProgress(); return; }
       if (item.doc) { openDoc(item.doc); return; }
       if (item.adminEntry) { go("admin-hub"); return; }
+      if (item.adminToggle) { setAdminOn(!state.isAdmin); return; }
       if (item.support) { openSupport(); return; }
     });
   });
@@ -5642,6 +5729,7 @@ fetch("data/lesson-01.json")
     LESSON_ONE = data;
     state.quizAnswers = new Array(data.quiz.questions.length).fill(null);
     loadState();
+    autoMergeOwnCards();
     if (LINK_TOKEN && !state.isAdmin) {
       if (state.accessToken !== LINK_TOKEN) {
         state.accessToken = LINK_TOKEN;
