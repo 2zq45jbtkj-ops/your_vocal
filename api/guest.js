@@ -154,9 +154,47 @@ function cleanStudentPublic(sp) {
   return out;
 }
 
+/* Карточку Николая находит бот (у него база учеников): спрашиваем подписью
+   токеном бота, а если подпись не подошла — initData самого Николая (Коля, 20.11:
+   «гостям» показать профиль с его аккаунта). Код карточки гостю не отдаётся. */
+var DEMO_CARD_URL = "https://vocal-bot.vercel.app/api/demo_card";
+async function askBotForCard(sql, initData) {
+  var token = String(process.env.TELEGRAM_BOT_TOKEN || "").trim();
+  var bodies = [];
+  if (token) {
+    var ts = String(Math.floor(Date.now() / 1000));
+    bodies.push({ ts: ts, sign: hex(await hmac(new TextEncoder().encode(token), "demo-card:" + ts)) });
+  }
+  if (initData) bodies.push({ initData: String(initData) });
+  for (var i = 0; i < bodies.length; i++) {
+    try {
+      var r = await fetch(DEMO_CARD_URL, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(bodies[i]) });
+      if (!r.ok) continue;
+      var d = await r.json();
+      var tok = d && d.ok && String(d.token || "").toLowerCase();
+      if (tok && /^[0-9a-f-]{36}$/.test(tok)) {
+        await sql`INSERT INTO guest_kv (k, v, updated_at) VALUES ('demo_token', ${tok}, now())
+          ON CONFLICT (k) DO UPDATE SET v = EXCLUDED.v, updated_at = now()`;
+        await sql`DELETE FROM guest_kv WHERE k = 'demo_cache'`;
+        return tok;
+      }
+    } catch (e) {}
+  }
+  return "";
+}
+
 async function buildDemo(sql) {
   var tr = await sql`SELECT v FROM guest_kv WHERE k = 'demo_token'`;
   var tok = tr.length ? tr[0].v : "";
+  if (!tok) {
+    // не чаще раза в минуту, чтобы гости не дёргали бота
+    var last = await sql`SELECT updated_at FROM guest_kv WHERE k = 'demo_ask'`;
+    if (!last.length || Date.now() - new Date(last[0].updated_at).getTime() > 60000) {
+      await sql`INSERT INTO guest_kv (k, v, updated_at) VALUES ('demo_ask', '1', now())
+        ON CONFLICT (k) DO UPDATE SET updated_at = now()`;
+      tok = await askBotForCard(sql, "");
+    }
+  }
   var empty = { ok: true, ready: false, student: cleanStudentPublic(null), songs: [], karaoke: { ok: true, marks: {}, meta: {}, covers: {} } };
   if (!tok) return empty;
   var sp = null;
@@ -330,6 +368,10 @@ export default async function handler(req) {
 
     if (action === "hello") {
       var visit = await touch(sql, g, body.src);
+      if (g.owner) {
+        var have = await sql`SELECT 1 FROM guest_kv WHERE k = 'demo_token'`;
+        if (!have.length) await askBotForCard(sql, body.initData);
+      }
       return json({ ok: true, visit: visit, owner: g.owner });
     }
     if (action === "ev") {
