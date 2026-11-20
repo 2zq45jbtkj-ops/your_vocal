@@ -1324,6 +1324,8 @@ html.browser-mode {
 .cab-hw-title { font: 600 14px/1.35 'Manrope', sans-serif; color: var(--ink); }
 .cab-hw-due { font-size: 12px; color: var(--gray); margin-top: 3px; }
 .cab-hw-due.red { color: var(--ink-red); }
+.cab-hw-sub { font: 700 12px/1.2 'Inter', sans-serif; color: var(--gray); text-transform: uppercase; letter-spacing: .04em; margin-top: 16px; }
+.cab-hw-sub + .cab-hw-list { margin-top: 8px; }
 
 .cab-wheel { display: block; width: 100%; max-width: 270px; margin: 0 auto 6px; }
 .cab-wdot { cursor: pointer; -webkit-tap-highlight-color: transparent; }

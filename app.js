@@ -2230,10 +2230,10 @@ function renderCabHw(data, homework) {
   // Открытые задания: всё, что не сдано, плюс сданное, пока не прошёл его срок —
   // чтобы отмеченное задание не пропадало из-под пальца.
   var today = new Date(); today.setHours(0, 0, 0, 0);
-  var list = "";
+  var list = "", doneItems = [];
   (homework || []).forEach(function (hw, i) {
     var due = hw.due ? new Date(String(hw.due).slice(0, 10) + "T00:00:00") : null;
-    if (hw.done && !(due && due >= today)) return;
+    if (hw.done && !(due && due >= today)) { doneItems.push({ hw: hw, i: i }); return; }
     var overdue = due && due < today && !hw.done;
     var busy = state._hwBusy[hwKey(hw)];
     list += '<div class="cab-hw' + (hw.done ? " hw-item-done" : "") + '">' +
@@ -2243,6 +2243,16 @@ function renderCabHw(data, homework) {
         (due ? '<div class="cab-hw-due' + (overdue ? " red" : "") + '">до ' + dayMonth(hw.due) + (overdue ? " · просрочено" : "") + "</div>" : "") +
       "</div></div>";
   });
+  // 20.11: сданные задания тоже видны — списком ниже, свежие сверху
+  doneItems.sort(function (a, b) { return String(b.hw.lessonDate || b.hw.due || "") < String(a.hw.lessonDate || a.hw.due || "") ? -1 : 1; });
+  var done = doneItems.map(function (x) {
+    var hw = x.hw, when = hw.lessonDate || hw.due;
+    return '<div class="cab-hw hw-item-done">' +
+      '<div class="hw-check done" aria-hidden="true">' + SVG_HW_CHECK + "</div>" +
+      '<div style="flex:1;min-width:0;"><div class="hw-title cab-hw-title">' + esc(hw.title || "") + "</div>" +
+        (when ? '<div class="cab-hw-due">' + (hw.lessonDate ? "урок " : "до ") + dayMonth(when) + " · сдано</div>" : '<div class="cab-hw-due">сдано</div>') +
+      "</div></div>";
+  }).join("");
   return '<div class="cab-card">' +
       '<div class="cab-card-title">Домашние задания' + (tracker.length ? "<small>сдано " + okN + " из " + tracker.length + "</small>" : "") + "</div>" +
       (tracker.length
@@ -2250,6 +2260,7 @@ function renderCabHw(data, homework) {
           '<div class="cab-mute cab-sq-cap">Каждый квадрат — задание после урока. Пустой — не сдано.</div>'
         : '<div class="cab-mute">Задания появятся здесь после урока.</div>') +
       (list ? '<div class="cab-hw-list">' + list + "</div>" : "") +
+      (done ? '<div class="cab-hw-sub">Сданные</div><div class="cab-hw-list">' + done + "</div>" : "") +
     "</div>";
 }
 
