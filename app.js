@@ -2356,6 +2356,12 @@ function renderCabWheel(data) {
   var current = (Array.isArray(wheelTopics) && wheelTopics.length)
     ? wheelTopics
     : (list.length ? (list[list.length - 1].topics || []) : []);
+  // 20.11 (Николай): пустые зоны (без оценки ни сейчас, ни в срезах) не показываем
+  var hasScore = function (v) { return v !== null && v !== undefined && v !== "" && !isNaN(Number(v)) && Number(v) > 0; };
+  var filled = {};
+  current.forEach(function (t) { if (hasScore(t.score)) filled[t.name] = 1; });
+  list.forEach(function (z) { (z.topics || []).forEach(function (t) { if (hasScore(t.score)) filled[t.name] = 1; }); });
+  current = current.filter(function (t) { return filled[t.name]; });
   if (!current.length) {
     return '<div class="cab-screen-title">Колесо баланса</div>' + gold +
       '<div class="instruction-note">Колесо заполним вместе на первом срезе.</div>';
