@@ -416,7 +416,7 @@ function backBtn(handlerName) {
 
 function go(screen) {
   // каждый новый вход в лекцию заново спрашивает уровень (упрощённая / подробная)
-  if (screen === "lecture" && state.screen !== "lecture") state._lectureLevel = null;
+  if (screen === "lecture" && state.screen !== "lecture") { state._lectureLevel = null; state._llevelSkip = false; }
   state.screen = screen;
   if (BROWSER_MODE) pushBackEntry();
   render();
@@ -1812,16 +1812,18 @@ function wireHwSwipe(overlay) {
 function wireSheetSwipe(sheet, onClose, shade) {
   if (!sheet || sheet._swipe) return;
   sheet._swipe = true;
-  var y0 = null, t0 = 0, dy = 0, dragging = false;
+  var y0 = null, x0 = 0, t0 = 0, dy = 0, dragging = false;
   sheet.addEventListener("touchstart", function (e) {
     var t = e.target;
-    if (sheet.scrollTop > 0 || e.touches.length !== 1 || (t && t.closest && t.closest("input, textarea, select"))) { y0 = null; return; }
-    y0 = e.touches[0].clientY; t0 = Date.now(); dy = 0; dragging = false;
+    // поля ввода и колёсики «Тональность/Темп» (.wh) тянутся вбок — их не трогаем
+    if (sheet.scrollTop > 0 || e.touches.length !== 1 || (t && t.closest && t.closest("input, textarea, select, .wh"))) { y0 = null; return; }
+    y0 = e.touches[0].clientY; x0 = e.touches[0].clientX; t0 = Date.now(); dy = 0; dragging = false;
   }, { passive: true });
   sheet.addEventListener("touchmove", function (e) {
     if (y0 === null) return;
     dy = e.touches[0].clientY - y0;
     if (!dragging) {
+      if (Math.abs(e.touches[0].clientX - x0) > Math.abs(dy) + 4) { y0 = null; return; }
       if (dy < 6) { if (dy < -6) y0 = null; return; }
       dragging = true;
       sheet.style.animation = "none";
@@ -4060,7 +4062,7 @@ function renderLecture() {
   });
   html += "</div>";
   html += '<div class="bottom-cta"><button class="cta" data-act="go-quiz">Пройти тест</button></div>';
-  if (hasLevels && !state._lectureLevel) {
+  if (hasLevels && !state._lectureLevel && !state._llevelSkip) {
     html += '<div class="llevel-ov"><div class="llevel-card">' +
       '<div class="llevel-title">Как будешь проходить лекцию?</div>' +
       '<div class="llevel-sub">Выбор можно поменять в любой момент — переключателем вверху.</div>' +
@@ -4070,6 +4072,9 @@ function renderLecture() {
   }
   app.innerHTML = html;
   wireActs();
+  // смахнул окно выбора — остаётся упрощённая (переключатель вверху), при следующем входе спросим снова
+  var llOv = app.querySelector(".llevel-ov");
+  if (llOv) wireSheetSwipe(llOv.querySelector(".llevel-card"), function () { state._llevelSkip = true; if (llOv.parentNode) llOv.parentNode.removeChild(llOv); }, llOv);
 }
 
 function renderQuiz() {

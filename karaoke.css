@@ -134,6 +134,8 @@ html.dark .kp .mk { color: oklch(80% 0.08 50); }
 .kp .ksheet { position: absolute; left: 16px; right: 16px; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); z-index: 3; border-radius: 26px;
   background: var(--glass); border: 1px solid var(--glass-b); -webkit-backdrop-filter: blur(30px); backdrop-filter: blur(30px); padding: 18px 18px 16px; }
 html.dark .kp .ksheet { background: oklch(30% 0.012 235 / .7); }
+/* полоска сверху — шторку можно смахнуть вниз (20.11) */
+.kp .ksheet::before { content: ""; display: block; width: 36px; height: 4px; border-radius: 2px; background: currentColor; opacity: .25; margin: -8px auto 10px; }
 .kp .ksheet .t { font: 800 16px Manrope, sans-serif; text-align: center; }
 .kp .ksheet .s { font: 500 12.5px Inter, sans-serif; color: var(--dim); text-align: center; margin-top: 3px; }
 .kp .stp { display: flex; align-items: center; justify-content: center; gap: 22px; margin: 16px 0 6px; }

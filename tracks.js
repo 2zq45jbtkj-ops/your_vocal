@@ -664,6 +664,7 @@ function karOpenColors() {
   var d = document.createElement("div");
   d.className = "ksheet kcolors";
   KP.root.appendChild(d);
+  wireSheetSwipe(d, function () { var ok = d.querySelector('[data-s="ok"]'); if (ok) ok.click(); else if (d.parentNode) d.parentNode.removeChild(d); });
   KP.sheet = d;
   karPaintColors();
 }

@@ -929,6 +929,7 @@ function karOpenSettings() {
   var d = document.createElement("div");
   d.className = "ksheet kset";
   KP.root.appendChild(d);
+  wireSheetSwipe(d, function () { var ok = d.querySelector('[data-s="ok"]'); if (ok) ok.click(); else if (d.parentNode) d.parentNode.removeChild(d); });
   KP.sheet = d;
   karPaintSettings();
 }
@@ -976,6 +977,7 @@ function karOpenSheet() {
   var d = document.createElement("div");
   d.className = "ksheet";
   KP.root.appendChild(d);
+  wireSheetSwipe(d, function () { var ok = d.querySelector('[data-s="ok"]'); if (ok) ok.click(); else if (d.parentNode) d.parentNode.removeChild(d); });
   KP.sheet = d;
   karPaintSheet();
 }

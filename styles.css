@@ -1378,6 +1378,7 @@ html.dark .cab-zone.on, body.dark .cab-zone.on { background: color-mix(in srgb, 
   width: 100%; max-width: 430px; padding: 22px 20px calc(22px + var(--tg-safe-area-inset-bottom, 0px));
   border-radius: 24px 24px 0 0; background: var(--bg); box-shadow: var(--raised-lg);
 }
+.llevel-card::before { content: ""; display: block; width: 40px; height: 5px; border-radius: 3px; background: var(--line); margin: -10px auto 16px; }
 .llevel-title { font: 800 21px 'Manrope', sans-serif; color: var(--ink); }
 .llevel-sub { margin: 6px 0 16px; font-size: 13.5px; color: var(--gray); line-height: 1.45; }
 .llevel-opt {

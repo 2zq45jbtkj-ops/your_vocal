@@ -385,6 +385,7 @@
     var d = document.createElement("div");
     d.className = "ksheet kfxs";
     kp.root.appendChild(d);
+    wireSheetSwipe(d, function () { var ok = d.querySelector('[data-s="ok"]'); if (ok) ok.click(); else if (d.parentNode) d.parentNode.removeChild(d); });
     kp.sheet = d;
     paintSheet(kp);
   }
