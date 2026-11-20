@@ -421,6 +421,7 @@ var TrackEditSheet = {
     function close() { if (preview) URL.revokeObjectURL(preview); if (ov.parentNode) ov.parentNode.removeChild(ov); }
     ov.addEventListener("click", function (e) { if (e.target === ov) close(); });
     ov.querySelector('[data-trs="cancel"]').onclick = close;
+    wireSheetSwipe(ov.querySelector(".trk-sheet"), close, ov);
     var full = ov.querySelector('[data-trs="full"]');
     if (full) full.onclick = function () { close(); onFull(); };
 

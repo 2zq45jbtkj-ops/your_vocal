@@ -1805,6 +1805,51 @@ function wireHwSwipe(overlay) {
   sheet.addEventListener("touchcancel", end);
 }
 
+/* Общий свайп вниз для любой нижней шторки с полоской (20.11, просьба
+   Николая: полоски на шторках не смахивались). Логика та же, что у шторки
+   ДЗ: тянуть можно, когда содержимое прокручено до верха; дальше 90px или
+   резкий смах — закрыть, иначе вернуть на место. Поля ввода не перехватываем. */
+function wireSheetSwipe(sheet, onClose, shade) {
+  if (!sheet || sheet._swipe) return;
+  sheet._swipe = true;
+  var y0 = null, t0 = 0, dy = 0, dragging = false;
+  sheet.addEventListener("touchstart", function (e) {
+    var t = e.target;
+    if (sheet.scrollTop > 0 || e.touches.length !== 1 || (t && t.closest && t.closest("input, textarea, select"))) { y0 = null; return; }
+    y0 = e.touches[0].clientY; t0 = Date.now(); dy = 0; dragging = false;
+  }, { passive: true });
+  sheet.addEventListener("touchmove", function (e) {
+    if (y0 === null) return;
+    dy = e.touches[0].clientY - y0;
+    if (!dragging) {
+      if (dy < 6) { if (dy < -6) y0 = null; return; }
+      dragging = true;
+      sheet.style.animation = "none";
+      sheet.style.transition = "none";
+    }
+    if (e.cancelable) e.preventDefault();
+    sheet.style.transform = "translateY(" + Math.max(0, dy) + "px)";
+  }, { passive: false });
+  function end() {
+    if (y0 === null) return;
+    y0 = null;
+    if (!dragging) return;
+    dragging = false;
+    var fast = dy > 30 && dy / Math.max(1, Date.now() - t0) > 0.6;
+    sheet.style.transition = "transform .22s ease";
+    if (dy > 90 || fast) {
+      sheet.style.transform = "translateY(110%)";
+      if (shade) { shade.style.transition = "opacity .22s ease"; shade.style.opacity = "0"; }
+      setTimeout(onClose, 220);
+    } else {
+      sheet.style.transform = "";
+    }
+  }
+  sheet.addEventListener("touchend", end);
+  sheet.addEventListener("touchcancel", end);
+}
+window.wireSheetSwipe = wireSheetSwipe;
+
 function maybeShowHwReminder() {
   if (state._hwReminderShown || state.adminMode) return;
   // «Завершил» — доступ закрыт, экран blocked; напоминать такому ученику

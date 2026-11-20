@@ -82,6 +82,7 @@ function hpGate(kind, onGo) {
       "</div>";
     wrap.querySelector('[data-hp="yes"]').onclick = function () { KAR.hp = "yes"; close(); onGo(); };
     wrap.querySelector('[data-hp="no"]').onclick = step2;
+    wireSheetSwipe(wrap.querySelector(".hp-sheet"), close, wrap);
   }
   function step2() {
     var ticked = false;
@@ -104,6 +105,7 @@ function hpGate(kind, onGo) {
     };
     go.onclick = function () { if (!ticked) return; KAR.hp = "no"; close(); onGo(); };
     wrap.querySelector('[data-hp="back"]').onclick = step1;
+    wireSheetSwipe(wrap.querySelector(".hp-sheet"), close, wrap);
   }
   step1();
 }
@@ -755,6 +757,8 @@ function karOpenLineEditor(k) {
     var sing = d.querySelector('[data-e="sing"]');
     if (sing) sing.onclick = function () { apply(); close(); karLineTap(k); };
   }
+  // смахнуть вниз = «Готово»: пометки не теряются
+  wireSheetSwipe(d, function () { apply(); close(); });
   function close() { if (d.parentNode) d.parentNode.removeChild(d); }
   function apply() {
     var changed = ed.hint.trim() !== (l.hint || "").trim() || JSON.stringify(ed.mk) !== JSON.stringify(l.mk || {});
