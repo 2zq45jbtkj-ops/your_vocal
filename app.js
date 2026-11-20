@@ -4108,11 +4108,12 @@ function renderLecture() {
   if (llOv) wireSheetSwipe(llOv.querySelector(".llevel-card"), function () { state._llevelSkip = true; if (llOv.parentNode) llOv.parentNode.removeChild(llOv); }, llOv);
 }
 
-/* Новый тест урока 1 (quizNew) — пока только на устройствах Николая (есть ключ админа):
-   10 вопросов, в подробной лекции +5. Там же сразу показываем правильный ответ. */
+/* Новый тест урока 1 (quizNew): 10 вопросов, в подробной лекции +5.
+   На устройствах Николая (есть ключ админа) сразу показываем правильный ответ. */
 function quizPreview() { return !!readAdminKey() && !!(LESSON && LESSON.quizNew); }
 function quizQuestions() {
-  if (!quizPreview()) return LESSON.quiz.questions;
+  // 21.11: новый тест открыт всем; мгновенный показ ответа (quizPreview) — только у Николая
+  if (!(LESSON && LESSON.quizNew)) return LESSON.quiz.questions;
   return LESSON.quizNew.questions.concat(state._lectureLevel === "deep" ? (LESSON.quizNew.deep || []) : []);
 }
 
