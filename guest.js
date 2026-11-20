@@ -197,6 +197,39 @@
       if (G.on) { G.toast("Это пример заданий. Свои задания появятся после первого урока."); return; }
       return origHw(i);
     };
+    // «Домашние задания» у гостя: открыто только то, что про «Дыхание»,
+    // остальные задания закрыты замком (Коля, 20.11: «открыть доступ только к теме дыхания»)
+    var origCabHw = window.renderCabHw;
+    if (origCabHw) window.renderCabHw = function (data, homework) {
+      if (!G.on) return origCabHw(data, homework);
+      var open = [], shut = [];
+      (homework || []).forEach(function (hw) { (/дыхан/i.test(String((hw && hw.title) || "")) ? open : shut).push(hw); });
+      var html = origCabHw(data, open);
+      if (!shut.length) return html;
+      var rows = shut.map(function (hw) {
+        return '<div class="cab-hw gd-hw-shut"><div class="gd-hw-lock">' + LOCK_ICO + '</div>' +
+          '<div style="flex:1;min-width:0;"><div class="hw-title cab-hw-title">' + esc(hw.title || "") + '</div>' +
+          '<div class="cab-hw-due">Закрыто в тест-драйве</div></div></div>';
+      }).join("");
+      var block = '<div class="cab-hw-sub">Закрыто в тест-драйве</div>' +
+        G.blockHtml("В тест-драйве открыта только тема «Дыхание». Остальные задания откроются после записи на занятия.") +
+        '<div class="cab-hw-list">' + rows + '</div>' +
+        '<button type="button" class="cta terra gd-cta" data-gd-trial="hw" style="margin-top:14px;">Записаться на пробный урок</button>';
+      var k = html.lastIndexOf("</div>");
+      return html.slice(0, k) + block + html.slice(k);
+    };
+    // уроки кроме «Дыхания» гостю закрыты по любому входу (плитка, дорожная карта, «следующий урок»)
+    var lockMsg = "В тест-драйве открыт только урок «Дыхание». Остальные откроются после записи на занятия.";
+    var origOpenNum = window.openLessonByNumber;
+    if (origOpenNum) window.openLessonByNumber = function (n) {
+      if (G.on && n !== 1) { G.toast(lockMsg); return; }
+      return origOpenNum(n);
+    };
+    var origSwitch = window.switchToLesson;
+    if (origSwitch) window.switchToLesson = function (n, plan) {
+      if (G.on && n !== 1) { G.toast(lockMsg); return; }
+      return origSwitch(n, plan);
+    };
     var origSupport = window.renderSupport;
     window.renderSupport = function () {
       if (!G.on) return origSupport();
@@ -233,6 +266,10 @@
     if (sc === "pitch-topic" || sc === "pitch-sing") mark("pitch");
     if (sc === "cab-wheel") mark("progress");
     if (sc === "warmups" || sc === "song") lockUploads();
+    if (sc === "cab-hw") {
+      var hb = app.querySelector('[data-gd-trial="hw"]');
+      if (hb && !hb.getAttribute("data-gd-w")) { hb.setAttribute("data-gd-w", "1"); hb.addEventListener("click", function (e) { e.stopPropagation(); goTrial("hw"); }); }
+    }
     // «Пополнить уроки» у гостя — запись на пробный
     Array.prototype.forEach.call(app.querySelectorAll('[data-act="cab-renew"]'), function (b) {
       if (b.children.length === 0) b.textContent = b.classList.contains("cab-cta-sm") ? "На пробный" : "Записаться на пробный урок";

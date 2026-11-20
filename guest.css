@@ -99,3 +99,7 @@ html.browser-mode .gd-chip { top: 10px; }
 .gd-ev.hot { color: var(--terra); font-weight: 700; }
 .gd-ev-t { flex: none; width: 40px; font-variant-numeric: tabular-nums; color: var(--gray); font-weight: 600; }
 .gd-ev-d { flex: none; font-weight: 700; color: var(--terra); }
+
+/* закрытые задания в «Домашних заданиях» гостя */
+.gd-hw-shut .cab-hw-title { color: var(--gray); }
+.gd-hw-lock { flex: none; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; color: var(--terra); }
