@@ -99,7 +99,8 @@
       if (typeof LINK_TOKEN !== "undefined" && LINK_TOKEN) return false;
       if (state.accessToken || state.isAdmin) return false;
       if (typeof readAdminKey === "function" && readAdminKey()) return false;
-      try { if (localStorage.getItem(OWNER_KEY) === "1") return false; } catch (e) {}
+      // метка «это Николай» (стояла 20.11 полчаса) уводила на экран пароля — убираем её
+      try { localStorage.removeItem(OWNER_KEY); } catch (e) {}
       src = "menu";
       G.auto = true;
     }
@@ -128,14 +129,7 @@
     var appGo = window.go;
     window.go = function (screen) { return appGo(screen === "token-entry" || screen === "tg" ? "profile" : screen); };
     G.allDone = SECTIONS.every(function (s) { return G.store.explored.indexOf(s.id) !== -1; });
-    post("hello", { src: src }).then(function (r) { return r && r.json ? r.json() : null; }).then(function (d) {
-      // Николай открыл приложение без кода на новом телефоне: это его бот, а не гость.
-      // Запоминаем и открываем обычный вход, где он вводит пароль сайта.
-      if (G.auto && d && d.owner) {
-        try { localStorage.setItem(OWNER_KEY, "1"); } catch (e) {}
-        location.reload();
-      }
-    }).catch(function () {});
+    post("hello", { src: src });
     log({ kind: "open", label: "Открыл тест-драйв" });
     document.addEventListener("click", onClickCapture, true);
     document.addEventListener("visibilitychange", onVis);
