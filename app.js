@@ -4363,26 +4363,23 @@ function firstTry(k, v) {
   try { if (localStorage.getItem(ftKey(k)) === null) localStorage.setItem(ftKey(k), String(v)); } catch (e) {}
 }
 function firstTryVal(k) { try { var v = localStorage.getItem(ftKey(k)); return v === null ? null : parseFloat(v); } catch (e) { return null; } }
-function songTrackFrac(ti, track) {
-  var c = trackCorrectness(ti, track);
-  return c.length ? c.filter(Boolean).length / c.length : 1;
-}
+// 22.11: в каждой песне допускается не больше 1 ошибки (строки с неверной разметкой)
+var SONG_MAX_ERR = 1;
+function songTrackErr(ti, track) { return trackCorrectness(ti, track).filter(function (ok) { return !ok; }).length; }
 function masterStats() {
   var tracks = (LESSON && LESSON.song && LESSON.song.tracks) || [];
   var q = firstTryVal("quiz");
-  var lines = 0, ok = 0;
-  tracks.forEach(function (t, ti) {
-    var f = firstTryVal("song" + ti);
-    if (f === null) f = songTrackFrac(ti, t);
-    lines += t.lines.length; ok += f * t.lines.length;
+  var errs = tracks.map(function (t, ti) {
+    var e = firstTryVal("songErr" + ti);
+    return e === null ? songTrackErr(ti, t) : e;
   });
-  return { quiz: q, song: lines ? ok / lines : null };
+  return { quiz: q, songErr: tracks.length ? errs : null };
 }
 function lessonMastered() {
   if (!stepFullyDone("lecture") || !state.quizDone || !stepFullyDone("warmups") || !stepFullyDone("song")) return false;
   var st = masterStats();
   if (st.quiz === null || st.quiz < MASTER_MIN) return false;
-  if (st.song !== null && st.song < MASTER_MIN) return false;
+  if (st.songErr && st.songErr.some(function (e) { return e > SONG_MAX_ERR; })) return false;
   return true;
 }
 function masterShown() { try { return localStorage.getItem(ftKey("masterShown")) === "1"; } catch (e) { return false; } }
@@ -4391,7 +4388,7 @@ function renderLessonMaster() {
   var st = masterStats(), n = quizQuestions().length;
   var parts = [];
   if (st.quiz !== null) parts.push("тест " + Math.round(st.quiz * n) + " из " + n);
-  if (st.song !== null) parts.push("разметка " + Math.round(st.song * 100) + "%");
+  if (st.songErr) parts.push(st.songErr.every(function (e) { return e === 0; }) ? "разметка без ошибок" : "разметка почти без ошибок");
   app.innerHTML =
     '<div class="quiz-result-screen lm-screen">' +
       '<div class="qr-center lm-center">' +
@@ -4411,7 +4408,7 @@ function showStepDone(kind) {
   if (kind === "song" && !masterShown() && lessonMastered()) {
     try { localStorage.setItem(ftKey("masterShown"), "1"); } catch (e) {}
     state._stepKind = "song";
-    trackEv("lesson_master", { lesson: (LESSON && LESSON.id) || 1, quiz: masterStats().quiz, song: masterStats().song });
+    trackEv("lesson_master", { lesson: (LESSON && LESSON.id) || 1, quiz: masterStats().quiz, songErr: masterStats().songErr });
     go("lesson-master");
     return;
   }
@@ -5741,7 +5738,7 @@ function renderSong() {
       var ti = btn.getAttribute("data-ti");
       // первый показ ответа — фиксируем, сколько строк было верно до подсказки
       var tr = LESSON.song.tracks[ti];
-      if (tr && !state.songRevealed[ti]) firstTry("song" + ti, songTrackFrac(+ti, tr));
+      if (tr && !state.songRevealed[ti]) firstTry("songErr" + ti, songTrackErr(+ti, tr));
       state.songRevealed[ti] = !state.songRevealed[ti];
       render();
     });
