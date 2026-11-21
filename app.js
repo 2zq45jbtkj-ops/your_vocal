@@ -475,7 +475,7 @@ function backTarget() {
     case "karaoke-play": return (window.KAR && KAR.fromAdmEdit) ? "admin-karaoke-edit" : "karaoke";
     case "pitch": return "profile";
     case "bylo": return "profile";
-    case "trainer": case "trainer-ex": case "trainer-rec": return window.trainerBackTarget ? trainerBackTarget() : "profile";
+    case "trainer": case "trainer-ex": case "trainer-rec": case "trainer-done": return window.trainerBackTarget ? trainerBackTarget() : "profile";
     case "pitch-topic": return "pitch";
     case "pitch-sing": case "pitch-score": return "pitch-topic";
     case "admin-karaoke": return "admin-hub";
@@ -3862,7 +3862,7 @@ function activeDockTab() {
   if (MAIN_TAB_SCREENS.indexOf(state.screen) !== -1) return state.screen;
   if (LESSON_SUB_SCREENS.indexOf(state.screen) !== -1) return "courses";
   if (CAB_SCREENS.indexOf(state.screen) !== -1 || state.screen === "karaoke" || state.screen === "pitch" || state.screen === "pitch-topic" || state.screen === "bylo") return "profile";
-  if (state.screen === "trainer" || state.screen === "trainer-ex" || state.screen === "trainer-rec") return (window.TRAINER && (TRAINER.from === "lesson-home" || TRAINER.from === "warmups")) ? "courses" : "profile";
+  if (state.screen === "trainer" || state.screen === "trainer-ex" || state.screen === "trainer-rec" || state.screen === "trainer-done") return (window.TRAINER && (TRAINER.from === "lesson-home" || TRAINER.from === "warmups")) ? "courses" : "profile";
   return null;
 }
 
@@ -5872,7 +5872,7 @@ function render() {
   // становится матовым и прозрачным, как в кабинете, без серой полосы (17.11).
   document.documentElement.classList.toggle("kp-open", state.screen === "karaoke-play");
   // Экран результата теста — без прокрутки страницы вообще (21.11)
-  document.documentElement.classList.toggle("no-scroll", state.screen === "quiz-result");
+  document.documentElement.classList.toggle("no-scroll", state.screen === "quiz-result" || state.screen === "trainer-done");
   stopAllMedia();
   // Прокручиваем наверх только при переходе на другой шаг/вопрос — не при
   // мелких действиях на том же экране (ответ в тесте, метка в песне и
@@ -5909,7 +5909,7 @@ function render() {
     case "karaoke": case "karaoke-play": case "admin-karaoke": case "admin-karaoke-songs": case "admin-karaoke-edit": renderKaraokeScreen(); break;
     case "pitch": case "pitch-topic": case "pitch-sing": case "pitch-score": renderPitchScreen(); break;
     case "bylo": renderByloScreen(); break;
-    case "trainer": case "trainer-ex": case "trainer-rec": if (window.renderTrainerScreen) renderTrainerScreen(); break;
+    case "trainer": case "trainer-ex": case "trainer-rec": case "trainer-done": if (window.renderTrainerScreen) renderTrainerScreen(); break;
     case "lesson-home": renderLessonHome(); break;
     case "lesson-soon": renderLessonSoon(); break;
     case "blocked": renderBlocked(); break;

@@ -372,6 +372,36 @@
     try { tg && tg.HapticFeedback && tg.HapticFeedback.notificationOccurred("success"); } catch (e) {}
     // Автосмена буквы через 1,5 с
     if (TR.exIdx < s.exercises.length - 1) TR.advTimer = setTimeout(function () { if (state.screen === "trainer-ex") switchEx(TR.exIdx + 1); }, 1500);
+    // 22.11: последняя буква раздела — финальная заставка
+    else TR.advTimer = setTimeout(function () { if (state.screen === "trainer-ex") { TR.doneFoil = true; go("trainer-done"); } }, 1500);
+  }
+
+  /* ---------- финальная заставка раздела (22.11) ----------
+     Неподвижный экран в стиле «Тест пройден»: значок + текст чуть выше центра,
+     кнопка ровно над доком, зеркальное конфетти один раз сразу после раздела. */
+  function renderDone() {
+    var s = section(), done = todayList(), st = streak(), n = s.exercises.length;
+    var allToday = SECTIONS.every(function (x) { return x.exercises.every(function (e) { return done.indexOf(x.id + ":" + e.id) !== -1; }); });
+    var back = TR.from === "warmups" ? "К распевкам" : "К разделам";
+    app.innerHTML =
+      '<div class="quiz-result-screen tr-done tone-' + s.tone + '">' +
+        '<div class="qr-center">' +
+          '<div class="result-badge tr-done-badge">' + ico(s.icon, 28) + "</div>" +
+          '<div class="tr-done-kicker">' + h(s.title) + "</div>" +
+          '<div class="result-title">' + (allToday ? "Все распевки на сегодня сделаны" : "Распевка завершена") + "</div>" +
+          '<div class="result-sub">' + n + " " + pl(n, "упражнение", "упражнения", "упражнений") + " · " + n + " мин</div>" +
+          '<div class="tr-done-streak">' + (st > 0 ? st + " " + pl(st, "день", "дня", "дней") + " подряд" : "Серия началась") + "</div>" +
+        "</div>" +
+        '<div class="tr-done-btns">' +
+          '<button type="button" class="tr-done-again" id="tr-done-again">' + ico("redo", 16) + "<span>Пройти ещё раз</span></button>" +
+          '<button type="button" class="cta tr-done-cta" id="tr-done-ok">' + back + "</button>" +
+        "</div>" +
+      "</div>";
+    wireActs();
+    document.getElementById("tr-done-ok").addEventListener("click", function () { go(TR.from === "warmups" ? "warmups" : "trainer"); });
+    document.getElementById("tr-done-again").addEventListener("click", function () { TR.exIdx = 0; TR.paused = false; go("trainer-ex"); });
+    if (window.trackEv) trackEv("trainer_section_done", { section: s.id, all: allToday });
+    if (TR.doneFoil && window.playFoilConfetti) { TR.doneFoil = false; window.playFoilConfetti(app.querySelector(".tr-done")); }
   }
 
   /* ---------- запись видео с суфлёром ---------- */
@@ -853,6 +883,7 @@
   /* ---------- подключение к app.js ---------- */
   window.renderTrainerScreen = function () {
     if (state.screen === "trainer-rec") renderRec();
+    else if (state.screen === "trainer-done") renderDone();
     else if (state.screen === "trainer-ex") renderEx();
     else renderList();
   };
@@ -864,7 +895,7 @@
   };
   window.trainerBackTarget = function () {
     if (state.screen === "trainer-rec") return "trainer-ex";
-    if (state.screen === "trainer-ex") return TR.from === "warmups" ? "warmups" : "trainer";
+    if (state.screen === "trainer-ex" || state.screen === "trainer-done") return TR.from === "warmups" ? "warmups" : "trainer";
     return TR.from || "profile";
   };
   /* Список разделов внутри «Распевок» урока (renderWarmups в app.js) */
