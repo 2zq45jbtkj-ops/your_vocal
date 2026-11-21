@@ -428,11 +428,18 @@
         "</div>" +
         '<div class="tr-rec-alt" id="tr-rec-alt" hidden>' +
           '<button type="button" class="tr-btn ghost" id="tr-cam-retry">' + ico("redo", 18) + "Ещё раз</button>" +
-          '<label class="tr-btn main">' + ico("cam", 18) + 'Снять системной камерой<input type="file" accept="video/*" capture="user" id="tr-native" hidden></label>' +
+          '<label class="tr-btn main">' + ico("cam", 18) + 'Снять или выбрать видео<input type="file" accept="video/*" id="tr-native" style="display:none;"></label>' +
+          // В Telegram на iPhone камера внутри приложения не открывается —
+          // в Safari по личной ссылке работает полная запись с лентой.
+          ((tg && state.accessToken && !window.GUEST_ON) ? '<button type="button" class="tr-btn ghost wide" id="tr-open-safari">Открыть в Safari — там камера работает вместе с лентой</button>' : "") +
         "</div>" +
       "</div>";
     document.getElementById("tr-rec-close").addEventListener("click", function () { handleBack(); });
     document.getElementById("tr-rec-go").addEventListener("click", recCountdown);
+    var saf = document.getElementById("tr-open-safari");
+    if (saf) saf.addEventListener("click", function () {
+      try { tg.openLink(location.origin + "/?k=" + encodeURIComponent(state.accessToken)); } catch (e) {}
+    });
     document.getElementById("tr-cam-retry").addEventListener("click", function () { setStatus("Включаю камеру…", ""); startCamera(); });
     document.getElementById("tr-native").addEventListener("change", function (e) {
       var f = e.target.files && e.target.files[0]; if (!f) return;
@@ -491,8 +498,9 @@
       : "Камера не включилась";
     setStatus(msg + " (" + name + ")", "warn");
     hint(name === "NotAllowedError"
-      ? "Разреши камеру и микрофон в настройках iPhone и нажми «Ещё раз». Или сними системной камерой — плечи проверю по готовому видео."
-      : "Нажми «Ещё раз» или сними системной камерой — плечи проверю по готовому видео.");
+      ? "Разреши камеру и микрофон в настройках iPhone и нажми «Ещё раз». Или сними видео кнопкой ниже — плечи проверю по готовому видео."
+      : (tg ? "В Telegram камера внутри приложения может не открываться. Открой в Safari или сними видео кнопкой ниже — плечи проверю по готовому видео."
+            : "Нажми «Ещё раз» или сними видео кнопкой ниже — плечи проверю по готовому видео."));
     var b = document.getElementById("tr-rec-go"); if (b) b.disabled = true;
     var alt = document.getElementById("tr-rec-alt"); if (alt) alt.hidden = false;
     if (window.trackEv) trackEv("trainer_cam_error", { error: name, msg: String(err && err.message || "").slice(0, 120) });
