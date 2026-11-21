@@ -1480,3 +1480,23 @@ html.dark .cab-zone.on, body.dark .cab-zone.on { background: color-mix(in srgb, 
 .pt .seg > .seg-pill { border-radius: 11px; background: var(--bg); box-shadow: var(--raised-sm); }
 .tr-tempo.seg-slide > button.on { background: transparent; }
 .tr-tempo > .seg-pill { border-radius: 10px; background: var(--blue); }
+
+/* 22.11: «Урок пройден с первого раза» — кольцо вокруг значка переливается
+   терракотовым и голубым светом, как цветной дым в караоке. */
+.lm-ring { position: relative; width: 68px; height: 68px; margin: 0 0 30px; }
+.lm-ring .result-badge { position: relative; margin: 0; z-index: 1; }
+.lm-glow {
+  position: absolute; inset: -16px; border-radius: 50%; pointer-events: none;
+  background: conic-gradient(from 0deg, var(--terra), transparent 22%, var(--blue) 40%, transparent 58%, var(--terra) 78%, transparent 90%, var(--terra));
+  filter: blur(12px); opacity: .85;
+  animation: lmSpin 9s linear infinite, lmBreath 4.5s ease-in-out infinite;
+}
+.lm-glow.b {
+  inset: -22px; filter: blur(18px); opacity: .6;
+  background: conic-gradient(from 120deg, var(--blue), transparent 25%, var(--terra) 45%, transparent 65%, var(--blue) 85%, transparent);
+  animation: lmSpinR 13s linear infinite, lmBreath 6s ease-in-out -2s infinite;
+}
+@keyframes lmSpin { to { transform: rotate(360deg); } }
+@keyframes lmSpinR { to { transform: rotate(-360deg); } }
+@keyframes lmBreath { 0%, 100% { scale: .94; } 50% { scale: 1.08; } }
+@media (prefers-reduced-motion: reduce) { .lm-glow { animation: none; } }

@@ -482,7 +482,7 @@ function backTarget() {
     case "admin-karaoke": return "admin-hub";
     case "admin-karaoke-songs": return (window.KAR && KAR.adm && KAR.adm.fromKar) ? "karaoke" : "admin-karaoke";
     case "admin-karaoke-edit": return "admin-karaoke-songs";
-    case "lecture": case "warmups": case "song": case "quiz-result": case "step-done": return "lesson-home";
+    case "lecture": case "warmups": case "song": case "quiz-result": case "step-done": case "lesson-master": return "lesson-home";
     case "feedback": return "song";
     case "quiz": return null; // отдельная логика
     default: return null;
@@ -3855,7 +3855,7 @@ function renderBlocked() {
 var MAIN_TAB_SCREENS = ["courses", "profile", "questions", "more"];
 /* Подэкраны урока и избранное относятся к вкладке «Уроки» — она подсвечивается
    и на них, даже если открыт конкретный шаг урока, а не список уроков. */
-var LESSON_SUB_SCREENS = ["lesson-home", "lecture", "quiz", "quiz-result", "warmups", "song", "feedback", "favorites", "lesson-soon", "step-done"];
+var LESSON_SUB_SCREENS = ["lesson-home", "lecture", "quiz", "quiz-result", "warmups", "song", "feedback", "favorites", "lesson-soon", "step-done", "lesson-master"];
 /* Дока нет ТОЛЬКО на экранах входа — на всех остальных она закреплена всегда. */
 var NO_DOCK_SCREENS = ["tg", "name", "token-entry", "blocked", "karaoke-play", "admin-karaoke-edit", "pitch-sing", "pitch-score"];
 
@@ -4277,6 +4277,7 @@ function renderQuiz() {
     });
     state.quizDone = true;
     state.quizScore = score;
+    firstTry("quiz", score / Math.max(1, questions.length)); // засчитывается только первая попытка
     saveState();
     sendProgressToBaza((LESSON.id || 1), "quiz");
     trackEv("quiz", { lesson: (LESSON.id || 1), score: score, total: questions.length });
@@ -4352,7 +4353,68 @@ function stepFullyDone(kind) {
   return false;
 }
 
+/* ---------- «Урок пройден с первого раза» (22.11) ----------
+   Отдельный экран, если ученик сделал все 4 шага целиком, с первой попытки
+   и не меньше чем на 70% верно (тест и разметка песни). Показывается
+   вместо заставки шага «Песня» один раз за урок; конфетти бесконечное. */
+var MASTER_MIN = 0.7;
+function ftKey(k) { return "firstTry." + ((LESSON && LESSON.id) || 1) + "." + k; }
+function firstTry(k, v) {
+  try { if (localStorage.getItem(ftKey(k)) === null) localStorage.setItem(ftKey(k), String(v)); } catch (e) {}
+}
+function firstTryVal(k) { try { var v = localStorage.getItem(ftKey(k)); return v === null ? null : parseFloat(v); } catch (e) { return null; } }
+function songTrackFrac(ti, track) {
+  var c = trackCorrectness(ti, track);
+  return c.length ? c.filter(Boolean).length / c.length : 1;
+}
+function masterStats() {
+  var tracks = (LESSON && LESSON.song && LESSON.song.tracks) || [];
+  var q = firstTryVal("quiz");
+  var lines = 0, ok = 0;
+  tracks.forEach(function (t, ti) {
+    var f = firstTryVal("song" + ti);
+    if (f === null) f = songTrackFrac(ti, t);
+    lines += t.lines.length; ok += f * t.lines.length;
+  });
+  return { quiz: q, song: lines ? ok / lines : null };
+}
+function lessonMastered() {
+  if (!stepFullyDone("lecture") || !state.quizDone || !stepFullyDone("warmups") || !stepFullyDone("song")) return false;
+  var st = masterStats();
+  if (st.quiz === null || st.quiz < MASTER_MIN) return false;
+  if (st.song !== null && st.song < MASTER_MIN) return false;
+  return true;
+}
+function masterShown() { try { return localStorage.getItem(ftKey("masterShown")) === "1"; } catch (e) { return false; } }
+
+function renderLessonMaster() {
+  var st = masterStats(), n = quizQuestions().length;
+  var parts = [];
+  if (st.quiz !== null) parts.push("тест " + Math.round(st.quiz * n) + " из " + n);
+  if (st.song !== null) parts.push("разметка " + Math.round(st.song * 100) + "%");
+  app.innerHTML =
+    '<div class="quiz-result-screen lm-screen">' +
+      '<div class="qr-center lm-center">' +
+        '<div class="lm-ring"><div class="lm-glow"></div><div class="lm-glow b"></div>' +
+          '<div class="result-badge">' + SVG.resultCheck + "</div></div>" +
+        '<div class="result-title">Урок «' + esc(LESSON.title) + '» пройден</div>' +
+        '<div class="result-sub">Всё с первого раза' + (parts.length ? ": " + parts.join(" · ") : "") + "</div>" +
+      "</div>" +
+      '<button class="cta terra qr-cta" data-act="step-done-next">Продолжить: оценить урок</button>' +
+    "</div>";
+  wireActs();
+  var scr = app.querySelector(".lm-screen");
+  if (window.playFoilConfetti) window.playFoilConfetti(scr, { loop: true, avoid: [scr.querySelector(".lm-center"), scr.querySelector(".qr-cta")] });
+}
+
 function showStepDone(kind) {
+  if (kind === "song" && !masterShown() && lessonMastered()) {
+    try { localStorage.setItem(ftKey("masterShown"), "1"); } catch (e) {}
+    state._stepKind = "song";
+    trackEv("lesson_master", { lesson: (LESSON && LESSON.id) || 1, quiz: masterStats().quiz, song: masterStats().song });
+    go("lesson-master");
+    return;
+  }
   state._stepKind = kind;
   state._stepFoil = stepFullyDone(kind);
   trackEv("step_done", { lesson: (LESSON && LESSON.id) || 1, step: kind, full: state._stepFoil });
@@ -5677,6 +5739,9 @@ function renderSong() {
   Array.prototype.forEach.call(app.querySelectorAll(".reveal-link"), function (btn) {
     btn.addEventListener("click", function () {
       var ti = btn.getAttribute("data-ti");
+      // первый показ ответа — фиксируем, сколько строк было верно до подсказки
+      var tr = LESSON.song.tracks[ti];
+      if (tr && !state.songRevealed[ti]) firstTry("song" + ti, songTrackFrac(+ti, tr));
       state.songRevealed[ti] = !state.songRevealed[ti];
       render();
     });
@@ -5965,7 +6030,7 @@ function render() {
   // становится матовым и прозрачным, как в кабинете, без серой полосы (17.11).
   document.documentElement.classList.toggle("kp-open", state.screen === "karaoke-play");
   // Экран результата теста — без прокрутки страницы вообще (21.11)
-  document.documentElement.classList.toggle("no-scroll", state.screen === "quiz-result" || state.screen === "trainer-done" || state.screen === "step-done");
+  document.documentElement.classList.toggle("no-scroll", state.screen === "quiz-result" || state.screen === "trainer-done" || state.screen === "step-done" || state.screen === "lesson-master");
   lectureClock();
   stopAllMedia();
   // Прокручиваем наверх только при переходе на другой шаг/вопрос — не при
@@ -6011,6 +6076,7 @@ function render() {
     case "quiz": renderQuiz(); break;
     case "quiz-result": renderQuizResult(); break;
     case "step-done": renderStepDone(); break;
+    case "lesson-master": renderLessonMaster(); break;
     case "warmups": renderWarmups(); break;
     case "song": renderSong(); break;
     case "feedback": renderFeedback(); break;
