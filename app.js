@@ -4227,11 +4227,33 @@ function renderQuiz() {
     "</div>" +
     '<div class="quiz-cta-wrap"><button id="quiz-next" class="cta' + (isLast ? " terra" : "") + '"' + (hasAnswer ? "" : " disabled") + ">" + (isLast ? "Завершить" : "Далее") + "</button></div>";
 
+  // 21.11: выбор ответа НЕ перерисовывает экран — меняем только отметки на месте.
+  // Раньше полный render() пересобирал страницу (с картинкой/анимацией), высота
+  // на миг проседала и страница прыгала вверх. Теперь место нажатия не сдвигается.
   Array.prototype.forEach.call(app.querySelectorAll(".quiz-opt"), function (el) {
     el.addEventListener("click", function () {
-      state.quizAnswers[state.quizIndex] = parseInt(el.getAttribute("data-opt"), 10);
+      var pick = parseInt(el.getAttribute("data-opt"), 10);
+      state.quizAnswers[state.quizIndex] = pick;
       saveState();
-      render();
+      answered = pick; hasAnswer = true;
+      Array.prototype.forEach.call(app.querySelectorAll(".quiz-opt"), function (o) {
+        var i = parseInt(o.getAttribute("data-opt"), 10);
+        o.classList.toggle("sel", i === pick);
+        o.classList.toggle("right", !!preview && i === cq.correct);
+        o.classList.toggle("wrong", !!preview && i === pick && i !== cq.correct);
+      });
+      if (preview) {
+        var card = app.querySelector(".quiz-card");
+        var ex = card && card.querySelector(".quiz-explain");
+        if (pick !== cq.correct && cq.explain) {
+          if (!ex && card) { ex = document.createElement("div"); ex.className = "quiz-explain"; ex.textContent = cq.explain; card.appendChild(ex); }
+        } else if (ex) ex.parentNode.removeChild(ex);
+      }
+      var cnt = state.quizAnswers.filter(function (a) { return a !== null && a !== undefined; }).length;
+      var ring = app.querySelector(".quiz-ring-big");
+      if (ring) ring.style.background = "conic-gradient(oklch(56% 0.09 235) " + Math.round(cnt / questions.length * 100) + "%, oklch(87% 0.01 70) 0)";
+      var nb = document.getElementById("quiz-next");
+      if (nb) nb.disabled = false;
     });
   });
   document.getElementById("quiz-next").addEventListener("click", function () {
