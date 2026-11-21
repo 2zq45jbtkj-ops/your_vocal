@@ -1504,12 +1504,14 @@ html.dark .cab-zone.on, body.dark .cab-zone.on { background: color-mix(in srgb, 
 .qr-center.lm-card {
   left: 18px; right: 18px; max-width: 394px; margin: 0 auto;
   padding: 46px 22px 28px; border-radius: 28px;
-  /* 22.11: матовое стекло — прозрачность 30% (фон 70%) */
-  background: color-mix(in srgb, var(--bg) 70%, transparent);
-  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  /* 22.11: матовое стекло — прозрачность 50% (30% + ещё 20%), размытие сильнее */
+  background: color-mix(in srgb, var(--bg) 50%, transparent);
+  -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px);
   box-shadow: var(--raised-lg);
 }
 .lm-card .lm-ring { margin-bottom: 30px; }
+/* значок на стеклянной карточке остаётся сплошным, непрозрачным */
+.lm-card .result-badge { background: var(--bg); opacity: 1; }
 /* 22.11: нижняя кнопка экрана — всегда над доком, на одном уровне везде
    (та же формула, что у .qr-cta на «Тест пройден») */
 .dock-cta {
