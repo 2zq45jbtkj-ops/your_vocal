@@ -3655,6 +3655,13 @@ function lecturePanelsHtml(blk) {
     "</div>";
 }
 
+/* Лекция «Сила работы»: шкала усилия со смыканием связок, «Что видит врач», предупреждение */
+function effortBlockHtml(blk) {
+  if (blk.type === "effort-scale") return '<div class="ef-scale-mount"></div>';
+  if (blk.type === "effort-anatomy") return '<div class="ef-anatomy-mount"></div>';
+  return '<div class="ef-warn"><div class="ef-warn-t">⚠︎ ' + esc(blk.title || "") + '</div><div class="ef-warn-p">' + esc(blk.text || "") + "</div></div>";
+}
+
 function planLectureHtml(lecture) {
   if (!lecture || !lecture.blocks) return "";
   var html = "";
@@ -3674,6 +3681,8 @@ function planLectureHtml(lecture) {
       html += '<p class="lecture-para">' + esc(blk.text) + "</p>";
     } else if (blk.type === "scale") {
       html += lectureScaleHtml(blk);
+    } else if (blk.type === "effort-scale" || blk.type === "effort-anatomy" || blk.type === "warning") {
+      html += effortBlockHtml(blk); // effort-anim.js монтирует шкалу и связки сам
     } else if (blk.type === "table") {
       html += lectureTableHtml(blk);
     } else if (blk.type === "panels") {
@@ -4072,6 +4081,8 @@ function renderLecture() {
       html += '<p class="lecture-para">' + esc(blk.text) + "</p>";
     } else if (blk.type === "scale") {
       html += lectureScaleHtml(blk);
+    } else if (blk.type === "effort-scale" || blk.type === "effort-anatomy" || blk.type === "warning") {
+      html += effortBlockHtml(blk); // effort-anim.js монтирует шкалу и связки сам
     } else if (blk.type === "table") {
       html += lectureTableHtml(blk);
     } else if (blk.type === "panels") {

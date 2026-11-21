@@ -1,0 +1,63 @@
+/* Лекция «Сила работы голоса» (effort-anim.js): шкала усилия со смыканием
+   связок и анатомическая схема «Что видит врач». Карточки всегда тёмные —
+   как у анимаций «Дыхания». */
+@font-face {
+  font-family: 'SeptDyn';
+  src: url('vendor/sept-dyn.woff2') format('woff2');
+  font-display: block;
+}
+.ef {
+  margin: 18px -8px 8px; padding: 14px 12px 12px; border-radius: 20px;
+  background: #1b2024; color: #e3e7ea; box-shadow: var(--raised-sm);
+  font-family: 'Inter', sans-serif; -webkit-user-select: none; user-select: none;
+}
+.ef-modes { display: flex; gap: 6px; margin-bottom: 14px; }
+.ef-btn {
+  flex: 1; min-height: 34px; border-radius: 12px; border: 1px solid #3d474d; background: #2b3236;
+  color: #c9d1d6; font: 500 13px 'Inter', sans-serif; cursor: pointer; padding: 0 4px;
+  transition: background .2s, border-color .2s, color .2s;
+}
+.ef-btn.on { border-color: #3a8bb8; color: #e3e7ea; background: #2f3b42; }
+.ef-track { position: relative; height: 34px; margin: 0 0 4px; }
+.ef-line { position: absolute; left: 0; right: 0; top: 16px; height: 2px; background: #3a4247; }
+.ef-danger { position: absolute; left: 80%; right: 0; top: 15px; height: 4px; border-radius: 2px; background: rgba(240,149,149,.33); }
+.ef-dot, .ef-ring {
+  position: absolute; top: 17px; width: 18px; height: 18px; border-radius: 50%; transform: translate(-50%, -50%);
+}
+.ef-dot { background: #3a8bb8; border: 3px solid #1b2024; transition: left .45s cubic-bezier(.3,1.4,.5,1), background .3s; }
+.ef-ring { background: #e24b4a; opacity: 0; }
+@keyframes ef-pu { 0% { transform: translate(-50%,-50%) scale(1); opacity: .7; } 100% { transform: translate(-50%,-50%) scale(2.6); opacity: 0; } }
+.ef-cells { display: grid; grid-template-columns: repeat(10, 1fr); border-radius: 16px; overflow: hidden; }
+.ef-cell { height: 46px; display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer; }
+.ef-nus { display: grid; grid-template-columns: repeat(10, 1fr); margin-top: 8px; }
+.ef-nu {
+  border-top: 1px solid #3d474d; padding-top: 2px; height: 26px; display: flex; align-items: center;
+  justify-content: center; color: #c9d1d6; white-space: nowrap; cursor: pointer;
+}
+.ef-nu.hot { border-top-color: #f09595; }
+.ef-dy { font-family: 'SeptDyn'; line-height: 1; letter-spacing: -1.2px; }
+.ef-dt { font-family: Georgia, 'Times New Roman', serif; font-style: italic; font-weight: 700; letter-spacing: -.8px; }
+.ef-ends { display: flex; justify-content: space-between; font-size: 12px; color: #8b969d; margin-top: 4px; }
+.ef-fig { margin-top: 12px; }
+.ef-fig svg { display: block; width: 100%; height: auto; font-family: 'Inter', sans-serif; }
+.ef-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.ef-stat { background: #22282c; border-radius: 12px; padding: 8px 10px; }
+.ef-stat small { display: block; font-size: 11px; color: #8b969d; }
+.ef-stat b { font-size: 18px; font-weight: 600; }
+.ef-read { margin-top: 8px; background: #22282c; border-radius: 12px; padding: 10px 12px; font-size: 14px; color: #c9d1d6; line-height: 1.45; border: 1px solid transparent; }
+.ef-read.red { border-color: #a32d2d; }
+.ef-read-top { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; margin-bottom: 4px; }
+.ef-states { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px; }
+.ef-st {
+  min-height: 34px; border-radius: 10px; border: 1px solid #3d474d; background: #2b3236;
+  color: #c9d1d6; font: 500 13px 'Inter', sans-serif; cursor: pointer;
+}
+.ef-st.on { border-color: #e07a4a; color: #f3b08f; }
+.ef-row { display: flex; gap: 6px; margin-top: 8px; }
+.ef-legend { display: grid; grid-template-columns: 22px 1fr; gap: 4px 6px; font-size: 13px; line-height: 1.35; margin-top: 10px; color: #c9d1d6; }
+.ef-legend b { font-weight: 600; color: #e07a4a; }
+.ef-desc { font-size: 14px; line-height: 1.55; color: #c9d1d6; margin-top: 10px; }
+.ef-foot { font-size: 11px; color: #6c777e; margin-top: 6px; line-height: 1.4; }
+.ef-warn { margin: 16px 0 6px; padding: 14px 16px; border-radius: 18px; background: #3a2224; border: 1px solid #a32d2d; }
+.ef-warn-t { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600; color: #f7c1c1; margin-bottom: 6px; }
+.ef-warn-p { font-size: 14px; line-height: 1.55; color: #f1d6d6; }
