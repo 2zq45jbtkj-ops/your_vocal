@@ -470,6 +470,7 @@ function backTarget() {
     case "admin-dash": return "admin-hub";
     case "admin-guests": return "admin-hub";
     case "admin-plans": return "admin-hub";
+    case "admin-screens": return "admin-hub";
     case "admin-plan": return "admin-plans";
     case "karaoke": return "profile";
     case "token-entry": return state._afterAdminLogin ? "karaoke" : null;
@@ -482,7 +483,8 @@ function backTarget() {
     case "admin-karaoke": return "admin-hub";
     case "admin-karaoke-songs": return (window.KAR && KAR.adm && KAR.adm.fromKar) ? "karaoke" : "admin-karaoke";
     case "admin-karaoke-edit": return "admin-karaoke-songs";
-    case "lecture": case "warmups": case "song": case "quiz-result": case "step-done": case "lesson-master": return "lesson-home";
+    case "lecture": case "warmups": case "song": case "quiz-result": return "lesson-home";
+    case "step-done": case "lesson-master": return state._preview ? "admin-screens" : "lesson-home";
     case "feedback": return "song";
     case "quiz": return null; // отдельная логика
     default: return null;
@@ -3361,6 +3363,10 @@ function renderAdminHub() {
       icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 18V5l11-2v13" stroke="var(--gray)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="18" r="3" stroke="var(--gray)" stroke-width="1.9"/><circle cx="17" cy="16" r="3" stroke="var(--gray)" stroke-width="1.9"/></svg>'
     },
     {
+      label: "Финальные заставки", act: "admin-hub-screens", sub: "Посмотреть заставки окончания шагов урока «Дыхание»",
+      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="var(--gray)" stroke-width="1.4"/><path d="M5.5 8.2l1.8 1.8 3.4-3.8" stroke="var(--terra)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    },
+    {
       label: "Планы уроков", act: "admin-hub-plans", sub: "По темам срезов и колеса баланса",
       icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3.5 2.5h9a1 1 0 011 1v9a1 1 0 01-1 1h-9a1 1 0 01-1-1v-9a1 1 0 011-1z" stroke="var(--gray)" stroke-width="1.3" stroke-linejoin="round"/><path d="M5.5 6h5M5.5 8.5h5M5.5 11h3" stroke="var(--gray)" stroke-width="1.3" stroke-linecap="round"/></svg>'
     }
@@ -4384,8 +4390,29 @@ function lessonMastered() {
 }
 function masterShown() { try { return localStorage.getItem(ftKey("masterShown")) === "1"; } catch (e) { return false; } }
 
+function renderAdminScreens() {
+  var rows = [
+    ["lecture", "Лекция прочитана", "Обычная заставка, конфетти после 3 минут чтения"],
+    ["warmups", "Распевки выполнены", "Обычная заставка, конфетти если всё сделано и видео отправлено"],
+    ["song", "Упражнение выполнено", "Обычная заставка шага «Песня»"],
+    ["trainer", "Раздел тренажёра", "Например, «Спокойствие: готово»"],
+    ["master", "Урок пройден с первого раза", "Бесконечное конфетти и светящееся кольцо"]
+  ];
+  app.innerHTML =
+    '<div class="top pb8">' + backBtn("back") +
+      '<div><div class="top-title lg">Финальные заставки</div><div class="top-sub">Просмотр — прогресс учеников не меняется</div></div>' +
+    "</div>" +
+    '<div style="padding:8px 16px 130px;display:flex;flex-direction:column;gap:10px;">' +
+    rows.map(function (r) {
+      return '<div class="more-item" data-act="admin-preview" data-k="' + r[0] + '">' +
+        '<div style="flex:1;min-width:0;"><div class="more-item-label">' + esc(r[1]) + '</div><div class="lesson-sub" style="margin-top:1px;">' + esc(r[2]) + "</div></div>" +
+        SVG.chevronRight + "</div>";
+    }).join("") + "</div>";
+  wireActs();
+}
+
 function renderLessonMaster() {
-  var st = masterStats(), n = quizQuestions().length;
+  var st = state._preview ? { quiz: 0.9, songErr: [0, 0, 0] } : masterStats(), n = LESSON ? quizQuestions().length : 10;
   var parts = [];
   if (st.quiz !== null) parts.push("тест " + Math.round(st.quiz * n) + " из " + n);
   if (st.songErr) parts.push(st.songErr.every(function (e) { return e === 0; }) ? "разметка без ошибок" : "разметка почти без ошибок");
@@ -4394,7 +4421,7 @@ function renderLessonMaster() {
       '<div class="qr-center lm-center">' +
         '<div class="lm-ring"><div class="lm-glow"></div><div class="lm-glow b"></div>' +
           '<div class="result-badge">' + SVG.resultCheck + "</div></div>" +
-        '<div class="result-title">Урок «' + esc(LESSON.title) + '» пройден</div>' +
+        '<div class="result-title">Урок «' + esc((LESSON && LESSON.title) || "Дыхание") + '» пройден</div>' +
         '<div class="result-sub">Всё с первого раза' + (parts.length ? ": " + parts.join(" · ") : "") + "</div>" +
       "</div>" +
       '<button class="cta terra qr-cta" data-act="step-done-next">Продолжить: оценить урок</button>' +
@@ -5909,6 +5936,7 @@ var ACTS = {
   "finish-warmups": function () { state.warmupsDone = true; saveState(); sendProgressToBaza((LESSON.id || 1), "warmups"); showStepDone("warmups"); },
   "finish-lesson": function () { state.songDone = true; saveState(); sendProgressToBaza((LESSON.id || 1), "song"); submitSongMarks(); showStepDone("song"); },
   "step-done-next": function () {
+    if (state._preview) { go("admin-screens"); return; }
     var k = state._stepKind;
     if (k === "lecture") ACTS["go-quiz"]();
     else if (k === "warmups") go("song");
@@ -5940,6 +5968,16 @@ var ACTS = {
   "admin-hub-dash": function () { go("admin-dash"); },
   "admin-hub-guests": function () { if (window.GUEST) GUEST.adminOpenList(); },
   "admin-hub-plans": function () { go("admin-plans"); },
+  "admin-hub-screens": function () { state._preview = false; go("admin-screens"); },
+  "admin-preview": function (el) {
+    // 22.11: просмотр заставки для Николая — прогресс урока не меняется
+    var k = el.getAttribute("data-k");
+    if (LESSON_ONE) LESSON = LESSON_ONE;
+    state._preview = true;
+    if (k === "master") { go("lesson-master"); return; }
+    if (k === "trainer") { if (window.trainerPreviewDone) trainerPreviewDone(); return; }
+    state._stepKind = k; state._stepFoil = true; go("step-done");
+  },
   "undo-unstar": undoUnstar,
   "cal-prev": function () {
     var m = state.calMonth - 1, y = state.calYear;
@@ -6061,6 +6099,7 @@ function render() {
     case "admin-dash": if (window.renderAdminDash) renderAdminDash(); break;
     case "admin-guests": if (window.renderAdminGuests) renderAdminGuests(); break;
     case "admin-plans": renderAdminPlans(); break;
+    case "admin-screens": renderAdminScreens(); break;
     case "admin-plan": renderAdminPlanDetail(); break;
     case "karaoke": case "karaoke-play": case "admin-karaoke": case "admin-karaoke-songs": case "admin-karaoke-edit": renderKaraokeScreen(); break;
     case "pitch": case "pitch-topic": case "pitch-sing": case "pitch-score": renderPitchScreen(); break;

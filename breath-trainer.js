@@ -382,8 +382,8 @@
   function renderDone() {
     // 22.11: дизайн один в один с «Тест пройден»; значок — иконка раздела
     var s = section(), n = s.exercises.length;
-    var back = TR.from === "warmups" ? "К распевкам" : "К разделам";
-    var full = sectionFull(s);
+    var back = TR.preview ? "Назад к заставкам" : TR.from === "warmups" ? "К распевкам" : "К разделам";
+    var full = TR.preview || sectionFull(s);
     app.innerHTML =
       '<div class="quiz-result-screen tr-done">' +
         '<div class="qr-center">' +
@@ -395,8 +395,8 @@
         '<button type="button" class="cta terra qr-cta" id="tr-done-ok">' + back + "</button>" +
       "</div>";
     wireActs();
-    document.getElementById("tr-done-ok").addEventListener("click", function () { go(TR.from === "warmups" ? "warmups" : "trainer"); });
-    if (window.trackEv) trackEv("trainer_section_done", { section: s.id, full: full });
+    document.getElementById("tr-done-ok").addEventListener("click", function () { if (TR.preview) { TR.preview = false; go("admin-screens"); return; } go(TR.from === "warmups" ? "warmups" : "trainer"); });
+    if (window.trackEv && !TR.preview) trackEv("trainer_section_done", { section: s.id, full: full });
     // конфетти — только если все буквы раздела сделаны и видео ушло Николаю
     if (TR.doneFoil && full && window.playFoilConfetti) window.playFoilConfetti(app.querySelector(".tr-done"));
     TR.doneFoil = false;
@@ -410,6 +410,8 @@
     var done = todayList();
     return sentToday(s.id) && s.exercises.every(function (x) { return done.indexOf(s.id + ":" + x.id) !== -1; });
   }
+  /* 22.11: просмотр заставки раздела из «Режима админа» (с конфетти) */
+  window.trainerPreviewDone = function () { TR.from = "admin"; TR.sid = "calm"; TR.preview = true; TR.doneFoil = true; go("trainer-done"); };
   /* Для заставки «Распевки выполнены»: все буквы всех разделов хоть раз сделаны */
   window.trainerAllDone = function () {
     var log = loadLog(), all = {};
@@ -913,6 +915,7 @@
   };
   window.trainerBackTarget = function () {
     if (state.screen === "trainer-rec") return "trainer-ex";
+    if (state.screen === "trainer-done" && TR.preview) { TR.preview = false; return "admin-screens"; }
     if (state.screen === "trainer-ex" || state.screen === "trainer-done") return TR.from === "warmups" ? "warmups" : "trainer";
     return TR.from || "profile";
   };
