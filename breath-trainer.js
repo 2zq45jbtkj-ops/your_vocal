@@ -387,6 +387,7 @@
     if (REC.rec && REC.rec.state !== "inactive") { REC.discard = true; try { REC.rec.stop(); } catch (e) {} }
     REC.rec = null;
     if (REC.stream) { REC.stream.getTracks().forEach(function (t) { t.stop(); }); REC.stream = null; }
+    audioForPlay();
     if (state.screen !== "trainer-rec" && REC.url) { URL.revokeObjectURL(REC.url); REC.url = ""; REC.blob = null; }
     if (state.screen !== "trainer-rec") REC.phase = "off";
   }
@@ -463,7 +464,15 @@
     { video: { facingMode: "user" }, audio: true },
     { video: true, audio: true }
   ];
+  /* ГЛАВНОЕ (21.11): заставка (splash.js) ставит звуку режим "ambient" — в нём
+     iPhone вообще не даёт включить камеру/микрофон: getUserMedia падает с
+     InvalidStateError, окно разрешения даже не появляется (в Safari, в Telegram
+     и с иконки). Перед камерой переключаем звук в "play-and-record", после — в "auto". */
+  function audioForRecord() { try { if (navigator.audioSession) navigator.audioSession.type = "play-and-record"; } catch (e) {} }
+  function audioForPlay() { try { if (navigator.audioSession) navigator.audioSession.type = "auto"; } catch (e) {} }
+
   function startCamera() {
+    audioForRecord();
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { camFailed({ name: "NoMediaDevices" }); return; }
     var i = 0, lastErr = null;
     (function attempt() {
@@ -476,6 +485,7 @@
     })();
   }
   function camReady(stream) {
+    try { localStorage.setItem(CAM_KEY, "1"); } catch (e) {}
     if (state.screen !== "trainer-rec") { stream.getTracks().forEach(function (t) { t.stop(); }); return; }
     REC.stream = stream;
     var alt = document.getElementById("tr-rec-alt"); if (alt) alt.hidden = true;
@@ -623,6 +633,7 @@
       REC.duration = Math.round((performance.now() - REC.startedAt) / 1000);
       REC.phase = "review"; REC.sendStatus = "";
       if (REC.stream) { REC.stream.getTracks().forEach(function (t) { t.stop(); }); REC.stream = null; }
+      audioForPlay();
       if (REC.poseTimer) { cancelAnimationFrame(REC.poseTimer); REC.poseTimer = 0; }
       if (state.screen === "trainer-rec") renderReview();
     };
@@ -843,6 +854,44 @@
         "</span></button>";
     });
     return '<div class="tr-in-warmups">' + html + "</div>";
+  };
+  /* Разрешение камеры заранее: карточка в «Распевках». Окно iPhone
+     «Разрешить доступ к камере» появляется по кнопке, ответ сохраняется. */
+  var CAM_KEY = "trainerCamOk";
+  function camOk() { try { return localStorage.getItem(CAM_KEY) === "1"; } catch (e) { return false; } }
+  window.trainerCamCardHtml = function () {
+    var ok = camOk();
+    return '<div class="tr-camcard' + (ok ? " ok" : "") + '" id="tr-camcard">' +
+      '<span class="tr-camcard-ic">' + ico(ok ? "check" : "cam", 20) + "</span>" +
+      '<span class="tr-camcard-tx"><b>' + (ok ? "Камера разрешена" : "Разреши камеру заранее") + "</b>" +
+        '<span id="tr-camcard-sub">' + (ok ? "Можно записывать упражнения и сразу отправлять Николаю" : "Телефон спросит доступ к камере и микрофону — нажми «Разрешить». Это нужно один раз") + "</span></span>" +
+      (ok ? "" : '<button type="button" class="tr-camcard-btn" id="tr-camcard-btn">Разрешить</button>') +
+    "</div>";
+  };
+  window.trainerWireCamCard = function () {
+    var b = document.getElementById("tr-camcard-btn"); if (!b) return;
+    b.addEventListener("click", function () {
+      var sub = document.getElementById("tr-camcard-sub");
+      audioForRecord();
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { if (sub) sub.textContent = "Здесь камера недоступна — обнови iOS или открой приложение в Safari"; return; }
+      b.disabled = true; b.textContent = "…";
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: true }).then(function (st) {
+        st.getTracks().forEach(function (t) { t.stop(); });
+        audioForPlay();
+        try { localStorage.setItem(CAM_KEY, "1"); } catch (e) {}
+        var card = document.getElementById("tr-camcard");
+        if (card) card.outerHTML = window.trainerCamCardHtml();
+        if (window.trackEv) trackEv("trainer_cam_ok", {});
+      }).catch(function (e) {
+        audioForPlay();
+        b.disabled = false; b.textContent = "Ещё раз";
+        var n = (e && e.name) || "Error";
+        if (sub) sub.textContent = n === "NotAllowedError"
+          ? "Доступ запрещён. Включи камеру и микрофон для этого приложения в Настройках iPhone и нажми «Ещё раз» (" + n + ")"
+          : "Камера не включилась (" + n + "). Нажми «Ещё раз»";
+        if (window.trackEv) trackEv("trainer_cam_error", { error: n, where: "precheck" });
+      });
+    });
   };
   window.trainerWireSections = function (from) {
     Array.prototype.forEach.call(app.querySelectorAll("[data-tr-open]"), function (b) {

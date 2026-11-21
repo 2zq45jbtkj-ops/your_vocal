@@ -76,6 +76,17 @@
 /* список разделов внутри «Распевок» */
 .tr-in-warmups { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
 
+/* карточка «Разреши камеру заранее» */
+.tr-camcard { display: flex; align-items: center; gap: 12px; margin-top: 14px; padding: 14px 14px 14px 16px; border-radius: 18px; background: color-mix(in srgb, var(--terra) 14%, transparent); }
+.tr-camcard.ok { background: color-mix(in srgb, var(--blue) 14%, transparent); }
+.tr-camcard-ic { width: 40px; height: 40px; flex: none; border-radius: 12px; background: var(--terra); color: var(--white-text); display: flex; align-items: center; justify-content: center; }
+.tr-camcard.ok .tr-camcard-ic { background: var(--blue); }
+.tr-camcard-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.tr-camcard-tx b { font: 800 15px 'Manrope', sans-serif; color: var(--ink); }
+.tr-camcard-tx span { font: 400 13px/1.35 'Inter', sans-serif; color: var(--gray); }
+.tr-camcard-btn { flex: none; height: 40px; padding: 0 14px; border: 0; border-radius: 12px; background: var(--terra); color: var(--white-text); font: 800 14px 'Manrope', sans-serif; cursor: pointer; }
+.tr-camcard-btn:disabled { opacity: .6; }
+
 /* кнопка «Записать видео» на экране ленты */
 .tr-rec-open { display: flex; align-items: center; justify-content: center; gap: 10px; height: 52px; margin-top: 18px; border: 0; border-radius: 16px; background: var(--tr-c); color: var(--tr-on); font: 800 16px 'Manrope', sans-serif; }
 

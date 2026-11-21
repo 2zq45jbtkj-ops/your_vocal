@@ -4604,6 +4604,7 @@ function renderWarmups() {
         '<div class="instruction-note">Музыка не нужна — выполняй упражнения, глядя на ленту. Каждая буква длится минуту. ' +
           'Нажми <b>«Записать видео для Николая»</b>: поставь телефон так, чтобы в рамке были макушка и пояс, — после упражнения видео сразу уйдёт Николаю. ' +
           'Телефон заодно следит, чтобы на вдохе не поднимались плечи.</div>' +
+        (window.trainerCamCardHtml ? trainerCamCardHtml() : "") +
         trainerSectionsHtml() +
         '<div class="section-label" style="margin:22px 0 8px;">Или прикрепи готовое видео</div>' +
         '<div id="hw-zone"></div>' +
@@ -4612,6 +4613,7 @@ function renderWarmups() {
     renderHwZone();
     wireActs();
     trainerWireSections("warmups");
+    if (window.trainerWireCamCard) trainerWireCamCard();
     return;
   }
   var cards = "";
