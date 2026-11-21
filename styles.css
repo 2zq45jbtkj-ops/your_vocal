@@ -1446,3 +1446,14 @@ html.dark .cab-zone.on, body.dark .cab-zone.on { background: color-mix(in srgb, 
 .dash-dots i { width: 12px; height: 12px; border-radius: 4px; box-shadow: var(--inset-sm); }
 .dash-dots i.on { background: var(--terra); box-shadow: none; }
 .dash-foot { font: 500 11.5px/1.45 Inter, sans-serif; color: var(--gray); text-align: center; padding: 0 8px; }
+
+/* ---------- переключатели-ползунки: плашка едет, как в доке (segEnhance) ---------- */
+.seg-slide { position: relative; }
+.seg-slide > .seg-pill { position: absolute; z-index: 0; pointer-events: none; transition: opacity .2s; }
+.seg-slide > :not(.seg-pill) { position: relative; z-index: 1; transition: color .25s; }
+.llevel-seg.seg-slide > button.on { background: transparent; box-shadow: none; }
+.llevel-seg > .seg-pill { border-radius: 10px; background: var(--bg); box-shadow: var(--raised-sm); }
+.pt .seg.seg-slide > div.on { background: transparent; box-shadow: none; }
+.pt .seg > .seg-pill { border-radius: 11px; background: var(--bg); box-shadow: var(--raised-sm); }
+.tr-tempo.seg-slide > button.on { background: transparent; }
+.tr-tempo > .seg-pill { border-radius: 10px; background: var(--blue); }

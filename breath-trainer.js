@@ -145,7 +145,8 @@
     var cycle = 0; ex.seq.forEach(function (e) { cycle += e.dur * k; });
     var reps = Math.max(1, Math.round(EX_SECONDS / cycle));
     var out = [], t = 0;
-    for (var r = 0; r < reps; r++) ex.seq.forEach(function (e) { var d = e.dur * k; out.push({ type: e.type, label: e.label, peak: e.peak, dur: d, start: t }); t += d; });
+    for (var r = 0; r < reps; r++) ex.seq.forEach(function (e) { var d = e.dur * k; out.push({ type: e.type, label: e.label, peak: e.peak, dur: d, start: t, rep: r }); t += d; });
+    TR.reps = reps;
     TR.events = out; TR.total = t; TR.t = -1.5; TR.cur = -1; TR.finished = false; TR.left = Math.ceil(t);
   }
 
@@ -226,17 +227,28 @@
           "</div>" +
         "</div>" +
         '<div class="tr-head"><h1 class="tr-h1">' + h(ex.title) + '</h1><p class="tr-sub">' + h(ex.hint) + "</p></div>" +
-        '<div class="tr-cue-wrap"><div class="tr-cue" id="tr-cue"></div></div>' +
+        // Вариант 2 (21.11): буква слева в кольце-таймере, справа время до смены и повторы
+        '<div class="tr-cue-row">' +
+          '<div class="tr-ring-wrap">' +
+            '<svg class="tr-ring" width="120" height="120" viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="54" class="tr-ring-bg"/><circle cx="60" cy="60" r="54" class="tr-ring-fg" id="tr-ring" stroke-dasharray="' + RING_C + '" stroke-dashoffset="0" transform="rotate(-90 60 60)"/></svg>' +
+            '<div class="tr-cue" id="tr-cue"></div>' +
+          "</div>" +
+          '<div class="tr-cue-info">' +
+            '<span class="tr-cue-l" id="tr-next-l"></span>' +
+            '<b class="tr-cue-t" id="tr-next-t"></b>' +
+            '<span class="tr-cue-d" id="tr-count"></span>' +
+            '<div class="tr-reps" id="tr-reps" aria-hidden="true"></div>' +
+          "</div>" +
+        "</div>" +
         '<div class="tr-lane" style="height:' + LANE_H + 'px"><div class="tr-strip" id="tr-strip">' + laneItemsHtml() + '</div><div class="tr-hit"></div><div class="tr-fade"></div></div>' +
-        '<button type="button" class="tr-rec-open" id="tr-rec-open">' + ico("cam", 20) + "<span>Записать видео для Николая</span></button>" +
-        '<div class="tr-stats"><span>Сделано</span><b id="tr-count">0 <i>/ ' + countable() + "</i></b></div>" +
-        '<div class="tr-stats tr-next"><span id="tr-next-l"></span><b id="tr-next-t"></b></div>' +
+        '<div class="tr-chips" style="grid-template-columns:repeat(' + s.exercises.length + ',minmax(0,1fr))">' + chips + "</div>" +
         '<div class="tr-tempo" role="group" aria-label="Темп">' +
           [["slow", "Медленно"], ["mid", "Средне"], ["fast", "Быстро"]].map(function (p) {
             return '<button type="button" data-tr-tempo="' + p[0] + '"' + (TR.tempo === p[0] ? ' class="on" aria-pressed="true"' : ' aria-pressed="false"') + ">" + p[1] + "</button>";
           }).join("") +
         "</div>" +
-        '<div class="tr-chips" style="grid-template-columns:repeat(' + s.exercises.length + ',minmax(0,1fr))">' + chips + "</div>" +
+        // кнопка записи — в самом конце, под всеми настройками
+        '<button type="button" class="tr-rec-open" id="tr-rec-open">' + ico("cam", 20) + "<span>Записать видео для Николая</span></button>" +
       "</div>";
     wireActs();
     document.getElementById("tr-rec-open").addEventListener("click", function () {
@@ -265,7 +277,8 @@
       b.addEventListener("click", function () { switchEx(parseInt(b.getAttribute("data-tr-ex"), 10)); });
     });
     if (TR.soundOn && !TR.pad) { TR.pad = makePad(s.pad); if (TR.paused && TR.pad) TR.pad.suspend(); }
-    paintCue(); paintNext();
+    paintCue(); paintNext(); paintRing();
+    if (window.segEnhance) segEnhance();
     startLoop();
   }
 
@@ -279,6 +292,23 @@
     window.scrollTo(0, y);
   }
 
+  var RING_C = 339.3; // 2π·54
+  function paintRing() {
+    var r = document.getElementById("tr-ring"); if (!r || !TR.total) return;
+    var frac = TR.finished ? 1 : Math.max(0, Math.min(1, TR.t / TR.total));
+    r.setAttribute("stroke-dashoffset", (RING_C * frac).toFixed(1));
+  }
+  function paintReps() {
+    var done = TR.finished ? TR.reps : (TR.cur >= 0 && TR.events[TR.cur] ? TR.events[TR.cur].rep : 0);
+    var cnt = document.getElementById("tr-count");
+    if (cnt) cnt.innerHTML = "Сделано <b>" + done + " из " + TR.reps + "</b>";
+    var bars = document.getElementById("tr-reps");
+    if (bars) {
+      if (TR.reps > 12) { bars.innerHTML = ""; return; }
+      var html = ""; for (var i = 0; i < TR.reps; i++) html += '<i class="' + (i < done ? "on" : "") + '"></i>';
+      bars.innerHTML = html;
+    }
+  }
   function paintCue() {
     var el = document.getElementById("tr-cue"); if (!el) return;
     var e = TR.events[TR.cur], txt, rest = false;
@@ -292,10 +322,7 @@
     el.classList.toggle("rest", rest);
     el.classList.toggle("small", txt.length > 3);
     if (e && e.type === "pulse" && !TR.finished) { el.classList.remove("hit"); void el.offsetWidth; el.classList.add("hit"); }
-    // счётчик
-    var c = 0; for (var i = 0; i < TR.cur && i < TR.events.length; i++) { var t = TR.events[i].type; if (t === "pulse" || t === "glide" || t === "long") c++; }
-    if (TR.finished) c = countable();
-    var cnt = document.getElementById("tr-count"); if (cnt) cnt.innerHTML = c + " <i>/ " + countable() + "</i>";
+    paintReps();
     // пройденные элементы ленты приглушаем
     var prev = app.querySelector('.tr-li[data-i="' + (TR.cur - 1) + '"]'); if (prev) prev.classList.add("past");
   }
@@ -303,8 +330,8 @@
   function paintNext() {
     var s = section(), last = TR.exIdx >= s.exercises.length - 1;
     var l = document.getElementById("tr-next-l"), t = document.getElementById("tr-next-t"); if (!l) return;
-    if (TR.finished) { l.textContent = last ? "Раздел пройден — отличная работа!" : "Переходим к следующему"; t.textContent = ""; return; }
-    l.textContent = last ? "До конца раздела" : "Дальше «" + s.exercises[TR.exIdx + 1].chip + "» через";
+    if (TR.finished) { l.textContent = last ? "Раздел пройден" : "Переходим к следующему"; t.textContent = last ? "✓" : "0:00"; return; }
+    l.textContent = last ? "до конца раздела" : "до буквы «" + s.exercises[TR.exIdx + 1].chip + "»";
     t.textContent = Math.floor(TR.left / 60) + ":" + String(TR.left % 60).padStart(2, "0");
   }
 
@@ -317,6 +344,7 @@
       var strip = document.getElementById("tr-strip");
       if (!strip) { TR.raf = 0; return; }
       strip.style.transform = "translate3d(" + (HIT_X - TR.t * PPS) + "px,0,0)";
+      paintRing();
       var left = Math.max(0, Math.ceil(TR.total - Math.max(0, TR.t)));
       if (left !== TR.left) { TR.left = left; paintNext(); }
       var i = -1;
@@ -589,7 +617,7 @@
 
   function showWarn(t) {
     var el = document.getElementById("tr-sh-warn"); if (!el) return;
-    el.textContent = t; el.classList.add("on");
+    el.innerHTML = (window.icoWarn ? icoWarn(20) : "") + "<span>" + h(t) + "</span>"; el.classList.add("on");
     clearTimeout(REC.warnTimer);
     REC.warnTimer = setTimeout(function () { el.classList.remove("on"); }, 2200);
   }
@@ -860,12 +888,11 @@
   var CAM_KEY = "trainerCamOk";
   function camOk() { try { return localStorage.getItem(CAM_KEY) === "1"; } catch (e) { return false; } }
   window.trainerCamCardHtml = function () {
-    var ok = camOk();
-    return '<div class="tr-camcard' + (ok ? " ok" : "") + '" id="tr-camcard">' +
-      '<span class="tr-camcard-ic">' + ico(ok ? "check" : "cam", 20) + "</span>" +
-      '<span class="tr-camcard-tx"><b>' + (ok ? "Камера разрешена" : "Разреши камеру заранее") + "</b>" +
-        '<span id="tr-camcard-sub">' + (ok ? "Можно записывать упражнения и сразу отправлять Николаю" : "Телефон спросит доступ к камере и микрофону — нажми «Разрешить». Это нужно один раз") + "</span></span>" +
-      (ok ? "" : '<button type="button" class="tr-camcard-btn" id="tr-camcard-btn">Разрешить</button>') +
+    if (camOk()) return "";
+    return '<div class="tr-camcard" id="tr-camcard">' +
+      '<span class="tr-camcard-ic">' + (window.icoWarn ? icoWarn(22) : "!") + "</span>" +
+      '<span class="tr-camcard-tx" id="tr-camcard-sub">Разреши камеру для записи упражнений</span>' +
+      '<button type="button" class="tr-camcard-btn" id="tr-camcard-btn">Разрешить</button>' +
     "</div>";
   };
   window.trainerWireCamCard = function () {
@@ -880,15 +907,15 @@
         audioForPlay();
         try { localStorage.setItem(CAM_KEY, "1"); } catch (e) {}
         var card = document.getElementById("tr-camcard");
-        if (card) card.outerHTML = window.trainerCamCardHtml();
+        if (card) card.remove();
         if (window.trackEv) trackEv("trainer_cam_ok", {});
       }).catch(function (e) {
         audioForPlay();
         b.disabled = false; b.textContent = "Ещё раз";
         var n = (e && e.name) || "Error";
         if (sub) sub.textContent = n === "NotAllowedError"
-          ? "Доступ запрещён. Включи камеру и микрофон для этого приложения в Настройках iPhone и нажми «Ещё раз» (" + n + ")"
-          : "Камера не включилась (" + n + "). Нажми «Ещё раз»";
+          ? "Камера запрещена — включи её в Настройках iPhone (" + n + ")"
+          : "Камера не включилась (" + n + ")";
         if (window.trackEv) trackEv("trainer_cam_error", { error: n, where: "precheck" });
       });
     });

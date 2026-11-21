@@ -63,6 +63,16 @@ var LESSON_ONE = null; // урок 1 целиком — единственный
 // без ограничений по качеству/длительности) уходит преподавателю не через
 // сервер, а напрямую в Telegram-чат с ботом.
 var MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
+/* Единый знак «Внимание» для всего приложения (21.11, просьба Николая):
+   красный треугольник с белым восклицательным знаком. Используй icoWarn(size)
+   везде, где нужно срочно обратить внимание ученика. */
+function icoWarn(size) {
+  size = size || 22;
+  return '<svg class="ico-warn" width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+    '<path d="M12 3.5L2.8 19.5h18.4L12 3.5z" fill="#E5484D" stroke="#E5484D" stroke-width="2" stroke-linejoin="round"/>' +
+    '<path d="M12 9.6v4.6" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="16.9" r="1.25" fill="#fff"/></svg>';
+}
+window.icoWarn = icoWarn;
 var TEACHER_BOT_USERNAME = "your_vocal_teacher_bot";
 
 /* ---------- состояние ---------- */
@@ -3661,7 +3671,7 @@ function lecturePanelsHtml(blk) {
 function effortBlockHtml(blk) {
   if (blk.type === "effort-scale") return '<div class="ef-scale-mount"></div>';
   if (blk.type === "effort-anatomy") return '<div class="ef-anatomy-mount"></div>';
-  return '<div class="ef-warn"><div class="ef-warn-t">⚠︎ ' + esc(blk.title || "") + '</div><div class="ef-warn-p">' + esc(blk.text || "") + "</div></div>";
+  return '<div class="ef-warn"><div class="ef-warn-t">' + icoWarn(20) + esc(blk.title || "") + '</div><div class="ef-warn-p">' + esc(blk.text || "") + "</div></div>";
 }
 
 function planLectureHtml(lecture) {
@@ -3910,6 +3920,48 @@ function renderDock() {
 // отпускании встаёт на ближайший пункт.
 var dockDragState = { lastX: null, lastTab: null, tapped: false, justDragged: false, run: null };
 var DOCK_SPRING = "cubic-bezier(.34,1.35,.5,1)";
+
+/* Переключатели-«ползунки» (21.11, просьба Николая): выбранная плашка не
+   перескакивает, а плавно едет к новой кнопке — той же пружиной, что в доке.
+   Работает для всех переключателей из SEG_SLIDERS, в том числе когда экран
+   перерисовывается целиком: прошлое место плашки запоминаем по ключу. */
+var SEG_SLIDERS = [".llevel-seg", ".pt .seg", ".tr-tempo"];
+var SEG_LAST = {};
+function segEnhance() {
+  SEG_SLIDERS.forEach(function (sel) {
+    Array.prototype.forEach.call(document.querySelectorAll(sel), function (box, n) {
+      var items = Array.prototype.filter.call(box.children, function (c) { return !c.classList.contains("seg-pill"); });
+      var on = items.filter(function (c) { return c.classList.contains("on"); })[0];
+      var pill = box.querySelector(":scope > .seg-pill");
+      if (!on) { if (pill) pill.style.opacity = 0; return; }
+      if (!pill) {
+        pill = document.createElement("span");
+        pill.className = "seg-pill"; pill.setAttribute("aria-hidden", "true");
+        box.insertBefore(pill, box.firstChild);
+        box.classList.add("seg-slide");
+      }
+      var key = (state.screen || "") + "|" + sel + "|" + n;
+      var to = { x: on.offsetLeft, y: on.offsetTop, w: on.offsetWidth, h: on.offsetHeight };
+      if (!to.w) return;
+      var cur = pill.dataset.x != null ? { x: +pill.dataset.x, w: +pill.dataset.w } : SEG_LAST[key];
+      pill.style.opacity = 1;
+      pill.style.left = to.x + "px"; pill.style.top = to.y + "px";
+      pill.style.width = to.w + "px"; pill.style.height = to.h + "px";
+      if (cur && (Math.abs(cur.x - to.x) > 1 || Math.abs(cur.w - to.w) > 1) && pill.animate && !dockReducedMotion()) {
+        pill.animate([{ left: cur.x + "px", width: cur.w + "px" }, { left: to.x + "px", width: to.w + "px" }], { duration: 460, easing: DOCK_SPRING });
+      }
+      pill.dataset.x = to.x; pill.dataset.w = to.w;
+      SEG_LAST[key] = { x: to.x, w: to.w };
+    });
+  });
+}
+window.segEnhance = segEnhance;
+// Нажатие внутри переключателя: экран может перерисоваться своей функцией,
+// поэтому догоняем плашку на следующем кадре.
+document.addEventListener("click", function (e) {
+  var t = e.target;
+  if (t && t.closest && t.closest(SEG_SLIDERS.join(","))) requestAnimationFrame(function () { requestAnimationFrame(segEnhance); });
+}, true);
 // Поворот iPad / смена ширины: старая позиция плашки уже неверна — не ведём от неё.
 window.addEventListener("resize", function () { dockDragState.lastX = null; });
 function dockReducedMotion() {
@@ -5837,6 +5889,7 @@ function render() {
   }
   renderAdminBanner();
   renderDock();
+  segEnhance();
   maybeCelebrate();
   if (window.GUEST_ON) GUEST.afterRender();
 }

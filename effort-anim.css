@@ -61,3 +61,5 @@
 .ef-warn { margin: 16px 0 6px; padding: 14px 16px; border-radius: 18px; background: #3a2224; border: 1px solid #a32d2d; }
 .ef-warn-t { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600; color: #f7c1c1; margin-bottom: 6px; }
 .ef-warn-p { font-size: 14px; line-height: 1.55; color: #f1d6d6; }
+
+.ef-warn-t .ico-warn { flex: none; }

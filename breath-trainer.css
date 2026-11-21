@@ -76,16 +76,31 @@
 /* список разделов внутри «Распевок» */
 .tr-in-warmups { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
 
-/* карточка «Разреши камеру заранее» */
-.tr-camcard { display: flex; align-items: center; gap: 12px; margin-top: 14px; padding: 14px 14px 14px 16px; border-radius: 18px; background: color-mix(in srgb, var(--terra) 14%, transparent); }
-.tr-camcard.ok { background: color-mix(in srgb, var(--blue) 14%, transparent); }
-.tr-camcard-ic { width: 40px; height: 40px; flex: none; border-radius: 12px; background: var(--terra); color: var(--white-text); display: flex; align-items: center; justify-content: center; }
-.tr-camcard.ok .tr-camcard-ic { background: var(--blue); }
-.tr-camcard-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.tr-camcard-tx b { font: 800 15px 'Manrope', sans-serif; color: var(--ink); }
-.tr-camcard-tx span { font: 400 13px/1.35 'Inter', sans-serif; color: var(--gray); }
-.tr-camcard-btn { flex: none; height: 40px; padding: 0 14px; border: 0; border-radius: 12px; background: var(--terra); color: var(--white-text); font: 800 14px 'Manrope', sans-serif; cursor: pointer; }
+/* «Разреши камеру» — компактная строка со знаком «Внимание» (icoWarn) */
+.tr-camcard { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 8px 8px 8px 12px; border-radius: 14px; background: color-mix(in srgb, #E5484D 12%, transparent); }
+.tr-camcard-ic { flex: none; display: flex; }
+.tr-camcard-tx { flex: 1; min-width: 0; font: 600 13px/1.3 'Inter', sans-serif; color: var(--ink); }
+.tr-camcard-btn { flex: none; height: 32px; padding: 0 12px; border: 0; border-radius: 10px; background: var(--terra); color: var(--white-text); font: 800 13px 'Manrope', sans-serif; cursor: pointer; }
 .tr-camcard-btn:disabled { opacity: .6; }
+
+/* буква в кольце-таймере + время (вариант 2, 21.11) */
+.tr-ex .tr-cue-row { display: flex; align-items: center; gap: 20px; margin-top: 16px; margin-bottom: 14px; }
+.tr-ring-wrap { position: relative; width: 120px; height: 120px; flex: none; display: flex; align-items: center; justify-content: center; }
+.tr-ring { position: absolute; inset: 0; }
+.tr-ring-bg { fill: none; stroke: var(--line); stroke-width: 5; }
+.tr-ring-fg { fill: none; stroke: var(--blue); stroke-width: 5; stroke-linecap: round; }
+.tr-ring-wrap .tr-cue { width: 90px; height: 90px; border-radius: 45px; }
+.tr-cue-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tr-cue-l { font: 400 14px 'Inter', sans-serif; color: var(--gray); }
+.tr-cue-t { font: 800 40px/1.05 'Manrope', sans-serif; color: var(--ink); font-variant-numeric: tabular-nums; }
+.tr-cue-d { margin-top: 8px; font: 400 14px 'Inter', sans-serif; color: var(--gray); }
+.tr-cue-d b { color: var(--ink); font-weight: 700; }
+.tr-reps { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+.tr-reps i { width: 22px; height: 6px; border-radius: 3px; background: var(--line); }
+.tr-reps i.on { background: var(--tr-c); }
+.tr-ex .tr-chips { margin-top: 16px; }
+.tr-ex .tr-tempo { margin-top: 12px; }
+.tr-ex .tr-rec-open { margin-top: 14px; }
 
 /* кнопка «Записать видео» на экране ленты */
 .tr-rec-open { display: flex; align-items: center; justify-content: center; gap: 10px; height: 52px; margin-top: 18px; border: 0; border-radius: 16px; background: var(--tr-c); color: var(--tr-on); font: 800 16px 'Manrope', sans-serif; }
@@ -114,7 +129,7 @@
 .tr-rec-status.ok { color: #9BE0B8; }
 .tr-rec-status.warn { color: #F0B497; }
 .tr-rec-status.rec { color: #FF8A80; }
-.tr-sh-warn { position: absolute; left: 12px; right: 12px; top: 62px; padding: 10px 12px; border-radius: 14px; background: #AE5F3F; color: #fff; font: 700 14px/1.3 'Inter', sans-serif; text-align: center; opacity: 0; transform: translateY(-6px); transition: opacity .25s, transform .25s; pointer-events: none; }
+.tr-sh-warn { display: flex; align-items: center; gap: 8px; position: absolute; left: 12px; right: 12px; top: 62px; padding: 10px 12px; border-radius: 14px; background: rgba(14,18,22,.88); border: 1px solid #E5484D; color: #fff; font: 700 14px/1.3 'Inter', sans-serif; text-align: left; opacity: 0; transform: translateY(-6px); transition: opacity .25s, transform .25s; pointer-events: none; }
 .tr-sh-warn.on { opacity: 1; transform: none; }
 .tr-cd { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: 800 96px 'Manrope', sans-serif; color: #fff; text-shadow: 0 4px 24px rgba(0,0,0,.5); opacity: 0; pointer-events: none; }
 .tr-cd.on { opacity: 1; }
@@ -154,3 +169,5 @@
 .tr-prog > div { height: 100%; background: var(--tr-c); border-radius: 4px; transition: width .3s; }
 
 @media (prefers-reduced-motion: reduce) { .tr-cue.hit { animation: none; } .tr-rec-dot i { animation: none; } }
+
+.tr-sh-warn .ico-warn { flex: none; }
