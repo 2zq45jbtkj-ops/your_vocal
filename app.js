@@ -300,7 +300,8 @@ function maybeCelebrate() {
   if (pct === 100 && !state.celebrated) {
     state.celebrated = true;
     saveState();
-    showConfetti();
+    // 22.11: окно «Готово на 100%» с конфетти убрано по просьбе Николая —
+    // теперь празднуют финальные заставки шагов (renderStepDone)
   }
 }
 
