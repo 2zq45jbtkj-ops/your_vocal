@@ -1488,11 +1488,11 @@ html.dark .cab-zone.on, body.dark .cab-zone.on { background: color-mix(in srgb, 
 .lm-glow {
   position: absolute; inset: -16px; border-radius: 50%; pointer-events: none;
   background: conic-gradient(from 0deg, var(--terra), transparent 22%, var(--blue) 40%, transparent 58%, var(--terra) 78%, transparent 90%, var(--terra));
-  filter: blur(12px); opacity: .85;
+  filter: blur(12px) saturate(1.1); opacity: .85; /* +10% насыщенности */
   animation: lmSpin 9s linear infinite, lmBreath 4.5s ease-in-out infinite;
 }
 .lm-glow.b {
-  inset: -22px; filter: blur(18px); opacity: .6;
+  inset: -22px; filter: blur(18px) saturate(1.1); opacity: .6;
   background: conic-gradient(from 120deg, var(--blue), transparent 25%, var(--terra) 45%, transparent 65%, var(--blue) 85%, transparent);
   animation: lmSpinR 13s linear infinite, lmBreath 6s ease-in-out -2s infinite;
 }
@@ -1504,7 +1504,10 @@ html.dark .cab-zone.on, body.dark .cab-zone.on { background: color-mix(in srgb, 
 .qr-center.lm-card {
   left: 18px; right: 18px; max-width: 394px; margin: 0 auto;
   padding: 46px 22px 28px; border-radius: 28px;
-  background: var(--bg); box-shadow: var(--raised-lg);
+  /* 22.11: матовое стекло — прозрачность 30% (фон 70%) */
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  box-shadow: var(--raised-lg);
 }
 .lm-card .lm-ring { margin-bottom: 30px; }
 /* 22.11: нижняя кнопка экрана — всегда над доком, на одном уровне везде

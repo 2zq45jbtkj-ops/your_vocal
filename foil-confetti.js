@@ -41,8 +41,8 @@
     function step(){
       if(!cv.isConnected){window.removeEventListener("resize",rs);return;}
       T++;while(Q.length&&Q[0][0]<=T)Q.shift()[1]();
-      if(opts.loop&&T>=nextAt){var sp=freeSpot();burst(sp[0],sp[1],28+Math.round(Math.random()*16),3,7);nextAt=T+45+Math.round(Math.random()*40);
-        if(P.length>500)P=P.filter(function(p){return p.y<=H+60;});}
+      if(opts.loop&&T>=nextAt){var sp=freeSpot();burst(sp[0],sp[1],56+Math.round(Math.random()*32),3,7);nextAt=T+45+Math.round(Math.random()*40);
+        if(P.length>900)P=P.filter(function(p){return p.y<=H+60;});}
       fx.clearRect(0,0,W,H);bx.clearRect(0,0,W,H);if(!opts.behind){clipOut(fx);clipOut(bx);}var alive=Q.length+(opts.loop?1:0),wind=Math.sin(T*.008)*.3+Math.sin(T*.021)*.12;
       for(var k=0;k<P.length;k++){var p=P[k];if(p.y>H+60)continue;alive++;var cx=p.front?fx:bx;
         if(p.land>0){p.land--;p.y+=.2;p.x+=(p.x-BC.x)*.004;p.rx*=.93;p.ry*=.93;p.ph+=.01;if(p.land===0||Math.hypot(p.x-BC.x,p.y-BC.y)>BC.r-2){p.land=0;p.vy=.6;p.vx=(p.x-BC.x)*.03;p.wx=(Math.random()-.5)*.2;p.wy=(Math.random()-.5)*.2;}}
