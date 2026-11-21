@@ -4280,6 +4280,7 @@ function renderQuiz() {
     sendProgressToBaza((LESSON.id || 1), "quiz");
     trackEv("quiz", { lesson: (LESSON.id || 1), score: score, total: questions.length });
     submitQuizResult(score, questions.length, wrongDetails);
+    state._foilPending = true; // конфетти только сразу после завершения теста
     go("quiz-result");
   });
   wireActs();
@@ -4298,6 +4299,10 @@ function renderQuizResult() {
       '<button class="cta terra qr-cta" data-act="go-warmups-free">Продолжить: распевки</button>' +
     "</div>";
   wireActs();
+  if (state._foilPending && window.playFoilConfetti) {
+    state._foilPending = false;
+    window.playFoilConfetti(app.querySelector(".quiz-result-screen"));
+  }
 }
 
 /* ---------- распевки ---------- */
