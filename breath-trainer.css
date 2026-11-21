@@ -1,0 +1,83 @@
+/* Тренажёр дыхания «Ритм-лента» — breath-trainer.js */
+.tr-screen { box-sizing: border-box; display: flex; flex-direction: column; gap: 16px; padding: var(--screen-top) 20px calc(var(--tg-safe-area-inset-bottom, 0px) + 130px); color: var(--ink); }
+.tr-screen button { font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.tone-terra { --tr-c: var(--terra); --tr-on: var(--white-text); --tr-soft: color-mix(in srgb, var(--terra) 16%, transparent); --tr-acc: var(--terra); }
+.tone-blue { --tr-c: var(--blue); --tr-on: var(--white-text); --tr-soft: color-mix(in srgb, var(--blue) 15%, transparent); --tr-acc: var(--blue); }
+.tone-sky { --tr-c: #8FB0C4; --tr-on: #12171C; --tr-soft: color-mix(in srgb, #8FB0C4 18%, transparent); --tr-acc: var(--blue); }
+.tone-sand { --tr-c: #D6A289; --tr-on: #12171C; --tr-soft: color-mix(in srgb, #D6A289 20%, transparent); --tr-acc: var(--terra); }
+
+.tr-kicker { font: 700 12px 'Manrope', sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--gray); }
+.tr-head { padding: 0 2px; }
+.tr-h1 { margin: 4px 0 0; font: 800 21px/1.25 'Manrope', sans-serif; color: var(--ink); }
+.tr-h1.lg { font-size: 24px; }
+.tr-sub { margin: 6px 0 0; font: 400 15px/1.4 'Inter', sans-serif; color: var(--gray); }
+
+.tr-today { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 16px; background: var(--bgmuted); font: 600 14px 'Inter', sans-serif; }
+.tr-today b { font-weight: 700; }
+.tr-today span { font-weight: 700; color: var(--terra); white-space: nowrap; }
+
+.tr-card { display: flex; gap: 14px; align-items: flex-start; padding: 16px; border-radius: 20px; border: 0; background: var(--tr-soft); color: var(--ink); text-align: left; width: 100%; }
+.tr-card-ic { width: 48px; height: 48px; flex: none; border-radius: 14px; background: var(--tr-c); color: var(--tr-on); display: flex; align-items: center; justify-content: center; }
+.tr-card-tx { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.tr-card-t { font: 800 17px 'Manrope', sans-serif; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tr-card-ok { display: inline-flex; align-items: center; gap: 3px; font: 700 12px 'Inter', sans-serif; color: var(--blue); }
+.tr-card-d { font: 400 14px/1.35 'Inter', sans-serif; color: var(--tx3); }
+.tr-card-m { font: 700 13px 'Inter', sans-serif; color: var(--tr-acc); }
+
+/* экран упражнения */
+.tr-ex { padding-left: 0; padding-right: 0; gap: 0; }
+.tr-ex > *:not(.tr-lane) { margin-left: 22px; margin-right: 22px; }
+.tr-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; }
+.tr-top-l { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.tr-top .back-btn { margin: 0; }
+.tr-top-btns { display: flex; gap: 8px; }
+.tr-round { width: 44px; height: 44px; border-radius: 22px; border: 0; background: var(--bgmuted); color: var(--ink); display: flex; align-items: center; justify-content: center; }
+.tr-sound { height: 44px; padding: 0 14px; border-radius: 22px; border: 0; background: var(--bgmuted); color: var(--ink); font: 700 14px 'Manrope', sans-serif; display: flex; align-items: center; gap: 7px; transition: background .3s, color .3s; }
+.tr-sound.on { background: var(--tr-c); color: var(--tr-on); }
+.tr-ex .tr-head { margin-top: 14px; }
+
+.tr-cue-wrap { height: 140px; display: flex; align-items: center; justify-content: center; margin-top: 6px; }
+.tr-cue { width: 96px; height: 96px; border-radius: 48px; background: var(--tr-c); color: var(--tr-on); display: flex; align-items: center; justify-content: center; font: 700 38px 'Manrope', sans-serif; transition: background .25s, color .25s; box-shadow: 0 0 34px color-mix(in srgb, var(--tr-c) 35%, transparent); }
+.tr-cue.small { font-size: 22px; }
+.tr-cue.rest { background: var(--bgmuted); color: var(--gray); box-shadow: none; font-size: 20px; }
+.tr-cue.hit { animation: trHit .42s ease-out; }
+@keyframes trHit { 0% { transform: scale(1.14); } 100% { transform: scale(1); } }
+
+.tr-lane { position: relative; margin-top: 4px; background: color-mix(in srgb, var(--blue) 10%, transparent); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); overflow: hidden; }
+.tr-strip { position: absolute; left: 0; top: 0; height: 100%; will-change: transform; }
+.tr-hit { position: absolute; left: 64px; top: 0; bottom: 0; width: 4px; background: var(--ink); opacity: .85; box-shadow: 0 0 16px color-mix(in srgb, var(--ink) 50%, transparent); }
+.tr-fade { position: absolute; left: 0; top: 0; bottom: 0; width: 64px; background: linear-gradient(90deg, var(--bg) 30%, transparent); pointer-events: none; }
+.tr-li { position: absolute; transition: opacity .3s; }
+.tr-li.past { opacity: .35; }
+.tr-li-inh { top: 44px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding-left: 14px; box-sizing: border-box; color: var(--gray); font: 700 13px 'Inter', sans-serif; }
+.tr-li-hold { width: 24px; height: 24px; border-radius: 12px; border: 2px dashed var(--gray); box-sizing: border-box; }
+.tr-li-long { top: 51px; height: 48px; border-radius: 24px; background: var(--blue); color: var(--white-text); display: flex; align-items: center; padding-left: 18px; box-sizing: border-box; font: 800 17px 'Manrope', sans-serif; white-space: nowrap; overflow: hidden; }
+.tr-li-pulse { top: 57px; width: 36px; height: 36px; border-radius: 18px; background: var(--tr-c); color: var(--tr-on); display: flex; align-items: center; justify-content: center; font: 800 15px 'Manrope', sans-serif; }
+.tr-li-glide { top: 0; }
+.tr-li-glide path { stroke: var(--tr-c); }
+.tr-li-glide text { fill: var(--ink); font: 700 14px 'Inter', sans-serif; }
+
+.tr-stats { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-top: 20px; font: 400 15px 'Inter', sans-serif; color: var(--gray); }
+.tr-stats b { font: 800 21px 'Manrope', sans-serif; color: var(--ink); font-variant-numeric: tabular-nums; }
+.tr-stats i { font-style: normal; font-size: 15px; font-weight: 600; color: var(--gray); }
+.tr-next { margin-top: 10px; }
+.tr-next b { font-size: 18px; }
+
+.tr-tempo { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; background: var(--bgmuted); padding: 4px; border-radius: 14px; margin-top: 16px; }
+.tr-tempo button { height: 44px; border: 0; border-radius: 10px; background: transparent; color: var(--gray); font: 600 15px 'Inter', sans-serif; }
+.tr-tempo button.on { background: var(--blue); color: var(--white-text); font-weight: 700; }
+
+.tr-chips { display: grid; gap: 8px; margin-top: 18px; }
+.tr-chipx { height: 56px; border: 0; border-radius: 14px; background: var(--bgmuted); color: var(--gray); font: 800 15px 'Manrope', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.tr-chipx small { font-size: 12px; }
+.tr-chipx.ok { background: color-mix(in srgb, var(--blue) 22%, transparent); color: var(--blue); }
+.tr-chipx.on { background: var(--tr-c); color: var(--tr-on); }
+
+/* строка входа в уроке «Дыхание» */
+.tr-entry { display: flex; align-items: center; gap: 12px; margin-top: 18px; padding: 14px 16px; border-radius: 18px; border: 0; width: 100%; background: color-mix(in srgb, var(--terra) 14%, transparent); color: var(--ink); text-align: left; cursor: pointer; }
+.tr-entry-ic { width: 40px; height: 40px; flex: none; border-radius: 12px; background: var(--terra); color: var(--white-text); display: flex; align-items: center; justify-content: center; }
+.tr-entry b { display: block; font: 800 16px 'Manrope', sans-serif; }
+.tr-entry span span { display: block; font: 400 13px/1.35 'Inter', sans-serif; color: var(--gray); margin-top: 2px; }
+.tr-entry-go { margin-left: auto; color: var(--gray); font-size: 22px; }
+
+@media (prefers-reduced-motion: reduce) { .tr-cue.hit { animation: none; } }
