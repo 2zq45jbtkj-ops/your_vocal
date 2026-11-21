@@ -135,4 +135,10 @@
 .tr-btn.main:disabled { opacity: .55; }
 .tr-btn.next { background: rgba(242,236,231,.1); color: #F2ECE7; }
 
+.tr-rec-alt { flex: none; display: grid; grid-template-columns: 1fr 1.6fr; gap: 10px; padding: 12px 18px 0; }
+.tr-rec-alt[hidden] { display: none; }
+.tr-rec-alt label.tr-btn { cursor: pointer; text-align: center; font-size: 14px; }
+.tr-prog { height: 8px; border-radius: 4px; background: rgba(242,236,231,.12); overflow: hidden; }
+.tr-prog > div { height: 100%; background: var(--tr-c); border-radius: 4px; transition: width .3s; }
+
 @media (prefers-reduced-motion: reduce) { .tr-cue.hit { animation: none; } .tr-rec-dot i { animation: none; } }

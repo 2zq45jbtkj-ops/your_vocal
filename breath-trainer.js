@@ -369,6 +369,11 @@
     return POSE.loading;
   }
 
+  // MediaPipe в режиме VIDEO требует растущие отметки времени — общий счётчик
+  // для живой камеры и для разбора готового видео.
+  var poseTs = 0;
+  function poseDetect(v, ms) { poseTs = Math.max(poseTs + 1, Math.round(ms)); return POSE.lm.detectForVideo(v, poseTs); }
+
   function pickMime() {
     var list = ["video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/mp4", "video/webm;codecs=vp8,opus", "video/webm"];
     if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return "";
@@ -421,9 +426,18 @@
           '<div class="tr-rec-info"><b>' + h(ex.title) + '</b><span id="tr-rec-hint">Поставь телефон так, чтобы макушка и пояс были на линиях</span></div>' +
           '<button type="button" class="tr-rec-btn" id="tr-rec-go" aria-label="Начать запись"><i></i></button>' +
         "</div>" +
+        '<div class="tr-rec-alt" id="tr-rec-alt" hidden>' +
+          '<button type="button" class="tr-btn ghost" id="tr-cam-retry">' + ico("redo", 18) + "Ещё раз</button>" +
+          '<label class="tr-btn main">' + ico("cam", 18) + 'Снять системной камерой<input type="file" accept="video/*" capture="user" id="tr-native" hidden></label>' +
+        "</div>" +
       "</div>";
     document.getElementById("tr-rec-close").addEventListener("click", function () { handleBack(); });
     document.getElementById("tr-rec-go").addEventListener("click", recCountdown);
+    document.getElementById("tr-cam-retry").addEventListener("click", function () { setStatus("Включаю камеру…", ""); startCamera(); });
+    document.getElementById("tr-native").addEventListener("change", function (e) {
+      var f = e.target.files && e.target.files[0]; if (!f) return;
+      useNativeVideo(f);
+    });
     paintCue();
     startLoop();
     startCamera();
@@ -434,27 +448,54 @@
     el.textContent = txt; el.className = "tr-rec-status" + (kind ? " " + kind : "");
   }
 
+  /* Камера: сначала с нужными настройками, при отказе — проще, потом без
+     требований к размеру. Если не вышло совсем — показываем причину и даём
+     снять системной камерой (плечи тогда проверяются по готовому видео). */
+  var CAM_TRIES = [
+    { video: { facingMode: "user", width: { ideal: 480 }, height: { ideal: 640 } }, audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } },
+    { video: { facingMode: "user" }, audio: true },
+    { video: true, audio: true }
+  ];
   function startCamera() {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { camFailed(); return; }
-    navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "user", width: { ideal: 480 }, height: { ideal: 640 }, aspectRatio: { ideal: 0.75 }, frameRate: { ideal: 24, max: 30 } },
-      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
-    }).then(function (stream) {
-      if (state.screen !== "trainer-rec") { stream.getTracks().forEach(function (t) { t.stop(); }); return; }
-      REC.stream = stream;
-      var v = document.getElementById("tr-cam");
-      v.srcObject = stream;
-      var p = v.play(); if (p && p.catch) p.catch(function () {});
-      setStatus("Встань в рамку", "");
-      loadPose().then(function () { if (state.screen === "trainer-rec") poseLoop(); })
-        .catch(function () { setStatus("Рамка без подсказок: проверь кадр сам", "warn"); hint("Контроль плеч сейчас недоступен — следи за плечами сам"); });
-    }).catch(camFailed);
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { camFailed({ name: "NoMediaDevices" }); return; }
+    var i = 0, lastErr = null;
+    (function attempt() {
+      if (i >= CAM_TRIES.length) { camFailed(lastErr); return; }
+      navigator.mediaDevices.getUserMedia(CAM_TRIES[i]).then(camReady).catch(function (e) {
+        lastErr = e; i++;
+        if (e && (e.name === "NotAllowedError" || e.name === "SecurityError")) { camFailed(e); return; }
+        attempt();
+      });
+    })();
   }
-
-  function camFailed() {
-    setStatus("Нет доступа к камере", "warn");
-    hint("Разреши доступ к камере и микрофону или прикрепи видео внизу «Распевок»");
+  function camReady(stream) {
+    if (state.screen !== "trainer-rec") { stream.getTracks().forEach(function (t) { t.stop(); }); return; }
+    REC.stream = stream;
+    var alt = document.getElementById("tr-rec-alt"); if (alt) alt.hidden = true;
+    var b = document.getElementById("tr-rec-go"); if (b) b.disabled = false;
+    var v = document.getElementById("tr-cam");
+    v.srcObject = stream;
+    var p = v.play(); if (p && p.catch) p.catch(function () {});
+    setStatus("Встань в рамку", "");
+    hint("Поставь телефон так, чтобы макушка и пояс были на линиях");
+    loadPose().then(function () { if (state.screen === "trainer-rec") poseLoop(); })
+      .catch(function () { setStatus("Рамка без подсказок: проверь кадр сам", "warn"); hint("Контроль плеч сейчас недоступен — следи за плечами сам"); });
+  }
+  function camFailed(err) {
+    var name = (err && err.name) || "Error";
+    var msg = name === "NotAllowedError" || name === "SecurityError"
+      ? "Камера запрещена для приложения"
+      : name === "NotReadableError" ? "Камера занята другим приложением"
+      : name === "NotFoundError" ? "Камера не найдена"
+      : name === "NoMediaDevices" ? "Здесь камера внутри приложения недоступна"
+      : "Камера не включилась";
+    setStatus(msg + " (" + name + ")", "warn");
+    hint(name === "NotAllowedError"
+      ? "Разреши камеру и микрофон в настройках iPhone и нажми «Ещё раз». Или сними системной камерой — плечи проверю по готовому видео."
+      : "Нажми «Ещё раз» или сними системной камерой — плечи проверю по готовому видео.");
     var b = document.getElementById("tr-rec-go"); if (b) b.disabled = true;
+    var alt = document.getElementById("tr-rec-alt"); if (alt) alt.hidden = false;
+    if (window.trackEv) trackEv("trainer_cam_error", { error: name, msg: String(err && err.message || "").slice(0, 120) });
   }
   function hint(t) { var el = document.getElementById("tr-rec-hint"); if (el) el.textContent = t; }
 
@@ -467,7 +508,7 @@
       if (now - lastT > 90 && v.readyState >= 2 && v.videoWidth) {
         lastT = now;
         var res = null;
-        try { res = POSE.lm.detectForVideo(v, now); } catch (e) {}
+        try { res = poseDetect(v, now); } catch (e) {}
         onPose(res && res.landmarks && res.landmarks[0], v.videoWidth, v.videoHeight, now);
       }
       REC.poseTimer = requestAnimationFrame(step);
@@ -556,8 +597,8 @@
   function recStart() {
     if (state.screen !== "trainer-rec" || !REC.stream) return;
     REC.mime = pickMime();
-    REC.chunks = []; REC.rises = []; REC.raised = false; REC.raisedSince = 0; REC.discard = false;
-    var opts = { videoBitsPerSecond: 280000, audioBitsPerSecond: 48000 };
+    REC.chunks = []; REC.rises = []; REC.raised = false; REC.raisedSince = 0; REC.discard = false; REC.native = false;
+    var opts = { videoBitsPerSecond: 600000, audioBitsPerSecond: 64000 }; // больше 4 МБ — уйдёт через хранилище
     if (REC.mime) opts.mimeType = REC.mime;
     var mr;
     try { mr = new MediaRecorder(REC.stream, opts); } catch (e) {
@@ -593,6 +634,93 @@
     }, 500);
   }
 
+  /* Видео из системной камеры: плечи проверяем по готовому файлу */
+  function useNativeVideo(file) {
+    if (REC.stream) { REC.stream.getTracks().forEach(function (t) { t.stop(); }); REC.stream = null; }
+    if (REC.poseTimer) { cancelAnimationFrame(REC.poseTimer); REC.poseTimer = 0; }
+    stopLoop();
+    if (REC.url) URL.revokeObjectURL(REC.url);
+    REC.blob = file; REC.url = URL.createObjectURL(file); REC.native = true;
+    REC.rises = []; REC.analyzed = false; REC.analyzeFailed = false; REC.analyzePct = 0; REC.duration = 0;
+    REC.phase = "review"; REC.sendStatus = "";
+    markDone(section().id, section().exercises[TR.exIdx].id);
+    renderReview();
+    analyzeFile(REC.url, function (pct) {
+      REC.analyzePct = pct;
+      var el = document.getElementById("tr-sum-live"); if (el) el.textContent = "Проверяю плечи по видео… " + pct + "%";
+    }).then(function (r) {
+      REC.rises = r.rises; REC.duration = r.duration; REC.analyzed = true;
+    }).catch(function () { REC.analyzed = true; REC.analyzeFailed = true; })
+      .then(function () { if (state.screen === "trainer-rec" && REC.phase === "review") renderReview(); });
+  }
+
+  function analyzeFile(url, onProgress) {
+    return loadPose().then(function () {
+      return new Promise(function (resolve, reject) {
+        var v = document.createElement("video");
+        v.muted = true; v.playsInline = true; v.setAttribute("playsinline", ""); v.preload = "auto";
+        v.style.cssText = "position:fixed;left:0;top:0;width:2px;height:2px;opacity:0.01;pointer-events:none";
+        document.body.appendChild(v);
+        var t = 0, dur = 0, STEP = 0.25, samples = [], raised = false, since = -1, rises = [], finished = false;
+        var dead = setTimeout(fail, 20000);
+        function cleanup() { finished = true; clearTimeout(dead); v.removeAttribute("src"); try { v.load(); } catch (e) {} v.remove(); }
+        function fail() { if (finished) return; cleanup(); reject(new Error("analyze")); }
+        function next() {
+          clearTimeout(dead); dead = setTimeout(fail, 8000);
+          if (t > dur || state.screen !== "trainer-rec") { cleanup(); resolve({ rises: rises, duration: Math.round(dur) }); return; }
+          v.currentTime = t;
+        }
+        v.onloadeddata = function () { if (dur) return; dur = v.duration || 0; if (!isFinite(dur) || dur <= 0) { fail(); return; } next(); };
+        v.onerror = fail;
+        v.onseeked = function () {
+          if (finished) return;
+          var res = null;
+          try { res = poseDetect(v, poseTs + 33); } catch (e) {}
+          var L = res && res.landmarks && res.landmarks[0];
+          if (L && (L[11].visibility == null || L[11].visibility > 0.5) && (L[12].visibility == null || L[12].visibility > 0.5)) {
+            var W = v.videoWidth, H = v.videoHeight;
+            var sy = (L[11].y + L[12].y) / 2, swPx = Math.abs(L[11].x - L[12].x) * W;
+            samples.push({ t: t, y: sy });
+            while (samples.length && t - samples[0].t > 6) samples.shift();
+            var low = sy; samples.forEach(function (p) { if (p.y > low) low = p.y; });
+            var rise = swPx > 10 ? (low - sy) * H / swPx : 0;
+            if (!raised && rise > 0.07) {
+              if (since < 0) since = t;
+              if (t - since >= 0.25) { raised = true; rises.push({ at: t }); }
+            } else if (rise <= 0.07) since = -1;
+            if (raised && rise < 0.035) raised = false;
+          }
+          onProgress(Math.min(99, Math.round(t / dur * 100)));
+          t += STEP; next();
+        };
+        v.src = url;
+        try { v.load(); } catch (e) {}
+      });
+    });
+  }
+
+  /* Большое видео — как в «Поддержке»: в хранилище по частям, затем бот
+     пересылает Николаю с подписью. */
+  function sendBig(blob, name, note, meta, onProgress) {
+    var ext = (String(name).match(/\.([A-Za-z0-9]{1,5})$/) || [])[1] || "mp4";
+    var who = supportIdentity();
+    if (!who.initData && !who.accessToken) return Promise.reject(new Error("who"));
+    return loadBlobClient().then(function (client) {
+      return client.upload("support/video-" + Date.now().toString(36) + "-0." + ext.toLowerCase(), blob, {
+        access: "private", handleUploadUrl: "/api/support-upload", clientPayload: JSON.stringify(who),
+        contentType: blob.type || undefined, multipart: blob.size > 8 * 1024 * 1024,
+        onUploadProgress: function (ev) { onProgress(Math.min(99, Math.round((ev.loaded || 0) / blob.size * 100))); }
+      });
+    }).then(function (up) {
+      return supportPost({ action: "start", text: "🎤 Распевки (видео) · урок «" + (LESSON ? LESSON.title : "") + "»\n" + note, counts: { photo: 0, video: 1 },
+        firstName: state.firstName || "", lastName: state.lastName || "" })
+        .then(function (d) {
+          return supportPost({ action: "send", headerId: d.headerId, name: d.name || "",
+            items: [{ pathname: up.pathname, size: blob.size, kind: "video", name: name, width: meta && meta.width, height: meta && meta.height, duration: meta && meta.duration }] });
+        });
+    });
+  }
+
   function recStop() {
     clearInterval(REC.timeTimer);
     TR.paused = true;
@@ -601,7 +729,8 @@
 
   function shoulderSummary() {
     var n = REC.rises.length;
-    if (!POSE.lm) return { ok: null, text: "Контроль плеч не работал — проверь себя по видео", note: "Плечи: не отслеживались" };
+    if (REC.native && !REC.analyzed) return { ok: null, text: "Проверяю плечи по видео… " + (REC.analyzePct || 0) + "%", note: "Плечи: не проверены", live: true };
+    if (!POSE.lm || (REC.native && REC.analyzeFailed)) return { ok: null, text: "Контроль плеч не работал — проверь себя по видео", note: "Плечи: не отслеживались" };
     if (!n) return { ok: true, text: "Плечи спокойные всю запись — отлично!", note: "Плечи: спокойные ✓" };
     var times = REC.rises.slice(0, 6).map(function (r) { return fmt(r.at); }).join(", ");
     return { ok: false, text: "Плечи поднимались " + n + " " + pl(n, "раз", "раза", "раз") + " (" + times + "). Вдыхай в нижние рёбра и живот.",
@@ -611,6 +740,7 @@
   function renderReview() {
     var s = section(), ex = s.exercises[TR.exIdx], sum = shoulderSummary();
     var big = REC.blob && REC.blob.size > MAX_UPLOAD_BYTES;
+    var waiting = REC.native && !REC.analyzed;
     var st = REC.sendStatus;
     var sendTxt = st === "sending" ? "Отправляю Николаю…" : st === "sent" ? "Отправлено Николаю ✓" : st === "error" ? "Не отправилось — ещё раз" : "Отправить Николаю";
     app.innerHTML =
@@ -622,12 +752,12 @@
         "</div></div>" +
         '<div class="tr-review">' +
           '<div class="tr-review-t">' + h(ex.title) + "</div>" +
-          '<div class="tr-sum ' + (sum.ok === true ? "ok" : sum.ok === false ? "bad" : "") + '">' + h(sum.text) + "</div>" +
-          (big ? '<div class="tr-sum bad">Видео получилось тяжелее 4 МБ и не пройдёт в Telegram. Запиши ещё раз при хорошем свете — обычно так файл меньше.</div>' : "") +
+          '<div class="tr-sum ' + (sum.ok === true ? "ok" : sum.ok === false ? "bad" : "") + '"' + (sum.live ? ' id="tr-sum-live"' : "") + ">" + h(sum.text) + "</div>" +
+          (st === "sending" && big ? '<div class="tr-prog"><div id="tr-prog-fill" style="width:' + (REC.upPct || 0) + '%"></div></div>' : "") +
           (window.GUEST_ON ? '<div class="tr-sum">В тест-драйве отправка видео закрыта — она откроется после записи на занятия.</div>' : "") +
           '<div class="tr-review-btns">' +
             '<button type="button" class="tr-btn ghost" id="tr-redo">' + ico("redo", 18) + "Переснять</button>" +
-            '<button type="button" class="tr-btn main" id="tr-send"' + (big || window.GUEST_ON || st === "sending" || st === "sent" ? " disabled" : "") + ">" + ico("send", 18) + sendTxt + "</button>" +
+            '<button type="button" class="tr-btn main" id="tr-send"' + (waiting || window.GUEST_ON || st === "sending" || st === "sent" ? " disabled" : "") + ">" + ico("send", 18) + sendTxt + "</button>" +
           "</div>" +
           (st === "sent" && TR.exIdx < s.exercises.length - 1 ? '<button type="button" class="tr-btn next" id="tr-next">Следующее: ' + h(s.exercises[TR.exIdx + 1].title) + "</button>" : "") +
         "</div>" +
@@ -643,7 +773,7 @@
   function recSend(sum) {
     if (!REC.blob || REC.sendStatus === "sending" || REC.sendStatus === "sent") return;
     var s = section(), ex = s.exercises[TR.exIdx];
-    var ext = /mp4/.test(REC.blob.type) ? "mp4" : "webm";
+    var ext = (String(REC.blob.name || "").match(/\.([A-Za-z0-9]{1,5})$/) || [])[1] || (/mp4/.test(REC.blob.type) ? "mp4" : /quicktime/.test(REC.blob.type) ? "mov" : "webm");
     var name = "Тренажёр — " + ex.title.replace(/[«»"]/g, "") + "." + ext;
     REC.sendStatus = "sending"; renderReview();
     var note = "🌬 Тренажёр: " + s.title + " · " + ex.title + " · темп " + ({ slow: "медленно", mid: "средне", fast: "быстро" })[TR.tempo] + "\n" + sum.note;
@@ -651,7 +781,15 @@
       meta = meta || {};
       meta.note = note;
       if (!meta.duration) meta.duration = REC.duration;
-      submitFile("warmup", REC.blob, function (status) {
+      if (REC.blob.size > MAX_UPLOAD_BYTES) {
+        REC.upPct = 0;
+        sendBig(REC.blob, name, note, meta, function (pct) {
+          REC.upPct = pct; var f = document.getElementById("tr-prog-fill"); if (f) f.style.width = pct + "%";
+        }).then(function () { done("sent"); }).catch(function () { done("error"); });
+        return;
+      }
+      submitFile("warmup", REC.blob, done, name, meta);
+      function done(status) {
         if (status === "sending") return;
         REC.sendStatus = status === "sent" ? "sent" : "error";
         if (status === "sent") {
@@ -661,7 +799,7 @@
           if (window.trackEv) trackEv("trainer_video", { section: s.id, exercise: ex.id, rises: REC.rises.length });
         }
         if (state.screen === "trainer-rec" && REC.phase === "review") renderReview();
-      }, name, meta);
+      }
     });
   }
 
