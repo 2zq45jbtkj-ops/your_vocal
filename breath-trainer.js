@@ -380,29 +380,43 @@
      Неподвижный экран в стиле «Тест пройден»: значок + текст чуть выше центра,
      кнопка ровно над доком, зеркальное конфетти один раз сразу после раздела. */
   function renderDone() {
-    var s = section(), done = todayList(), st = streak(), n = s.exercises.length;
-    var allToday = SECTIONS.every(function (x) { return x.exercises.every(function (e) { return done.indexOf(x.id + ":" + e.id) !== -1; }); });
+    // 22.11: дизайн один в один с «Тест пройден»; значок — иконка раздела
+    var s = section(), n = s.exercises.length;
     var back = TR.from === "warmups" ? "К распевкам" : "К разделам";
+    var full = sectionFull(s);
     app.innerHTML =
-      '<div class="quiz-result-screen tr-done tone-' + s.tone + '">' +
+      '<div class="quiz-result-screen tr-done">' +
         '<div class="qr-center">' +
-          '<div class="result-badge tr-done-badge">' + ico(s.icon, 28) + "</div>" +
-          '<div class="tr-done-kicker">' + h(s.title) + "</div>" +
-          '<div class="result-title">' + (allToday ? "Все распевки на сегодня сделаны" : "Распевка завершена") + "</div>" +
-          '<div class="result-sub">' + n + " " + pl(n, "упражнение", "упражнения", "упражнений") + " · " + n + " мин</div>" +
-          '<div class="tr-done-streak">' + (st > 0 ? st + " " + pl(st, "день", "дня", "дней") + " подряд" : "Серия началась") + "</div>" +
+          '<div class="result-badge tr-done-badge">' + ico(s.icon, 30) + "</div>" +
+          '<div class="result-title">' + h(s.title) + ": готово</div>" +
+          '<div class="result-sub">' + n + " " + pl(n, "упражнение", "упражнения", "упражнений") + " · " +
+            (sentToday(s.id) ? "видео отправлено Николаю" : "видео Николаю не отправлено") + "</div>" +
         "</div>" +
-        '<div class="tr-done-btns">' +
-          '<button type="button" class="tr-done-again" id="tr-done-again">' + ico("redo", 16) + "<span>Пройти ещё раз</span></button>" +
-          '<button type="button" class="cta tr-done-cta" id="tr-done-ok">' + back + "</button>" +
-        "</div>" +
+        '<button type="button" class="cta terra qr-cta" id="tr-done-ok">' + back + "</button>" +
       "</div>";
     wireActs();
     document.getElementById("tr-done-ok").addEventListener("click", function () { go(TR.from === "warmups" ? "warmups" : "trainer"); });
-    document.getElementById("tr-done-again").addEventListener("click", function () { TR.exIdx = 0; TR.paused = false; go("trainer-ex"); });
-    if (window.trackEv) trackEv("trainer_section_done", { section: s.id, all: allToday });
-    if (TR.doneFoil && window.playFoilConfetti) { TR.doneFoil = false; window.playFoilConfetti(app.querySelector(".tr-done")); }
+    if (window.trackEv) trackEv("trainer_section_done", { section: s.id, full: full });
+    // конфетти — только если все буквы раздела сделаны и видео ушло Николаю
+    if (TR.doneFoil && full && window.playFoilConfetti) window.playFoilConfetti(app.querySelector(".tr-done"));
+    TR.doneFoil = false;
   }
+  var SENT_KEY = "trainerSent.v1";
+  function sentToday(sid) { try { return ((JSON.parse(localStorage.getItem(SENT_KEY)) || {})[ymd()] || []).indexOf(sid) !== -1; } catch (e) { return false; } }
+  function markSent(sid) {
+    try { var l = JSON.parse(localStorage.getItem(SENT_KEY)) || {}, d = ymd(); l[d] = l[d] || []; if (l[d].indexOf(sid) === -1) l[d].push(sid); localStorage.setItem(SENT_KEY, JSON.stringify(l)); } catch (e) {}
+  }
+  function sectionFull(s) {
+    var done = todayList();
+    return sentToday(s.id) && s.exercises.every(function (x) { return done.indexOf(s.id + ":" + x.id) !== -1; });
+  }
+  /* Для заставки «Распевки выполнены»: все буквы всех разделов хоть раз сделаны */
+  window.trainerAllDone = function () {
+    var log = loadLog(), all = {};
+    Object.keys(log).forEach(function (d) { (log[d] || []).forEach(function (k) { all[k] = 1; }); });
+    return SECTIONS.every(function (s) { return s.exercises.every(function (x) { return all[s.id + ":" + x.id]; }); });
+  };
+
 
   /* ---------- запись видео с суфлёром ---------- */
   var POSE_VER = "0.10.14";
@@ -837,10 +851,13 @@
             '<button type="button" class="tr-btn main" id="tr-send"' + (waiting || window.GUEST_ON || st === "sending" || st === "sent" ? " disabled" : "") + ">" + ico("send", 18) + sendTxt + "</button>" +
           "</div>" +
           (st === "sent" && TR.exIdx < s.exercises.length - 1 ? '<button type="button" class="tr-btn next" id="tr-next">Следующее: ' + h(s.exercises[TR.exIdx + 1].title) + "</button>" : "") +
+          (st === "sent" && TR.exIdx === s.exercises.length - 1 ? '<button type="button" class="tr-btn next" id="tr-fin">Завершить раздел</button>' : "") +
         "</div>" +
       "</div>";
     document.getElementById("tr-rec-close").addEventListener("click", function () { REC.phase = "off"; handleBack(); });
     document.getElementById("tr-redo").addEventListener("click", function () { REC.phase = "setup"; REC.sendStatus = ""; renderRec(); });
+    var fin = document.getElementById("tr-fin");
+    if (fin) fin.addEventListener("click", function () { REC.phase = "off"; REC.sendStatus = ""; TR.doneFoil = true; go("trainer-done"); });
     var nx = document.getElementById("tr-next");
     if (nx) nx.addEventListener("click", function () { TR.exIdx++; REC.phase = "setup"; REC.sendStatus = ""; renderRec(); });
     var sb = document.getElementById("tr-send");
@@ -871,6 +888,7 @@
         REC.sendStatus = status === "sent" ? "sent" : "error";
         if (status === "sent") {
           state.warmupFiles.push({ name: name, status: "sent" });
+          markSent(s.id);
           saveState();
           maybeCelebrate();
           if (window.trackEv) trackEv("trainer_video", { section: s.id, exercise: ex.id, rises: REC.rises.length });

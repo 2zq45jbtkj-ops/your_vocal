@@ -481,7 +481,7 @@ function backTarget() {
     case "admin-karaoke": return "admin-hub";
     case "admin-karaoke-songs": return (window.KAR && KAR.adm && KAR.adm.fromKar) ? "karaoke" : "admin-karaoke";
     case "admin-karaoke-edit": return "admin-karaoke-songs";
-    case "lecture": case "warmups": case "song": case "quiz-result": return "lesson-home";
+    case "lecture": case "warmups": case "song": case "quiz-result": case "step-done": return "lesson-home";
     case "feedback": return "song";
     case "quiz": return null; // отдельная логика
     default: return null;
@@ -3854,7 +3854,7 @@ function renderBlocked() {
 var MAIN_TAB_SCREENS = ["courses", "profile", "questions", "more"];
 /* Подэкраны урока и избранное относятся к вкладке «Уроки» — она подсвечивается
    и на них, даже если открыт конкретный шаг урока, а не список уроков. */
-var LESSON_SUB_SCREENS = ["lesson-home", "lecture", "quiz", "quiz-result", "warmups", "song", "feedback", "favorites", "lesson-soon"];
+var LESSON_SUB_SCREENS = ["lesson-home", "lecture", "quiz", "quiz-result", "warmups", "song", "feedback", "favorites", "lesson-soon", "step-done"];
 /* Дока нет ТОЛЬКО на экранах входа — на всех остальных она закреплена всегда. */
 var NO_DOCK_SCREENS = ["tg", "name", "token-entry", "blocked", "karaoke-play", "admin-karaoke-edit", "pitch-sing", "pitch-score"];
 
@@ -4161,7 +4161,7 @@ function renderLecture() {
     }
   });
   html += "</div>";
-  html += '<div class="bottom-cta"><button class="cta" data-act="go-quiz">Пройти тест</button></div>';
+  html += '<div class="bottom-cta"><button class="cta" data-act="finish-lecture">Пройти тест</button></div>';
   if (hasLevels && !state._lectureLevel && !state._llevelSkip) {
     html += '<div class="llevel-ov"><div class="llevel-card">' +
       '<div class="llevel-title">Как будешь проходить лекцию?</div>' +
@@ -4301,6 +4301,91 @@ function renderQuizResult() {
   wireActs();
   if (state._foilPending && window.playFoilConfetti) {
     state._foilPending = false;
+    window.playFoilConfetti(app.querySelector(".quiz-result-screen"));
+  }
+}
+
+/* ---------- финальные заставки шагов урока (22.11) ----------
+   Тот же неподвижный экран, что «Тест пройден»: значок, заголовок, строка,
+   кнопка над доком. Конфетти — только если шаг выполнен целиком:
+   лекция — читал не меньше 3 минут; распевки и песня — все задания
+   сделаны и домашка отправлена Николаю в бот. */
+var LECTURE_MIN_SEC = 180;
+var lectureT0 = 0;
+function lectureKey() { return "lectureSec." + ((LESSON && LESSON.id) || 1); }
+function lectureSec() { try { return parseFloat(localStorage.getItem(lectureKey())) || 0; } catch (e) { return 0; } }
+function lectureFlush() {
+  if (!lectureT0) return;
+  var d = Math.min(600, (Date.now() - lectureT0) / 1000); // простой с открытым экраном не считаем дольше 10 мин
+  lectureT0 = 0;
+  try { localStorage.setItem(lectureKey(), String(lectureSec() + d)); } catch (e) {}
+}
+function lectureClock() {
+  lectureFlush();
+  if (state.screen === "lecture" && !document.hidden) lectureT0 = Date.now();
+}
+document.addEventListener("visibilitychange", function () {
+  if (document.hidden) lectureFlush();
+  else if (state.screen === "lecture") lectureT0 = Date.now();
+});
+function anySent(list) { return (list || []).some(function (f) { return f.status === "sent"; }); }
+
+var STEP_ICON = {
+  lecture: '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><path d="M8 13h5M8 17h7"/><path d="M18.4 2.6l3 3L14 13l-4 1 1-4z"/></svg>',
+  warmups: '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 14c2.5 0 2.5-6 5-6s2.5 8 5 8 2.5-10 5-10 2.5 8 5 8"/></svg>',
+  song: '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="18" r="3"/><circle cx="18" cy="15.5" r="3"/><path d="M9.5 18V5.5L21 3v12.5"/></svg>'
+};
+
+function stepFullyDone(kind) {
+  if (kind === "lecture") { lectureFlush(); if (state.screen === "lecture") lectureT0 = Date.now(); return lectureSec() >= LECTURE_MIN_SEC; }
+  if (kind === "warmups") {
+    if (!anySent(state.warmupFiles)) return false;
+    if (LESSON && LESSON.id === 1 && window.trainerAllDone) return trainerAllDone();
+    return true;
+  }
+  if (kind === "song") {
+    if (!anySent(state.songFiles)) return false;
+    var tr = (LESSON && LESSON.song && LESSON.song.tracks) || [];
+    return tr.every(function (t, ti) { return trackAttempted(ti, t); });
+  }
+  return false;
+}
+
+function showStepDone(kind) {
+  state._stepKind = kind;
+  state._stepFoil = stepFullyDone(kind);
+  trackEv("step_done", { lesson: (LESSON && LESSON.id) || 1, step: kind, full: state._stepFoil });
+  go("step-done");
+}
+
+function renderStepDone() {
+  var k = state._stepKind || "lecture", t, sub, cta;
+  if (k === "lecture") {
+    var m = Math.max(1, Math.round(lectureSec() / 60));
+    t = "Лекция прочитана";
+    sub = lectureSec() >= LECTURE_MIN_SEC ? "Время чтения: " + m + " мин" : "Можно вернуться и дочитать — это около 3 минут";
+    cta = "Продолжить: тест";
+  } else if (k === "warmups") {
+    t = "Распевки выполнены";
+    sub = anySent(state.warmupFiles) ? "Видео отправлено Николаю" : "Видео Николаю ещё не отправлено";
+    cta = "Продолжить: упражнение с песней";
+  } else {
+    t = "Упражнение выполнено";
+    sub = anySent(state.songFiles) ? "Разметка отправлена Николаю" : "Разметка Николаю ещё не отправлена";
+    cta = "Продолжить: оценить урок";
+  }
+  app.innerHTML =
+    '<div class="quiz-result-screen">' +
+      '<div class="qr-center">' +
+        '<div class="result-badge">' + STEP_ICON[k] + "</div>" +
+        '<div class="result-title">' + t + "</div>" +
+        '<div class="result-sub">' + sub + "</div>" +
+      "</div>" +
+      '<button class="cta terra qr-cta" data-act="step-done-next">' + cta + "</button>" +
+    "</div>";
+  wireActs();
+  if (state._stepFoil && window.playFoilConfetti) {
+    state._stepFoil = false;
     window.playFoilConfetti(app.querySelector(".quiz-result-screen"));
   }
 }
@@ -5757,8 +5842,15 @@ var ACTS = {
   "go-warmups": function () { go("warmups"); },
   "go-warmups-free": function () { go("warmups"); },
   "go-song": function () { go("song"); },
-  "finish-warmups": function () { state.warmupsDone = true; saveState(); sendProgressToBaza((LESSON.id || 1), "warmups"); go("song"); },
-  "finish-lesson": function () { state.songDone = true; saveState(); sendProgressToBaza((LESSON.id || 1), "song"); submitSongMarks(); go("feedback"); },
+  "finish-lecture": function () { showStepDone("lecture"); },
+  "finish-warmups": function () { state.warmupsDone = true; saveState(); sendProgressToBaza((LESSON.id || 1), "warmups"); showStepDone("warmups"); },
+  "finish-lesson": function () { state.songDone = true; saveState(); sendProgressToBaza((LESSON.id || 1), "song"); submitSongMarks(); showStepDone("song"); },
+  "step-done-next": function () {
+    var k = state._stepKind;
+    if (k === "lecture") ACTS["go-quiz"]();
+    else if (k === "warmups") go("song");
+    else go("feedback");
+  },
   "reset-progress": resetProgress,
   "go-profile": function () { go("profile"); },
   "cab-lessons": function () { go("cab-lessons"); },
@@ -5872,7 +5964,8 @@ function render() {
   // становится матовым и прозрачным, как в кабинете, без серой полосы (17.11).
   document.documentElement.classList.toggle("kp-open", state.screen === "karaoke-play");
   // Экран результата теста — без прокрутки страницы вообще (21.11)
-  document.documentElement.classList.toggle("no-scroll", state.screen === "quiz-result" || state.screen === "trainer-done");
+  document.documentElement.classList.toggle("no-scroll", state.screen === "quiz-result" || state.screen === "trainer-done" || state.screen === "step-done");
+  lectureClock();
   stopAllMedia();
   // Прокручиваем наверх только при переходе на другой шаг/вопрос — не при
   // мелких действиях на том же экране (ответ в тесте, метка в песне и
@@ -5916,6 +6009,7 @@ function render() {
     case "lecture": renderLecture(); break;
     case "quiz": renderQuiz(); break;
     case "quiz-result": renderQuizResult(); break;
+    case "step-done": renderStepDone(); break;
     case "warmups": renderWarmups(); break;
     case "song": renderSong(); break;
     case "feedback": renderFeedback(); break;
