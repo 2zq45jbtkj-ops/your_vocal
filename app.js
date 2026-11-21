@@ -3894,6 +3894,8 @@ function renderDock() {
   html += "</div>";
   app.insertAdjacentHTML("beforeend", html);
   var dock = app.querySelector(".dock");
+  // реальная высота дока — по ней кнопки ставятся ровно над ним (21.11)
+  if (dock.offsetHeight) document.documentElement.style.setProperty("--dock-h", dock.offsetHeight + "px");
   var pill = dock.querySelector(".dock-pill");
   var btns = dock.querySelectorAll(".dock-item");
   var activeIdx = -1;
@@ -4263,12 +4265,15 @@ function renderQuiz() {
 
 function renderQuizResult() {
   app.innerHTML =
-    '<div class="result-screen">' +
-      '<div class="result-badge">' + SVG.resultCheck + "</div>" +
-      '<div class="result-title">Тест пройден</div>' +
-      '<div class="result-sub">Результат: ' + state.quizScore + " из " + quizQuestions().length + "</div>" +
-      '<div class="spacer"></div>' +
-      '<button class="cta terra" data-act="go-warmups-free">Продолжить: распевки</button>' +
+    // 21.11: экран неподвижен — fixed-слой без прокрутки. Значок с надписью
+    // чуть выше центра, кнопка всегда ровно над доком (см. .quiz-result-screen).
+    '<div class="quiz-result-screen">' +
+      '<div class="qr-center">' +
+        '<div class="result-badge">' + SVG.resultCheck + "</div>" +
+        '<div class="result-title">Тест пройден</div>' +
+        '<div class="result-sub">Результат: ' + state.quizScore + " из " + quizQuestions().length + "</div>" +
+      "</div>" +
+      '<button class="cta terra qr-cta" data-act="go-warmups-free">Продолжить: распевки</button>' +
     "</div>";
   wireActs();
 }
@@ -5839,6 +5844,8 @@ function render() {
   // Караоке: страница под плеером в его цвете — тогда верх под часами на iPhone
   // становится матовым и прозрачным, как в кабинете, без серой полосы (17.11).
   document.documentElement.classList.toggle("kp-open", state.screen === "karaoke-play");
+  // Экран результата теста — без прокрутки страницы вообще (21.11)
+  document.documentElement.classList.toggle("no-scroll", state.screen === "quiz-result");
   stopAllMedia();
   // Прокручиваем наверх только при переходе на другой шаг/вопрос — не при
   // мелких действиях на том же экране (ответ в тесте, метка в песне и

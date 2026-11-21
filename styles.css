@@ -522,6 +522,26 @@ html.dark, body.dark {
   box-shadow: var(--raised-lg);
   display: flex; align-items: center; justify-content: center; margin: 40px 0 20px;
 }
+/* 21.11: «Тест пройден» — полностью неподвижный экран. Слой fixed на всё окно,
+   ничего не скроллится и не пересчитывается от высоты вьюпорта Telegram.
+   Значок + надпись — чуть выше центра, кнопка — ровно над доком
+   (низ дока + его реальная высота --dock-h + зазор 12px). */
+html.no-scroll, html.no-scroll body { overflow: hidden; overscroll-behavior: none; height: 100%; }
+.quiz-result-screen {
+  position: fixed; inset: 0; z-index: 1; overflow: hidden; touch-action: none;
+  background: var(--bg); text-align: center;
+}
+.qr-center {
+  position: absolute; left: 0; right: 0; top: 42%; transform: translateY(-50%);
+  display: flex; flex-direction: column; align-items: center; padding: 0 24px;
+}
+.qr-center .result-badge { margin: 0 0 20px; }
+.qr-cta {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  width: calc(100% - 36px); max-width: 394px;
+  bottom: calc(max(12px, calc(var(--tg-safe-area-inset-bottom, 0px) + 4px)) + var(--dock-h, 72px) + 12px);
+  height: 52px; font-size: 15px;
+}
 .result-title { font-size: 21px; font-weight: 800; color: var(--ink); margin-bottom: 6px; }
 .result-sub { font-size: 14px; color: var(--gray); }
 
