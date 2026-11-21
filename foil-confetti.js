@@ -30,7 +30,7 @@
     function freeSpot(){for(var k=0;k<20;k++){var x=W*(.12+Math.random()*.76),y=H*(.06+Math.random()*.7),ok=AV.every(function(r){return x<r.x-20||x>r.x+r.w+20||y<r.y-20||y>r.y+r.h+20;});if(ok)return[x,y];}return[W*(.15+Math.random()*.7),H*.08];}
     var nextAt=60;
     var P=[],T=0;
-    function mkPiece(x,y,ang,spd,i){var z=.6+Math.random()*.9;return{x:x,y:y,z:z,front:z>=.95,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,rx:Math.random()*6.28,ry:Math.random()*6.28,rz:Math.random()*6.28,wx:(Math.random()-.5)*.3,wy:(Math.random()-.5)*.3,wz:(Math.random()-.5)*.08,ph:Math.random()*6.28,fr:.03+Math.random()*.035,sw:.7+Math.random()*1.3,w:(6+Math.random()*5)*z,h:(10+Math.random()*7)*z,c:COL[i%COL.length],land:0,hit:0,cv:.35+Math.random()*.5};}
+    function mkPiece(x,y,ang,spd,i){var z=.6+Math.random()*.9;return{x:x,y:y,z:z,front:!opts.behind&&z>=.95,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,rx:Math.random()*6.28,ry:Math.random()*6.28,rz:Math.random()*6.28,wx:(Math.random()-.5)*.3,wy:(Math.random()-.5)*.3,wz:(Math.random()-.5)*.08,ph:Math.random()*6.28,fr:.03+Math.random()*.035,sw:.7+Math.random()*1.3,w:(6+Math.random()*5)*z,h:(10+Math.random()*7)*z,c:COL[i%COL.length],land:0,hit:0,cv:.35+Math.random()*.5};}
     function burst(x,y,n,s0,s1){for(var i=0;i<n;i++)P.push(mkPiece(x+(Math.random()-.5)*10,y,Math.random()*6.28,s0+Math.random()*(s1-s0),P.length));}
     var Q=[[0,function(){burst(W*.25,H*.18,45,4,9);}],[18,function(){burst(W*.75,H*.14,45,4,9);}],[36,function(){burst(W*.5,H*.1,55,5,10);}]];
     function drawP(cx,p,M){var w=p.w/2,h=p.h/2,N=6,bend=p.cv*Math.sin(p.ph*1.2),pts=[],ns=[],mx=0,i;
@@ -43,7 +43,7 @@
       T++;while(Q.length&&Q[0][0]<=T)Q.shift()[1]();
       if(opts.loop&&T>=nextAt){var sp=freeSpot();burst(sp[0],sp[1],28+Math.round(Math.random()*16),3,7);nextAt=T+45+Math.round(Math.random()*40);
         if(P.length>500)P=P.filter(function(p){return p.y<=H+60;});}
-      fx.clearRect(0,0,W,H);bx.clearRect(0,0,W,H);clipOut(fx);clipOut(bx);var alive=Q.length+(opts.loop?1:0),wind=Math.sin(T*.008)*.3+Math.sin(T*.021)*.12;
+      fx.clearRect(0,0,W,H);bx.clearRect(0,0,W,H);if(!opts.behind){clipOut(fx);clipOut(bx);}var alive=Q.length+(opts.loop?1:0),wind=Math.sin(T*.008)*.3+Math.sin(T*.021)*.12;
       for(var k=0;k<P.length;k++){var p=P[k];if(p.y>H+60)continue;alive++;var cx=p.front?fx:bx;
         if(p.land>0){p.land--;p.y+=.2;p.x+=(p.x-BC.x)*.004;p.rx*=.93;p.ry*=.93;p.ph+=.01;if(p.land===0||Math.hypot(p.x-BC.x,p.y-BC.y)>BC.r-2){p.land=0;p.vy=.6;p.vx=(p.x-BC.x)*.03;p.wx=(Math.random()-.5)*.2;p.wy=(Math.random()-.5)*.2;}}
         else{var sp=Math.hypot(p.vx,p.vy);p.vx*=.955;p.vy=p.vy*.955+.16;var term=.8+.6*p.z;if(p.vy>term)p.vy+=(term-p.vy)*.07;p.ph+=p.fr;var calm=Math.max(0,1-sp/5),fl=Math.sin(p.ph)*p.sw*p.z*calm;p.x+=p.vx+fl+wind*p.z*calm;p.y+=p.vy+Math.abs(Math.cos(p.ph))*.2*calm;var spin=1+Math.min(3,sp*.35);p.rx+=p.wx*spin+Math.cos(p.ph)*.03;p.ry+=p.wy*spin;p.rz+=p.wz*spin+fl*.01;
@@ -51,10 +51,10 @@
             if(d<BC.r*.82&&dy<-BC.r*.1&&Math.random()<.5){p.land=70+Math.random()*80;p.hit=999;}
             else if(d<rr){var nx=dx/d,ny=dy/d,vn=p.vx*nx+p.vy*ny;if(vn<0){p.vx-=1.5*vn*nx;p.vy-=1.5*vn*ny;p.vx+=nx*1.1;p.vy=Math.min(p.vy,ny*2);p.x=BC.x+nx*rr;p.y=BC.y+ny*rr;p.wx+=(Math.random()-.5)*.4;p.wy+=(Math.random()-.5)*.4;p.hit=20;}}}
           if(p.hit>0&&p.hit<999)p.hit--;}
-        var fade=Math.min(1,(H+60-p.y)/120)*(p.front?1:.55+.4*p.z);cx.globalAlpha=fade;cx.filter=p.z>1.35?'blur('+((p.z-1.35)*7).toFixed(1)+'px)':p.z<.75?'blur(0.7px)':'none';
+        var fade=Math.min(1,(H+60-p.y)/120)*(p.front||opts.behind?1:.55+.4*p.z);cx.globalAlpha=fade;cx.filter=p.z>1.35?'blur('+((p.z-1.35)*7).toFixed(1)+'px)':p.z<.75?'blur(0.7px)':'none';
         if(p.front&&Math.hypot(p.x-BC.x,p.y-BC.y)<BC.r+14){fx.save();fx.beginPath();fx.arc(BC.x,BC.y,BC.r,0,7);fx.clip();fx.globalAlpha=p.land>0?.42:.22;fx.fillStyle='#000';fx.filter='blur(3px)';fx.beginPath();fx.ellipse(p.x+4,p.y+6,p.w*.45,p.h*.35,p.rz,0,7);fx.fill();fx.restore();fx.globalAlpha=fade;fx.filter=cx.filter;}
         drawP(cx,p,rot(p.rx,p.ry,p.rz));}
-      fx.filter=bx.filter='none';fx.globalAlpha=bx.globalAlpha=1;if(AV.length){fx.restore();bx.restore();}
+      fx.filter=bx.filter='none';fx.globalAlpha=bx.globalAlpha=1;if(AV.length&&!opts.behind){fx.restore();bx.restore();}
       if(alive)requestAnimationFrame(step);else{bk.remove();cv.remove();}}
     requestAnimationFrame(step);
   };

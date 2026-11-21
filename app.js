@@ -4418,7 +4418,7 @@ function renderLessonMaster() {
   if (st.songErr) parts.push(st.songErr.every(function (e) { return e === 0; }) ? "разметка без ошибок" : "разметка почти без ошибок");
   app.innerHTML =
     '<div class="quiz-result-screen lm-screen">' +
-      '<div class="qr-center lm-center">' +
+      '<div class="qr-center lm-center lm-card">' +
         '<div class="lm-ring"><div class="lm-glow"></div><div class="lm-glow b"></div>' +
           '<div class="result-badge">' + SVG.resultCheck + "</div></div>" +
         '<div class="result-title">Урок «' + esc((LESSON && LESSON.title) || "Дыхание") + '» пройден</div>' +
@@ -4428,11 +4428,14 @@ function renderLessonMaster() {
     "</div>";
   wireActs();
   var scr = app.querySelector(".lm-screen");
-  if (window.playFoilConfetti) window.playFoilConfetti(scr, { loop: true, avoid: [scr.querySelector(".lm-center"), scr.querySelector(".qr-cta")] });
+  // конфетти летит за карточкой и кнопкой (behind), текст не перекрывает
+  if (window.playFoilConfetti) window.playFoilConfetti(scr, { loop: true, behind: true, avoid: [scr.querySelector(".lm-center"), scr.querySelector(".qr-cta")] });
 }
 
 function showStepDone(kind) {
-  if (kind === "song" && !masterShown() && lessonMastered()) {
+  // 22.11: у Николая (админ) в теме «Дыхание» экран показывается всегда в конце урока
+  var adminShow = kind === "song" && state.isAdmin && LESSON && LESSON.id === 1;
+  if (adminShow || (kind === "song" && !masterShown() && lessonMastered())) {
     try { localStorage.setItem(ftKey("masterShown"), "1"); } catch (e) {}
     state._stepKind = "song";
     trackEv("lesson_master", { lesson: (LESSON && LESSON.id) || 1, quiz: masterStats().quiz, songErr: masterStats().songErr });
@@ -5551,8 +5554,8 @@ function renderFeedback() {
       '<div class="mood-label">' + esc(label) + "</div>" +
       '<label class="field-label">РЕКОМЕНДАЦИИ И ПОЖЕЛАНИЯ (необязательно)</label>' +
       '<textarea id="feedback-text" class="feedback-textarea" placeholder="Что понравилось, что было сложно, чего не хватило...">' + esc(s.feedbackText || "") + "</textarea>" +
-      '<div class="spacer"></div>' +
-      '<button class="cta" id="feedback-submit"' + (s.feedbackMood ? "" : " disabled") + ' style="margin-top:16px;">Отправить и завершить</button>' +
+      // 22.11: кнопка всегда над доком, на том же уровне, что и на других экранах
+      '<button class="cta dock-cta" id="feedback-submit"' + (s.feedbackMood ? "" : " disabled") + '>Отправить и завершить</button>' +
     "</div>";
 
   Array.prototype.forEach.call(app.querySelectorAll(".mood-btn"), function (btn) {

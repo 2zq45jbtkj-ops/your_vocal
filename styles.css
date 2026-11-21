@@ -1500,3 +1500,17 @@ html.dark .cab-zone.on, body.dark .cab-zone.on { background: color-mix(in srgb, 
 @keyframes lmSpinR { to { transform: rotate(-360deg); } }
 @keyframes lmBreath { 0%, 100% { scale: .94; } 50% { scale: 1.08; } }
 @media (prefers-reduced-motion: reduce) { .lm-glow { animation: none; } }
+/* 22.11: текст и значок — на выпуклой карточке; конфетти пролетает за ней */
+.qr-center.lm-card {
+  left: 18px; right: 18px; max-width: 394px; margin: 0 auto;
+  padding: 46px 22px 28px; border-radius: 28px;
+  background: var(--bg); box-shadow: var(--raised-lg);
+}
+.lm-card .lm-ring { margin-bottom: 30px; }
+/* 22.11: нижняя кнопка экрана — всегда над доком, на одном уровне везде
+   (та же формула, что у .qr-cta на «Тест пройден») */
+.dock-cta {
+  position: fixed; z-index: 5; left: 50%; transform: translateX(-50%);
+  width: calc(100% - 36px); max-width: 394px; height: 52px; font-size: 15px;
+  bottom: calc(max(12px, calc(var(--tg-safe-area-inset-bottom, 0px) + 4px)) + var(--dock-h, 72px) + 12px);
+}
