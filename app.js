@@ -321,6 +321,7 @@ function submitFile(kind, file, onStatus, filename, meta) {
     if (meta.width) f.append("width", meta.width);
     if (meta.height) f.append("height", meta.height);
     if (meta.duration) f.append("duration", meta.duration);
+    if (meta.note) f.append("note", meta.note); // подпись к видео (тренажёр: упражнение и плечи)
   }
   fetch("/api/submit", { method: "POST", body: f })
     .then(function (r) { return r.json().catch(function () { return { ok: false }; }); })
@@ -464,7 +465,7 @@ function backTarget() {
     case "karaoke-play": return (window.KAR && KAR.fromAdmEdit) ? "admin-karaoke-edit" : "karaoke";
     case "pitch": return "profile";
     case "bylo": return "profile";
-    case "trainer": case "trainer-ex": return window.trainerBackTarget ? trainerBackTarget() : "profile";
+    case "trainer": case "trainer-ex": case "trainer-rec": return window.trainerBackTarget ? trainerBackTarget() : "profile";
     case "pitch-topic": return "pitch";
     case "pitch-sing": case "pitch-score": return "pitch-topic";
     case "admin-karaoke": return "admin-hub";
@@ -2247,13 +2248,11 @@ function renderCabMain(data) {
       '<div class="cab-row" data-act="cab-voice"><div class="cab-ico">' + CAB_ICO_VOICE + '</div><div class="cab-row-txt"><b>Мой голос</b><div>Тип голоса, диапазон и цель</div></div><div class="cab-chev">›</div></div>' +
       '<div class="cab-row" data-act="cab-wheel"><div class="cab-ico">' + CAB_ICO_WHEEL + '</div><div class="cab-row-txt"><b>Колесо баланса</b><div>' + srezLine + '</div></div><div class="cab-chev">›</div></div>' +
       '<div class="cab-row" data-act="cab-pitch"><div class="cab-ico">' + CAB_ICO_PITCH + '</div><div class="cab-row-txt"><b>Распевки с проверкой</b><div>Поёшь с пианино, телефон слушает, попадаешь ли в ноты</div></div><div class="cab-chev">›</div></div>' +
-      '<div class="cab-row" data-act="open-trainer" data-from="profile"><div class="cab-ico">' + CAB_ICO_TRAINER + '</div><div class="cab-row-txt"><b>Тренажёр дыхания</b><div>Дыхание, спокойствие, фокус и разогрев — по ленте</div></div><div class="cab-chev">›</div></div>' +
       '<div class="cab-row" data-act="cab-bylo"><div class="cab-ico">' + CAB_ICO_BYLO + '</div><div class="cab-row-txt"><b>Было и стало</b><div>Послушай, как вырос твой голос</div></div><div class="cab-chev">›</div></div>' +
     "</div>";
 }
 
 var CAB_ICO_VOICE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="9" y="3" width="6" height="11" rx="3" stroke="var(--terra)" stroke-width="1.8"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" stroke="var(--terra)" stroke-width="1.8" stroke-linecap="round"/></svg>';
-var CAB_ICO_TRAINER = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--terra)" stroke-width="1.8" stroke-linecap="round"><path d="M3 8h10a3 3 0 1 0-3-3"/><path d="M3 12h15a3 3 0 1 1-3 3"/><path d="M3 16h7"/></svg>';
 var CAB_ICO_BYLO = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 9v-2M7 10v-4M10 9v-2M14 17v-2M17 19v-6M20 17v-2" stroke="var(--terra)" stroke-width="1.8" stroke-linecap="round"/></svg>';
 var CAB_ICO_PITCH = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 17c2.5 0 3-4 5.5-4s3 3 5.5 3 3-7 7-7" stroke="var(--terra)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20" cy="9" r="1.6" fill="var(--terra)"/></svg>';
 var CAB_ICO_KARAOKE_W = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M9 18V5l11-2v13" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="18" r="3" stroke="#fff" stroke-width="2"/><circle cx="17" cy="16" r="3" stroke="#fff" stroke-width="2"/></svg>';
@@ -3853,7 +3852,7 @@ function activeDockTab() {
   if (MAIN_TAB_SCREENS.indexOf(state.screen) !== -1) return state.screen;
   if (LESSON_SUB_SCREENS.indexOf(state.screen) !== -1) return "courses";
   if (CAB_SCREENS.indexOf(state.screen) !== -1 || state.screen === "karaoke" || state.screen === "pitch" || state.screen === "pitch-topic" || state.screen === "bylo") return "profile";
-  if (state.screen === "trainer" || state.screen === "trainer-ex") return (window.TRAINER && TRAINER.from === "lesson-home") ? "courses" : "profile";
+  if (state.screen === "trainer" || state.screen === "trainer-ex" || state.screen === "trainer-rec") return (window.TRAINER && (TRAINER.from === "lesson-home" || TRAINER.from === "warmups")) ? "courses" : "profile";
   return null;
 }
 
@@ -4046,11 +4045,6 @@ function renderLessonHome() {
         dotBg: s.songDone ? "oklch(60% 0.13 38)" : (s.warmupsDone ? "oklch(56% 0.09 235)" : "var(--bg)"),
         icon: s.songDone ? SVG.stepCheck : SVG.notesIcon(s.warmupsDone ? "var(--white-text)" : "var(--locked)"),
         name: "Упражнение с песней", sub: subs.song }) +
-      // Тренажёр дыхания (21.11) — в уроке «Дыхание», вне четырёх шагов
-      ((LESSON && LESSON.id === 1) ?
-        '<button type="button" class="tr-entry" data-act="open-trainer" data-from="lesson-home"><span class="tr-entry-ic">' +
-          '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 8h10a3 3 0 1 0-3-3"/><path d="M3 12h15a3 3 0 1 1-3 3"/><path d="M3 16h7"/></svg></span>' +
-          '<span><b>Тренажёр дыхания</b><span>Упражнения по ленте, без музыки — каждая буква минуту</span></span><span class="tr-entry-go">›</span></button>' : "") +
     "</div>";
   wireActs();
 }
@@ -4600,6 +4594,26 @@ function wireWarmupControls(onFav) {
 }
 
 function renderWarmups() {
+  // Урок «Дыхание»: вместо прежних распевок — тренажёр «Ритм-лента» с записью
+  // видео прямо в приложении (21.11, просьба Николая). Прикрепить готовое видео
+  // по-прежнему можно внизу.
+  if (LESSON && LESSON.id === 1 && window.trainerSectionsHtml) {
+    app.innerHTML =
+      stepHeader("Распевки «" + esc(LESSON.title) + "»", 3) +
+      '<div class="warmups-body">' +
+        '<div class="instruction-note">Музыка не нужна — выполняй упражнения, глядя на ленту. Каждая буква длится минуту. ' +
+          'Нажми <b>«Записать видео для Николая»</b>: поставь телефон так, чтобы в рамке были макушка и пояс, — после упражнения видео сразу уйдёт Николаю. ' +
+          'Телефон заодно следит, чтобы на вдохе не поднимались плечи.</div>' +
+        trainerSectionsHtml() +
+        '<div class="section-label" style="margin:22px 0 8px;">Или прикрепи готовое видео</div>' +
+        '<div id="hw-zone"></div>' +
+      "</div>" +
+      '<div class="bottom-cta" style="padding-top:0;"><button class="cta" data-act="finish-warmups">Продолжить: упражнение с песней</button></div>';
+    renderHwZone();
+    wireActs();
+    trainerWireSections("warmups");
+    return;
+  }
   var cards = "";
   LESSON.warmups.exercises.forEach(function (ex) {
     var extra =
@@ -5807,7 +5821,7 @@ function render() {
     case "karaoke": case "karaoke-play": case "admin-karaoke": case "admin-karaoke-songs": case "admin-karaoke-edit": renderKaraokeScreen(); break;
     case "pitch": case "pitch-topic": case "pitch-sing": case "pitch-score": renderPitchScreen(); break;
     case "bylo": renderByloScreen(); break;
-    case "trainer": case "trainer-ex": if (window.renderTrainerScreen) renderTrainerScreen(); break;
+    case "trainer": case "trainer-ex": case "trainer-rec": if (window.renderTrainerScreen) renderTrainerScreen(); break;
     case "lesson-home": renderLessonHome(); break;
     case "lesson-soon": renderLessonSoon(); break;
     case "blocked": renderBlocked(); break;

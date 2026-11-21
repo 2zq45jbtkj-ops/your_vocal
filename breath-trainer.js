@@ -3,7 +3,10 @@
    длинная полоса = тянуть звук, кружок = один толчок, линия = сирена голосом,
    стрелка = вдох. Тихий фон (аккорды) синтезируется в телефоне, без файлов.
    Каждая буква (упражнение) идёт 1 минуту и сама сменяется на следующую.
-   Экраны: "trainer" — разделы, "trainer-ex" — лента. Трекер — localStorage. */
+   Экраны: "trainer" — разделы, "trainer-ex" — лента, "trainer-rec" — запись
+   видео с суфлёром (рамка кадра «от макушки до пояса» + контроль плеч).
+   21.11 (просьба Николая): тренажёр живёт внутри «Распевок» урока «Дыхание»
+   и заменяет прежние распевки; запись сразу уходит Николаю. Трекер — localStorage. */
 
 (function () {
   var EX_SECONDS = 60;   // длительность одного упражнения (буквы)
@@ -71,7 +74,11 @@
     up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
     check: '<path d="M5 12l5 5 9-10"/>',
     sound: '<path d="M11 5L6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/>',
-    mute: '<path d="M11 5L6 9H3v6h3l5 4z"/><path d="M16 9l5 6M21 9l-5 6"/>'
+    mute: '<path d="M11 5L6 9H3v6h3l5 4z"/><path d="M16 9l5 6M21 9l-5 6"/>',
+    cam: '<rect x="2" y="6" width="14" height="12" rx="3"/><path d="M16 10.5l6-3.5v10l-6-3.5"/>',
+    close: '<path d="M6 6l12 12M18 6L6 18"/>',
+    send: '<path d="M4 12l16-8-6 16-3-7z"/>',
+    redo: '<path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 4v4h4"/>'
   };
   function ico(name, size) {
     size = size || 24;
@@ -221,6 +228,7 @@
         '<div class="tr-head"><h1 class="tr-h1">' + h(ex.title) + '</h1><p class="tr-sub">' + h(ex.hint) + "</p></div>" +
         '<div class="tr-cue-wrap"><div class="tr-cue" id="tr-cue"></div></div>' +
         '<div class="tr-lane" style="height:' + LANE_H + 'px"><div class="tr-strip" id="tr-strip">' + laneItemsHtml() + '</div><div class="tr-hit"></div><div class="tr-fade"></div></div>' +
+        '<button type="button" class="tr-rec-open" id="tr-rec-open">' + ico("cam", 20) + "<span>Записать видео для Николая</span></button>" +
         '<div class="tr-stats"><span>Сделано</span><b id="tr-count">0 <i>/ ' + countable() + "</i></b></div>" +
         '<div class="tr-stats tr-next"><span id="tr-next-l"></span><b id="tr-next-t"></b></div>' +
         '<div class="tr-tempo" role="group" aria-label="Темп">' +
@@ -231,6 +239,10 @@
         '<div class="tr-chips" style="grid-template-columns:repeat(' + s.exercises.length + ',minmax(0,1fr))">' + chips + "</div>" +
       "</div>";
     wireActs();
+    document.getElementById("tr-rec-open").addEventListener("click", function () {
+      clearTimeout(TR.advTimer);
+      go("trainer-rec");
+    });
     document.getElementById("tr-pause").addEventListener("click", function () {
       TR.paused = !TR.paused;
       if (TR.pad) TR.paused ? TR.pad.suspend() : TR.pad.resume();
@@ -325,6 +337,7 @@
   function onFinish() {
     var s = section();
     TR.finished = true;
+    if (REC.phase === "rec") { markDone(s.id, s.exercises[TR.exIdx].id); recStop(); return; }
     markDone(s.id, s.exercises[TR.exIdx].id);
     var chip = app.querySelector('[data-tr-ex="' + TR.exIdx + '"]'); if (chip) chip.classList.add("ok");
     paintNext();
@@ -333,17 +346,365 @@
     if (TR.exIdx < s.exercises.length - 1) TR.advTimer = setTimeout(function () { if (state.screen === "trainer-ex") switchEx(TR.exIdx + 1); }, 1500);
   }
 
+  /* ---------- запись видео с суфлёром ---------- */
+  var POSE_VER = "0.10.14";
+  var POSE_CDN = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@" + POSE_VER;
+  var POSE_MODEL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
+  var POSE = { lm: null, loading: null, failed: false };
+  var REC = { phase: "off", stream: null, rec: null, chunks: [], blob: null, url: "", mime: "", poseTimer: 0, frame: "wait",
+    samples: [], raised: false, raisedSince: 0, rises: [], liveRise: 0, cdTimer: 0, startedAt: 0, sendStatus: "", sideOk: false };
+
+  function loadPose() {
+    if (POSE.lm) return Promise.resolve(POSE.lm);
+    if (POSE.loading) return POSE.loading;
+    POSE.loading = import(POSE_CDN + "/vision_bundle.mjs").then(function (m) {
+      return m.FilesetResolver.forVisionTasks(POSE_CDN + "/wasm").then(function (fs) {
+        function make(delegate) {
+          return m.PoseLandmarker.createFromOptions(fs, { baseOptions: { modelAssetPath: POSE_MODEL, delegate: delegate }, runningMode: "VIDEO", numPoses: 1 });
+        }
+        return make("GPU").catch(function () { return make("CPU"); });
+      });
+    }).then(function (lm) { POSE.lm = lm; return lm; })
+      .catch(function (e) { POSE.failed = true; POSE.loading = null; throw e; });
+    return POSE.loading;
+  }
+
+  function pickMime() {
+    var list = ["video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/mp4", "video/webm;codecs=vp8,opus", "video/webm"];
+    if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return "";
+    for (var i = 0; i < list.length; i++) if (MediaRecorder.isTypeSupported(list[i])) return list[i];
+    return "";
+  }
+
+  function recCleanup() {
+    clearInterval(REC.cdTimer); REC.cdTimer = 0;
+    if (REC.poseTimer) { cancelAnimationFrame(REC.poseTimer); REC.poseTimer = 0; }
+    if (REC.rec && REC.rec.state !== "inactive") { REC.discard = true; try { REC.rec.stop(); } catch (e) {} }
+    REC.rec = null;
+    if (REC.stream) { REC.stream.getTracks().forEach(function (t) { t.stop(); }); REC.stream = null; }
+    if (state.screen !== "trainer-rec" && REC.url) { URL.revokeObjectURL(REC.url); REC.url = ""; REC.blob = null; }
+    if (state.screen !== "trainer-rec") REC.phase = "off";
+  }
+
+  function fmt(sec) { sec = Math.max(0, Math.round(sec)); return Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0"); }
+
+  function renderRec() {
+    var s = section(), ex = s.exercises[TR.exIdx];
+    if (REC.phase === "off" || REC.phase === "rec" || REC.phase === "countdown") REC.phase = "setup";
+    if (REC.phase === "review") { renderReview(); return; }
+    buildEvents();
+    TR.paused = true;
+    REC.samples = []; REC.raised = false; REC.raisedSince = 0;
+    app.innerHTML =
+      '<div class="tr-rec tone-' + s.tone + '">' +
+        '<div class="tr-rec-view">' +
+          '<div class="tr-rec-box" id="tr-rec-box">' +
+            '<video id="tr-cam" class="tr-cam" playsinline muted autoplay></video>' +
+            '<div class="tr-guide" id="tr-guide" aria-hidden="true">' +
+              '<div class="tr-guide-line top"><span>макушка</span></div>' +
+              '<div class="tr-guide-line bot"><span>пояс</span></div>' +
+            "</div>" +
+            '<div class="tr-sh-base" id="tr-sh-base" aria-hidden="true"></div>' +
+            '<div class="tr-sh-line" id="tr-sh-line" aria-hidden="true"></div>' +
+            '<div class="tr-rec-top">' +
+              '<button type="button" class="tr-round dark" id="tr-rec-close" aria-label="Закрыть запись">' + ico("close", 18) + "</button>" +
+              '<div class="tr-rec-status" id="tr-rec-status" role="status">Включаю камеру…</div>' +
+            "</div>" +
+            '<div class="tr-sh-warn" id="tr-sh-warn" role="alert"></div>' +
+            '<div class="tr-cd" id="tr-cd" aria-live="assertive"></div>' +
+            '<div class="tr-cue tr-cue-cam" id="tr-cue"></div>' +
+            '<div class="tr-rec-dot" id="tr-rec-dot"><i></i><span id="tr-rec-time">0:00</span></div>' +
+          "</div>" +
+        "</div>" +
+        '<div class="tr-lane tr-lane-rec" style="height:' + LANE_H + 'px"><div class="tr-strip" id="tr-strip">' + laneItemsHtml() + '</div><div class="tr-hit"></div><div class="tr-fade"></div></div>' +
+        '<div class="tr-rec-bar">' +
+          '<div class="tr-rec-info"><b>' + h(ex.title) + '</b><span id="tr-rec-hint">Поставь телефон так, чтобы макушка и пояс были на линиях</span></div>' +
+          '<button type="button" class="tr-rec-btn" id="tr-rec-go" aria-label="Начать запись"><i></i></button>' +
+        "</div>" +
+      "</div>";
+    document.getElementById("tr-rec-close").addEventListener("click", function () { handleBack(); });
+    document.getElementById("tr-rec-go").addEventListener("click", recCountdown);
+    paintCue();
+    startLoop();
+    startCamera();
+  }
+
+  function setStatus(txt, kind) {
+    var el = document.getElementById("tr-rec-status"); if (!el) return;
+    el.textContent = txt; el.className = "tr-rec-status" + (kind ? " " + kind : "");
+  }
+
+  function startCamera() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { camFailed(); return; }
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user", width: { ideal: 480 }, height: { ideal: 640 }, aspectRatio: { ideal: 0.75 }, frameRate: { ideal: 24, max: 30 } },
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+    }).then(function (stream) {
+      if (state.screen !== "trainer-rec") { stream.getTracks().forEach(function (t) { t.stop(); }); return; }
+      REC.stream = stream;
+      var v = document.getElementById("tr-cam");
+      v.srcObject = stream;
+      var p = v.play(); if (p && p.catch) p.catch(function () {});
+      setStatus("Встань в рамку", "");
+      loadPose().then(function () { if (state.screen === "trainer-rec") poseLoop(); })
+        .catch(function () { setStatus("Рамка без подсказок: проверь кадр сам", "warn"); hint("Контроль плеч сейчас недоступен — следи за плечами сам"); });
+    }).catch(camFailed);
+  }
+
+  function camFailed() {
+    setStatus("Нет доступа к камере", "warn");
+    hint("Разреши доступ к камере и микрофону или прикрепи видео внизу «Распевок»");
+    var b = document.getElementById("tr-rec-go"); if (b) b.disabled = true;
+  }
+  function hint(t) { var el = document.getElementById("tr-rec-hint"); if (el) el.textContent = t; }
+
+  /* Поза: рамка «макушка — пояс» и подъём плеч. Координаты MediaPipe
+     нормированы к кадру; кадр 3:4 показан целиком, так что % совпадают с экраном. */
+  function poseLoop() {
+    var v = document.getElementById("tr-cam"), lastT = 0;
+    function step(now) {
+      if (state.screen !== "trainer-rec" || !POSE.lm) { REC.poseTimer = 0; return; }
+      if (now - lastT > 90 && v.readyState >= 2 && v.videoWidth) {
+        lastT = now;
+        var res = null;
+        try { res = POSE.lm.detectForVideo(v, now); } catch (e) {}
+        onPose(res && res.landmarks && res.landmarks[0], v.videoWidth, v.videoHeight, now);
+      }
+      REC.poseTimer = requestAnimationFrame(step);
+    }
+    REC.poseTimer = requestAnimationFrame(step);
+  }
+
+  function onPose(L, W, H, now) {
+    var line = document.getElementById("tr-sh-line"), base = document.getElementById("tr-sh-base"), guide = document.getElementById("tr-guide");
+    function vis(i) { return L[i].visibility == null ? 1 : L[i].visibility; }
+    if (!L || vis(0) < 0.5 || vis(11) < 0.5 || vis(12) < 0.5) {
+      REC.frame = "none";
+      if (REC.phase === "setup") setStatus("Встань в рамку", "");
+      if (guide) guide.className = "tr-guide";
+      if (line) line.style.opacity = 0;
+      return;
+    }
+    var sy = (L[11].y + L[12].y) / 2;
+    var swPx = Math.abs(L[11].x - L[12].x) * W;
+    var headTop = L[0].y - (sy - L[0].y) * 0.8;
+    var waistY = sy + 1.35 * swPx / H;
+    var ok = false, msg;
+    if (headTop < 0.01) msg = "Голова не помещается — отодвинь телефон или опусти его";
+    else if (waistY > 1.0) msg = "Отойди чуть дальше — нужен кадр до пояса";
+    else if (headTop > 0.2 || waistY < 0.72) msg = "Подойди ближе — ты слишком далеко";
+    else { ok = true; msg = "Кадр ровный — можно записывать"; }
+    REC.frame = ok ? "ok" : "bad";
+    if (REC.phase === "setup") setStatus(msg, ok ? "ok" : "warn");
+    if (guide) guide.className = "tr-guide " + (ok ? "ok" : "bad");
+
+    // Плечи: высота относительно самого низкого положения за последние 6 с,
+    // в долях ширины плеч (не зависит от расстояния до камеры).
+    REC.samples.push({ t: now, y: sy });
+    while (REC.samples.length && now - REC.samples[0].t > 6000) REC.samples.shift();
+    var low = sy; REC.samples.forEach(function (p) { if (p.y > low) low = p.y; });
+    var rise = swPx > 10 ? (low - sy) * H / swPx : 0;
+    REC.liveRise = rise;
+    var active = REC.phase === "rec" || REC.phase === "countdown";
+    if (line) {
+      line.style.opacity = 1;
+      line.style.top = (sy * 100) + "%";
+      line.style.left = (Math.min(L[11].x, L[12].x) * 100) + "%";
+      line.style.width = (Math.abs(L[11].x - L[12].x) * 100) + "%";
+      line.classList.toggle("up", REC.raised);
+    }
+    if (base) { base.style.opacity = active ? 1 : 0; base.style.top = (low * 100) + "%"; }
+    if (REC.phase !== "rec") return;
+    if (!REC.raised && rise > 0.07) {
+      if (!REC.raisedSince) REC.raisedSince = now;
+      if (now - REC.raisedSince > 250) {
+        REC.raised = true;
+        var e = TR.events[TR.cur];
+        REC.rises.push({ at: Math.max(0, TR.t), onInhale: !!(e && e.type === "inhale") });
+        showWarn("Плечи поднялись — вдыхай в нижние рёбра и живот");
+        try { tg && tg.HapticFeedback && tg.HapticFeedback.notificationOccurred("warning"); } catch (er) {}
+      }
+    } else if (rise <= 0.07) REC.raisedSince = 0;
+    if (REC.raised && rise < 0.035) REC.raised = false;
+  }
+
+  function showWarn(t) {
+    var el = document.getElementById("tr-sh-warn"); if (!el) return;
+    el.textContent = t; el.classList.add("on");
+    clearTimeout(REC.warnTimer);
+    REC.warnTimer = setTimeout(function () { el.classList.remove("on"); }, 2200);
+  }
+
+  function recCountdown() {
+    if (!REC.stream) return;
+    if (REC.phase !== "setup") return;
+    if (TR.pad) { TR.pad.stop(); TR.pad = null; } // фон на время записи выключен — Николай слышит только голос
+    REC.phase = "countdown";
+    var btn = document.getElementById("tr-rec-go"); if (btn) btn.disabled = true;
+    hint("Фон на время записи выключен, чтобы Николай слышал только тебя");
+    var n = 3, cd = document.getElementById("tr-cd");
+    cd.textContent = n; cd.classList.add("on");
+    REC.cdTimer = setInterval(function () {
+      n--;
+      if (n > 0) { cd.textContent = n; return; }
+      clearInterval(REC.cdTimer); REC.cdTimer = 0;
+      cd.classList.remove("on"); cd.textContent = "";
+      recStart();
+    }, 1000);
+  }
+
+  function recStart() {
+    if (state.screen !== "trainer-rec" || !REC.stream) return;
+    REC.mime = pickMime();
+    REC.chunks = []; REC.rises = []; REC.raised = false; REC.raisedSince = 0; REC.discard = false;
+    var opts = { videoBitsPerSecond: 280000, audioBitsPerSecond: 48000 };
+    if (REC.mime) opts.mimeType = REC.mime;
+    var mr;
+    try { mr = new MediaRecorder(REC.stream, opts); } catch (e) {
+      try { mr = new MediaRecorder(REC.stream); } catch (e2) { setStatus("Запись видео на этом телефоне не поддерживается", "warn"); REC.phase = "setup"; return; }
+    }
+    REC.rec = mr;
+    mr.ondataavailable = function (e) { if (e.data && e.data.size) REC.chunks.push(e.data); };
+    mr.onstop = function () {
+      if (REC.discard) { REC.discard = false; return; }
+      var type = (mr.mimeType || REC.mime || "video/mp4").split(";")[0];
+      REC.blob = new Blob(REC.chunks, { type: type });
+      if (REC.url) URL.revokeObjectURL(REC.url);
+      REC.url = URL.createObjectURL(REC.blob);
+      REC.duration = Math.round((performance.now() - REC.startedAt) / 1000);
+      REC.phase = "review"; REC.sendStatus = "";
+      if (REC.stream) { REC.stream.getTracks().forEach(function (t) { t.stop(); }); REC.stream = null; }
+      if (REC.poseTimer) { cancelAnimationFrame(REC.poseTimer); REC.poseTimer = 0; }
+      if (state.screen === "trainer-rec") renderReview();
+    };
+    mr.start(1000);
+    REC.startedAt = performance.now();
+    REC.phase = "rec";
+    TR.t = -1.5; TR.cur = -1; TR.finished = false; TR.paused = false;
+    setStatus("Идёт запись", "rec");
+    var dot = document.getElementById("tr-rec-dot"); if (dot) dot.classList.add("on");
+    var btn = document.getElementById("tr-rec-go");
+    if (btn) { btn.disabled = false; btn.classList.add("stop"); btn.setAttribute("aria-label", "Остановить запись"); btn.onclick = function () { recStop(); }; }
+    hint("Следи за лентой. Запись остановится сама через " + fmt(TR.total));
+    REC.timeTimer = setInterval(function () {
+      var el = document.getElementById("tr-rec-time");
+      if (!el || REC.phase !== "rec") { clearInterval(REC.timeTimer); return; }
+      el.textContent = fmt((performance.now() - REC.startedAt) / 1000);
+    }, 500);
+  }
+
+  function recStop() {
+    clearInterval(REC.timeTimer);
+    TR.paused = true;
+    if (REC.rec && REC.rec.state !== "inactive") { try { REC.rec.stop(); } catch (e) {} }
+  }
+
+  function shoulderSummary() {
+    var n = REC.rises.length;
+    if (!POSE.lm) return { ok: null, text: "Контроль плеч не работал — проверь себя по видео", note: "Плечи: не отслеживались" };
+    if (!n) return { ok: true, text: "Плечи спокойные всю запись — отлично!", note: "Плечи: спокойные ✓" };
+    var times = REC.rises.slice(0, 6).map(function (r) { return fmt(r.at); }).join(", ");
+    return { ok: false, text: "Плечи поднимались " + n + " " + pl(n, "раз", "раза", "раз") + " (" + times + "). Вдыхай в нижние рёбра и живот.",
+      note: "Плечи поднимались: " + n + " " + pl(n, "раз", "раза", "раз") + " (" + times + ")" };
+  }
+
+  function renderReview() {
+    var s = section(), ex = s.exercises[TR.exIdx], sum = shoulderSummary();
+    var big = REC.blob && REC.blob.size > MAX_UPLOAD_BYTES;
+    var st = REC.sendStatus;
+    var sendTxt = st === "sending" ? "Отправляю Николаю…" : st === "sent" ? "Отправлено Николаю ✓" : st === "error" ? "Не отправилось — ещё раз" : "Отправить Николаю";
+    app.innerHTML =
+      '<div class="tr-rec tone-' + s.tone + '">' +
+        '<div class="tr-rec-view"><div class="tr-rec-box">' +
+          '<video class="tr-cam tr-play" id="tr-play" playsinline controls src="' + REC.url + '"></video>' +
+          '<div class="tr-rec-top"><button type="button" class="tr-round dark" id="tr-rec-close" aria-label="Закрыть">' + ico("close", 18) + "</button>" +
+            '<div class="tr-rec-status ok">Запись готова · ' + fmt(REC.duration || 0) + "</div></div>" +
+        "</div></div>" +
+        '<div class="tr-review">' +
+          '<div class="tr-review-t">' + h(ex.title) + "</div>" +
+          '<div class="tr-sum ' + (sum.ok === true ? "ok" : sum.ok === false ? "bad" : "") + '">' + h(sum.text) + "</div>" +
+          (big ? '<div class="tr-sum bad">Видео получилось тяжелее 4 МБ и не пройдёт в Telegram. Запиши ещё раз при хорошем свете — обычно так файл меньше.</div>' : "") +
+          (window.GUEST_ON ? '<div class="tr-sum">В тест-драйве отправка видео закрыта — она откроется после записи на занятия.</div>' : "") +
+          '<div class="tr-review-btns">' +
+            '<button type="button" class="tr-btn ghost" id="tr-redo">' + ico("redo", 18) + "Переснять</button>" +
+            '<button type="button" class="tr-btn main" id="tr-send"' + (big || window.GUEST_ON || st === "sending" || st === "sent" ? " disabled" : "") + ">" + ico("send", 18) + sendTxt + "</button>" +
+          "</div>" +
+          (st === "sent" && TR.exIdx < s.exercises.length - 1 ? '<button type="button" class="tr-btn next" id="tr-next">Следующее: ' + h(s.exercises[TR.exIdx + 1].title) + "</button>" : "") +
+        "</div>" +
+      "</div>";
+    document.getElementById("tr-rec-close").addEventListener("click", function () { REC.phase = "off"; handleBack(); });
+    document.getElementById("tr-redo").addEventListener("click", function () { REC.phase = "setup"; REC.sendStatus = ""; renderRec(); });
+    var nx = document.getElementById("tr-next");
+    if (nx) nx.addEventListener("click", function () { TR.exIdx++; REC.phase = "setup"; REC.sendStatus = ""; renderRec(); });
+    var sb = document.getElementById("tr-send");
+    if (sb) sb.addEventListener("click", function () { recSend(sum); });
+  }
+
+  function recSend(sum) {
+    if (!REC.blob || REC.sendStatus === "sending" || REC.sendStatus === "sent") return;
+    var s = section(), ex = s.exercises[TR.exIdx];
+    var ext = /mp4/.test(REC.blob.type) ? "mp4" : "webm";
+    var name = "Тренажёр — " + ex.title.replace(/[«»"]/g, "") + "." + ext;
+    REC.sendStatus = "sending"; renderReview();
+    var note = "🌬 Тренажёр: " + s.title + " · " + ex.title + " · темп " + ({ slow: "медленно", mid: "средне", fast: "быстро" })[TR.tempo] + "\n" + sum.note;
+    readVideoMeta(REC.blob).then(function (meta) {
+      meta = meta || {};
+      meta.note = note;
+      if (!meta.duration) meta.duration = REC.duration;
+      submitFile("warmup", REC.blob, function (status) {
+        if (status === "sending") return;
+        REC.sendStatus = status === "sent" ? "sent" : "error";
+        if (status === "sent") {
+          state.warmupFiles.push({ name: name, status: "sent" });
+          saveState();
+          maybeCelebrate();
+          if (window.trackEv) trackEv("trainer_video", { section: s.id, exercise: ex.id, rises: REC.rises.length });
+        }
+        if (state.screen === "trainer-rec" && REC.phase === "review") renderReview();
+      }, name, meta);
+    });
+  }
+
   /* ---------- подключение к app.js ---------- */
   window.renderTrainerScreen = function () {
-    if (state.screen === "trainer-ex") renderEx(); else renderList();
+    if (state.screen === "trainer-rec") renderRec();
+    else if (state.screen === "trainer-ex") renderEx();
+    else renderList();
   };
   window.trainerStopAll = function () {
     stopLoop();
     clearTimeout(TR.advTimer);
     if (TR.pad) { TR.pad.stop(); TR.pad = null; }
+    recCleanup();
   };
   window.trainerBackTarget = function () {
-    return state.screen === "trainer-ex" ? "trainer" : (TR.from || "profile");
+    if (state.screen === "trainer-rec") return "trainer-ex";
+    if (state.screen === "trainer-ex") return TR.from === "warmups" ? "warmups" : "trainer";
+    return TR.from || "profile";
+  };
+  /* Список разделов внутри «Распевок» урока (renderWarmups в app.js) */
+  window.trainerSectionsHtml = function () {
+    var done = todayList(), html = "";
+    SECTIONS.forEach(function (s) {
+      var n = s.exercises.length;
+      var all = s.exercises.every(function (x) { return done.indexOf(s.id + ":" + x.id) !== -1; });
+      html += '<button type="button" class="tr-card tone-' + s.tone + '" data-tr-open="' + s.id + '">' +
+        '<span class="tr-card-ic">' + ico(s.icon) + "</span>" +
+        '<span class="tr-card-tx">' +
+          '<span class="tr-card-t">' + h(s.title) + (all ? ' <span class="tr-card-ok">' + ico("check", 14) + "сегодня</span>" : "") + "</span>" +
+          '<span class="tr-card-d">' + h(s.desc) + "</span>" +
+          '<span class="tr-card-m">' + n + " " + pl(n, "упражнение", "упражнения", "упражнений") + " · " + n + " мин · фон " + s.mood + "</span>" +
+        "</span></button>";
+    });
+    return '<div class="tr-in-warmups">' + html + "</div>";
+  };
+  window.trainerWireSections = function (from) {
+    Array.prototype.forEach.call(app.querySelectorAll("[data-tr-open]"), function (b) {
+      b.addEventListener("click", function () {
+        TR.from = from; TR.sid = b.getAttribute("data-tr-open"); TR.exIdx = 0; TR.paused = false;
+        go("trainer-ex");
+      });
+    });
   };
   document.addEventListener("visibilitychange", function () {
     if (!TR.pad) return;

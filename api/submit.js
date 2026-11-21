@@ -206,6 +206,9 @@ export default async function handler(req) {
       supports_streaming: "true"
     };
 
+    // Подпись от тренажёра дыхания: упражнение, темп и как вели себя плечи
+    var note = (form.get("note") || "").toString().slice(0, 400);
+    if (note) label = label + "\n" + note;
     var result = await tgSendFile(token, chatId, method, field, file, label + "\n" + head, extra);
     if (!result.ok) {
       // фолбэк: если Telegram не смог обработать как видео/фото (например формат/размер), шлём документом
