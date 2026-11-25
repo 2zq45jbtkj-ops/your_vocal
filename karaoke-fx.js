@@ -590,9 +590,26 @@
       : '<canvas class="kfx-bc" width="' + BALL + '" height="' + BALL + '" data-c="' + c.g + "," + c.u + "," + c.p + '"></canvas>';
   }
   function liveBalls(kp) { if (kp.sheet) { paintBalls(kp.sheet, performance.now()); ballLoop(kp); } }
+  /* Неподвижные шарики (25.11): темы пометок — пилюли на фонах, но без
+     движения. Один кадр в момент t, без цикла; без WebGL — цвет палитры. */
+  function staticBall(c) {
+    return THfail ? '<i style="background:' + hex(getPal(c.p).c[1]) + '"></i>'
+      : '<canvas class="kfx-bc kfx-still" width="' + BALL + '" height="' + BALL + '" data-c="' + c.g + "," + c.u + "," + c.p + '"></canvas>';
+  }
+  function paintStill(d) {
+    var r = thR(); if (!r) return;
+    var list = d.querySelectorAll("canvas.kfx-still");
+    for (var i = 0; i < list.length; i++) {
+      var el = list[i], c = el.getAttribute("data-c").split(",").map(Number);
+      r.combo = { g: c[0], u: c[1], p: c[2] };
+      try { r.reset(); r.draw(14, 0, 1e12); } catch (e) { continue; }
+      var cx = el.getContext("2d");
+      if (cx) cx.drawImage(r.cv, 0, 0, BALL, BALL);
+    }
+  }
 
   return {
-    apply: apply, tick: tick, openSheet: openSheet, stop: stop, currentBall: currentBall, liveBalls: liveBalls,
+    apply: apply, tick: tick, openSheet: openSheet, stop: stop, currentBall: currentBall, liveBalls: liveBalls, staticBall: staticBall, paintStill: paintStill,
     // для тестов
     _comboFor: comboFor, _randomCombo: randomCombo, _validCombo: validCombo, PAL: PAL, UNDER: UNDER
   };

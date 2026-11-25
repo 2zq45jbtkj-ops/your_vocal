@@ -2134,14 +2134,19 @@ ACTS["admin-hub-karaoke"] = function () { go("admin-karaoke"); };
    есть пока только у дыхания.
    ========================================================================== */
 
+/* Темы — пилюли с неподвижным шариком-фоном (как в шторке «Фон», но без
+   движения, 25.11). combo — какой кадр фона в шарике: g стекло, u подложка,
+   p палитра (только Бордо 0 / Терракота 1 / Индиго 2). */
 var KAR_THEMES = {
-  breath: { name: "дыхания", syms: [{ s: "V", t: "вдох" }, { s: "v", t: "добор" }, { s: "W", t: "двойной" }] },
-  reg: { name: "регистров", syms: [] },
-  onset: { name: "атаки и окончания звука", syms: [] },
-  folds: { name: "голосовых связок", syms: [] },
-  belt: { name: "бэлтинга", syms: [] },
-  twang: { name: "твэнга", syms: [] }
+  breath: { label: "Дыхание", name: "дыхания", combo: { g: 0, u: 2, p: 1 },
+    syms: [{ s: "V", t: "вдох" }, { s: "v", t: "добор" }, { s: "W", t: "двойной" }] },
+  reg: { label: "Регистры", name: "регистров", combo: { g: 0, u: 0, p: 2 }, syms: [] },
+  onset: { label: "Атака и окончание", name: "атаки и окончания звука", combo: { g: 1, u: 3, p: 0 }, syms: [] },
+  folds: { label: "Голосовые связки", name: "голосовых связок", combo: { g: 0, u: 1, p: 0 }, syms: [] },
+  belt: { label: "Бэлтинг", name: "бэлтинга", combo: { g: 1, u: 0, p: 1 }, syms: [] },
+  twang: { label: "Твэнг", name: "твэнга", combo: { g: 1, u: 4, p: 2 }, syms: [] }
 };
+var KAR_THEME_ORDER = ["breath", "reg", "onset", "folds", "belt", "twang"];
 
 var KM_ICO = {
   pen: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="m13.5 6.5 4 4" stroke="currentColor" stroke-width="2"/></svg>',
@@ -2186,6 +2191,7 @@ function karView() {
   if (KP.mark) return "stu";
   if (KP.rev) return "rev";
   if (KP.tap) return "key";
+  if (karTheme() !== "breath") { var r0 = karStuRec(); return r0 && r0.status === "checked" ? "rev" : "stu"; } // твоя разметка пока только по дыханию
   var rec = karStuRec();
   if (!rec || (rec.status === "draft" && !karStuCount())) return "key";
   if (KP.role === "teacher") return rec.status === "checked" ? "rev" : "key";
@@ -2236,12 +2242,28 @@ function karPaintMarksSheet() {
   }
   h += pill("com", KM_ICO.com, "Комментарии" + (nCom ? " · " + nCom : ""), nCom ? "" : "off");
   h += pill("show", KM_ICO.eye, "Показывать пометки", KAR.showMarks ? "on" : "");
+  var th = KAR_THEME_ORDER.map(function (k) {
+    var T = KAR_THEMES[k];
+    return '<span class="kfx-pill kset-pill' + (k === karTheme() ? " on" : "") + (T.syms.length ? "" : " off") + '" data-kt="' + k + '" role="button">' +
+      '<span class="kfx-ball">' + (window.KarFx && KarFx.staticBall ? KarFx.staticBall(T.combo) : "") + "</span>" + T.label + "</span>";
+  }).join("");
   d.innerHTML = '<div class="t">Пометки</div>' +
-    '<div class="kfxs-in"><div class="kfx-row kset-pills">' + h + "</div></div>" +
+    '<div class="kfxs-in"><div class="kfx-l kmt-l">Тема</div><div class="kfx-row kset-pills kmt-row">' + th + "</div>" +
+    '<div class="kfx-l kmt-l">Разметка</div><div class="kfx-row kset-pills">' + h + "</div></div>" +
     '<div class="row" style="display:flex;gap:10px;margin-top:16px"><div class="bt main" data-km="ok">Готово</div></div>';
   var q = function (k) { return d.querySelector('[data-km="' + k + '"]'); };
   var close = function () { if (d.parentNode) d.parentNode.removeChild(d); KP.sheet = null; };
   q("ok").onclick = close;
+  if (window.KarFx && KarFx.paintStill) KarFx.paintStill(d);
+  Array.prototype.forEach.call(d.querySelectorAll("[data-kt]"), function (el) {
+    el.onclick = function () {
+      var k = el.getAttribute("data-kt");
+      if (!KAR_THEMES[k].syms.length) { karToast("Значки для темы «" + KAR_THEMES[k].label + "» скоро появятся"); return; }
+      if (k === karTheme()) return;
+      KP.theme = k; KP.symMode = null;
+      karStuAttach(); karPaintLyrics(); karPaintMarksSheet();
+    };
+  });
   q("show").onclick = function () { KAR.showMarks = !KAR.showMarks; karPaintLyrics(); karPaintMarksSheet(); };
   q("com").onclick = function () { if (nCom) { close(); karOpenComments(); } else karToast(st === "checked" ? "Комментариев нет" : "Комментарии появятся после проверки Николая"); };
   if (q("rev")) q("rev").onclick = function () { close(); karRevStart(); };
@@ -2285,8 +2307,8 @@ function karStuPaintBar(box) {
     btns = '<div class="bt" data-kb="no">Отмена</div><div class="bt main" data-kb="done">Отправить</div>';
   } else if (KP.mark) {
     var n = karStuCount();
-    t = "Разметка дыхания" + (n ? " · " + n : "");
-    sub = "V — вдох, v — добор, W — двойной вдох";
+    t = "Разметка " + KAR_THEMES[karTheme()].name + (n ? " · " + n : "");
+    sub = KAR_THEMES[karTheme()].syms.map(function (x) { return x.s + " — " + x.t; }).join(", ");
     btns = '<div class="bt" data-kb="exit">Выйти</div><div class="bt main' + (n ? "" : " off") + '" data-kb="ask-send">Отправить Николаю</div>';
   } else {
     t = "Проверка разметки";
@@ -2346,7 +2368,7 @@ function karSymChips(mode) {
 
 function karStuOpenLine(k) {
   var l = KP.lines[k];
-  var ed = { mk: JSON.parse(JSON.stringify(l.smk || {})), mode: KP.symMode || "V" };
+  var ed = { mk: JSON.parse(JSON.stringify(l.smk || {})), mode: KP.symMode || KAR_THEMES[karTheme()].syms[0].s };
   var words = l.text.split(/\s+/);
   karMarkSheet(k, function (api) {
     var d = api.el, h = "";
@@ -2355,7 +2377,7 @@ function karStuOpenLine(k) {
       if (g < words.length) h += esc(words[g]);
     }
     d.innerHTML = '<div class="hdl"></div>' +
-      '<div class="cap">Строка ' + (k + 1) + " · тапни «+» там, где берёшь дыхание</div>" +
+      '<div class="cap">Строка ' + (k + 1) + " · тапни «+» между словами</div>" +
       '<div class="ln">' + h + "</div>" + karSymChips(ed.mode) +
       (l.t != null ? '<div class="sing" data-e="hear">▶ Послушать строку</div>' : "") +
       '<div class="bts"><span class="bt2" data-e="clear">Очистить</span><span class="bt2 main" data-e="ok">Готово</span></div>';
@@ -2420,7 +2442,7 @@ function karRevStart() {
   if (KE && KE.playing) karPause();
   if (KP.loop) karLoopOff();
   // первый раз: пропущенные вдохи сразу подставлены из твоей разметки (где у ученика пусто) — лишние убираешь тапом
-  if (!rec.review || !Object.keys(rec.review.lines || {}).length) {
+  if (karTheme() === "breath" && (!rec.review || !Object.keys(rec.review.lines || {}).length)) {
     KP.lines.forEach(function (l) {
       var miss = {};
       Object.keys(l.mk || {}).forEach(function (g) { if (!(l.smk && l.smk[g])) miss[g] = l.mk[g]; });
@@ -2446,7 +2468,7 @@ function karRevOpenLine(k) {
   var l = KP.lines[k];
   var rv = JSON.parse(JSON.stringify(l.rv || { ok: {}, miss: {}, c: "" }));
   rv.ok = rv.ok || {}; rv.miss = rv.miss || {}; rv.c = rv.c || "";
-  var mode = KP.symMode || "V";
+  var mode = KP.symMode || KAR_THEMES[karTheme()].syms[0].s;
   var words = l.text.split(/\s+/);
   karMarkSheet(k, function (api) {
     var d = api.el, h = "", ref = "", sm = l.smk || {};
@@ -2454,13 +2476,13 @@ function karRevOpenLine(k) {
       if (sm[g]) h += '<span class="km kr' + (rv.ok[g] === 1 ? " rok" : rv.ok[g] === 0 ? " rbad" : "") + '" data-r="' + g + '">' + sm[g] + (rv.ok[g] === 1 ? "✓" : rv.ok[g] === 0 ? "✗" : "") + "</span>";
       else if (rv.miss[g]) h += '<span class="km rmiss" data-m="' + g + '">' + rv.miss[g] + "</span>";
       else h += '<span class="kg" data-a="' + g + '">+</span>';
-      if (l.mk[g]) ref += "<b>" + l.mk[g] + "</b>";
+      if (karTheme() === "breath" && l.mk[g]) ref += "<b>" + l.mk[g] + "</b>";
       if (g < words.length) { h += esc(words[g]); ref += esc(words[g]) + " "; }
     }
     d.innerHTML = '<div class="hdl"></div>' +
       '<div class="cap">Строка ' + (k + 1) + " · тап по пометке ученика: ✓ → ✗ → без оценки</div>" +
       '<div class="ln">' + h + "</div>" +
-      (Object.keys(l.mk || {}).length ? '<div class="kref">Твоя разметка: ' + ref + "</div>" : "") +
+      (karTheme() === "breath" && Object.keys(l.mk || {}).length ? '<div class="kref">Твоя разметка: ' + ref + "</div>" : "") +
       '<div class="cap" style="margin-top:12px">Пропущенный вдох: выбери значок и тапни «+»</div>' + karSymChips(mode) +
       '<input type="text" class="hin" maxlength="500" placeholder="Комментарий к строке" value="' + esc(rv.c) + '">' +
       (l.t != null ? '<div class="sing" data-e="hear">▶ Послушать строку</div>' : "") +
@@ -2578,16 +2600,22 @@ function karOpenComments() {
 function karAdmPaintStu() {
   var box = app.querySelector(".kadm .kstu");
   if (!box || !KAE) return;
-  var s = KAE.song, all = (KAR.admStu || {})[s.id] || {}, rec = all.breath;
-  if (!rec || (rec.status === "draft")) { box.innerHTML = ""; return; }
-  var n = 0;
-  Object.keys(rec.lines || {}).forEach(function (k) { n += Object.keys(rec.lines[k].mk || {}).length; });
-  var hasMusic = !!(s.music && s.music.url);
-  box.innerHTML = '<div class="fld kstu-row" data-ka="rev"><span>Разметка дыхания ученика</span><b class="' + (rec.status === "sent" ? "" : "ok") + '">' +
-    (rec.status === "sent" ? "Ждёт проверки · " + n : "Проверена ✓") + (hasMusic ? " ›" : "") + "</b></div>";
-  box.querySelector('[data-ka="rev"]').onclick = function () {
-    if (!hasMusic) { karAdmMsg("Сначала загрузи минус — без него караоке не откроется.", true); return; }
-    KAR.openRev = true;
-    karAdmOpenKaraoke(null);
-  };
+  var s = KAE.song, all = (KAR.admStu || {})[s.id] || {};
+  var hasMusic = !!(s.music && s.music.url), h = "";
+  KAR_THEME_ORDER.forEach(function (th) {
+    var rec = all[th];
+    if (!rec || rec.status === "draft") return;
+    var n = 0;
+    Object.keys(rec.lines || {}).forEach(function (k) { n += Object.keys(rec.lines[k].mk || {}).length; });
+    h += '<div class="fld kstu-row" data-kth="' + th + '"><span>Разметка ' + KAR_THEMES[th].name + ' ученика</span><b class="' + (rec.status === "sent" ? "" : "ok") + '">' +
+      (rec.status === "sent" ? "Ждёт проверки · " + n : "Проверена ✓") + (hasMusic ? " ›" : "") + "</b></div>";
+  });
+  box.innerHTML = h;
+  Array.prototype.forEach.call(box.querySelectorAll("[data-kth]"), function (el) {
+    el.onclick = function () {
+      if (!hasMusic) { karAdmMsg("Сначала загрузи минус — без него караоке не откроется.", true); return; }
+      KAR.openRev = true; KP.theme = el.getAttribute("data-kth");
+      karAdmOpenKaraoke(null);
+    };
+  });
 }

@@ -430,3 +430,16 @@ html .kp.fx-ivory .mk.mok { color: #2f7d4a; } html .kp.fx-ivory .mk.mbad { color
 .kp .kcoms .kcl-gen .kcl-c { margin-top: 0; font-weight: 600; }
 .kadm .kstu-row { margin-top: 10px; cursor: pointer; }
 .kadm .khl-row .l b.W { color: oklch(45% 0.09 35); }
+.kp .kmarks .kmt-l { font: 700 12px Inter, sans-serif; color: var(--dim); margin: 14px 4px 0; text-transform: none; }
+.kp .kmarks .kmt-row { margin-top: 8px; }
+.kp .kmarks .kset-pills { margin-top: 8px; }
+.kp .kmarks .kfx-pill.off .kfx-ball { filter: saturate(.6); }
+.kp:has(.kedit) .kbottom { visibility: hidden; } /* шторка строки не просвечивает панель под собой (25.11) */
+/* ✓ / ✗ сильнее общего цвета пометок (в тёмной теме он перебивал) */
+html .kp .mk.mok, html.dark .kp .mk.mok { color: oklch(84% 0.14 150); }
+html .kp .mk.mbad, html.dark .kp .mk.mbad { color: oklch(72% 0.17 25); }
+html .kp.fx-ivory .mk.mok { color: #2f7d4a; } html .kp.fx-ivory .mk.mbad { color: #b3261e; }
+html .kp .lyr p.f1 .mk.mok, html .kp .lyr p.f2 .mk.mok, html .kp .lyr p.f3 .mk.mok { color: transparent; text-shadow: 0 0 2.4px oklch(84% 0.14 150); }
+html .kp .lyr p.f1 .mk.mbad, html .kp .lyr p.f2 .mk.mbad, html .kp .lyr p.f3 .mk.mbad { color: transparent; text-shadow: 0 0 2.4px oklch(72% 0.17 25); }
+html .kp .lyr.free p .mk.mok { color: oklch(84% 0.14 150); text-shadow: none; }
+html .kp .lyr.free p .mk.mbad { color: oklch(72% 0.17 25); text-shadow: none; }
