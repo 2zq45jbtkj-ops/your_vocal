@@ -552,3 +552,31 @@ function krLeave() {
   if (window.KP) { KP.recOn = false; KP.recPrep = false; }
 }
 window.krLeave = krLeave;
+
+/* Кнопка записи справа внизу — как в распевках (25.11, просьба Николая).
+   Сначала маленькая, чтобы не нажать случайно; первый тап — становится
+   крупной, второй — открывается запись (настройка наушников / «Перед записью»).
+   Если второго тапа нет 3 секунды — снова маленькая. */
+function krFab() {
+  if (!KP.root) return;
+  var f = KP.root.querySelector(".kr-fab");
+  var show = !KP.tap && !KAR.fromAdmEdit && !KP.sel && !KP.fixPick && !KP.mark && !KP.rev && !KP.ask && !KP.recOn && !KP.recPrep;
+  if (!show) { if (f) f.parentNode.removeChild(f); return; }
+  if (f) return;
+  f = document.createElement("button");
+  f.type = "button"; f.className = "kr-fab"; f.setAttribute("aria-label", "Запись");
+  f.innerHTML = "<i></i>";
+  KP.root.appendChild(f);
+  var t = 0;
+  f.onclick = function () {
+    if (!f.classList.contains("big")) {
+      f.classList.add("big");
+      try { window.Telegram.WebApp.HapticFeedback.impactOccurred("light"); } catch (e) {}
+      clearTimeout(t); t = setTimeout(function () { f.classList.remove("big"); }, 3000);
+      return;
+    }
+    clearTimeout(t); f.classList.remove("big");
+    krOpen();
+  };
+}
+window.krFab = krFab;

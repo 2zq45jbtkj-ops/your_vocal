@@ -494,3 +494,18 @@ html .kp .lyr.free p .mk.mbad { color: oklch(72% 0.17 25); text-shadow: none; }
   border: 3px solid var(--hi); display: flex; align-items: center; justify-content: center; }
 .kp .kr-stop i { width: 24px; height: 24px; border-radius: 6px; background: oklch(60% 0.22 25); }
 .kp:has(.krs) .kbottom { visibility: hidden; } /* шторки записи не просвечивают кнопки под собой */
+/* Кнопка записи справа внизу — как в распевках (.tr-rec-btn): маленькая → тап → крупная → тап → запись */
+.kp .kr-fab { position: absolute; z-index: 4; right: 18px; bottom: calc(22px + env(safe-area-inset-bottom, 0px)); width: 40px; height: 40px; border-radius: 50%;
+  border: 3px solid #F2ECE7; background: transparent; padding: 0; display: flex; align-items: center; justify-content: center; cursor: pointer;
+  transition: width .25s cubic-bezier(.3,.7,.3,1), height .25s cubic-bezier(.3,.7,.3,1), border-width .25s; -webkit-tap-highlight-color: transparent; }
+.kp .kr-fab i { width: 28px; height: 28px; border-radius: 50%; background: #FF5A4E; transition: width .25s, height .25s; }
+.kp .kr-fab.big { width: 68px; height: 68px; border-width: 4px; }
+.kp .kr-fab.big i { width: 50px; height: 50px; }
+html .kp.fx-ivory .kr-fab { border-color: #2b2622; }
+.kp:has(.ksheet) .kr-fab, .kp:has(.kedit) .kr-fab { visibility: hidden; }
+/* «Стоп» во время записи — та же кнопка, крупная, квадрат внутри */
+.kp .kr-bar { padding-bottom: 16px; padding-right: 96px; text-align: left; }
+.kp .kr-bar .kr-live { justify-content: flex-start; }
+.kp .kr-bar .s { text-align: left; }
+.kp .kr-stop { left: auto; right: 14px; top: 50%; bottom: auto; transform: translateY(-50%); border: 4px solid #F2ECE7; }
+.kp .kr-stop i { width: 26px; height: 26px; border-radius: 6px; background: #FF5A4E; }

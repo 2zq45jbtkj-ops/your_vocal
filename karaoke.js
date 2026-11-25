@@ -848,6 +848,7 @@ function karRangeTimes(a, b) {
 
 function karPaintBottom() {
   var box = KP.root.querySelector(".kbottom");
+  if (window.krFab) setTimeout(krFab, 0); // кнопка записи прячется в режимах разметки, повтора и записи
   if (KP.recOn || KP.recPrep) { krPaintRecBar(box); return; } // запись в караоке (25.11)
   if (KP.mark || KP.rev || KP.ask) { karStuPaintBar(box); return; }
   if (KP.fixPick) {
@@ -941,13 +942,11 @@ function karPaintChips() {
   chs.innerHTML =
     (hasVoice ? '<span class="gch' + (KE.voice ? " on" : "") + '" data-kp="voice">С голосом <b>' + (KE.voice ? "вкл" : "выкл") + "</b></span>" : "") +
     // редкие настройки (тональность, темп, пометки, фон) — за значком (20.11)
-    '<span class="gch kset-ch" data-kp="settings" role="button" aria-label="Настройки: тональность, темп, пометки, фон">' + KAR_SET_ICO + "Настройки</span>" +
-    (window.krOpen && !KP.tap && !KAR.fromAdmEdit ? '<span class="gch kr-ch" data-kp="rec" role="button" aria-label="Записать себя"><i></i>Запись</span>' : "");
+    '<span class="gch kset-ch" data-kp="settings" role="button" aria-label="Настройки: тональность, темп, пометки, фон">' + KAR_SET_ICO + "Настройки</span>";
   var vc = chs.querySelector('[data-kp="voice"]');
   if (vc) vc.onclick = function () { karSetVoice(!KE.voice); };
   chs.querySelector('[data-kp="settings"]').onclick = karOpenSettings;
-  var rc = chs.querySelector('[data-kp="rec"]');
-  if (rc) rc.onclick = krOpen;
+  if (window.krFab) krFab(); // кнопка записи справа внизу, как в распевках (25.11)
 }
 
 var KAR_SET_ICO = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="16" cy="7" r="2.2" stroke="currentColor" stroke-width="2"/><circle cx="10" cy="17" r="2.2" stroke="currentColor" stroke-width="2"/></svg>';
