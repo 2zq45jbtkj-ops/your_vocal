@@ -424,6 +424,8 @@
     log({ kind: "trial", label: "Нажал «Записаться на пробный урок»" });
     closeScreen(); flush(true);
     post("trial", {});
+    // 26.11: запись на пробный — сразу в приложении, со свободным временем Николая.
+    if (window.openBooking) { G.store.applied = Date.now(); saveStore(); closeSheets(); window.openBooking(); return; }
     G.store.popupAt = Date.now(); saveStore();
     G.store.applied = Date.now(); saveStore();
     closeSheets();

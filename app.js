@@ -468,6 +468,7 @@ function backTarget() {
     case "admin-students": return "admin-hub";
     case "admin-birthdays": return "admin-hub";
     case "admin-today": return "admin-hub";
+    case "book": return window.GUEST_ON ? "courses" : "profile";
     case "admin-week": return "admin-hub";
     case "admin-dash": return "admin-hub";
     case "admin-guests": return "admin-hub";
@@ -2292,6 +2293,7 @@ function renderCabLessons(data) {
         (up.length ? '<div class="cab-mute">Ближайший: ' + lessonWhen(up[0].at) + "</div>" : "") +
       "</div>" +
       '<button class="cta terra cab-cta-sm" data-act="cab-renew">Пополнить</button></div>' +
+      '<button class="cta terra" data-act="cab-book" style="margin-top:14px;">Записаться на урок</button>' +
     "</div>";
 
   var gold = data && data.nextSrez
@@ -2609,6 +2611,117 @@ function openRenew() {
   else window.open(url, "_blank");
 }
 
+
+/* ---------- Запись на урок / пробный прямо в приложении (26.11) ----------
+   Свободное время и сама запись — из бота записи (vocal-bot /api/app_book): то же
+   расписание, что у карточек бота, поэтому накладок нет. Новичок → пробный урок
+   (место держится час, реквизиты и чек — в боте), ученик → следующий урок из
+   абонемента или перенос ближайшего (правило 24 часов). Время — по часам телефона. */
+var BOOK_API = "https://vocal-bot.vercel.app/api/app_book";
+var BK_WD = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
+var BK_WDF = ["воскресенье", "понедельник", "вторник", "среду", "четверг", "пятницу", "субботу"];
+var BK_MON = ["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
+function bkOffsetH() { return -new Date().getTimezoneOffset() / 60; }
+function bkLocal(m, teacherOff) { return m + Math.round((bkOffsetH() - (teacherOff || 5)) * 60); }
+function bkHM(m) { m = ((m % 1440) + 1440) % 1440; return ("0" + Math.floor(m / 60)).slice(-2) + ":" + ("0" + (m % 60)).slice(-2); }
+function bkDate(iso) { var p = iso.split("-"); return new Date(+p[0], +p[1] - 1, +p[2]); }
+function openBooking() {
+  state.book = null; state.bookDay = null; state.bookStart = null; state.bookErr = ""; state.bookMove = false; state.bookDone = null;
+  go("book");
+}
+window.openBooking = openBooking;
+function loadBook() {
+  if (state.book || state._bookBusy) return;
+  state._bookBusy = true;
+  fetch(BOOK_API, { headers: { "x-tg-init-data": (tg && tg.initData) || "" } })
+    .then(function (r) { return r.json(); })
+    .then(function (d) { state._bookBusy = false; state.book = d && d.ok ? d : { ok: false, e: (d && d.e) || "" }; if (state.screen === "book") render(); },
+          function () { state._bookBusy = false; state.book = { ok: false }; if (state.screen === "book") render(); });
+}
+function submitBooking() {
+  var b = state.book;
+  if (!b || state.bookStart == null || state._bookSending) return;
+  state._bookSending = true; state.bookErr = ""; render();
+  fetch(BOOK_API, { method: "POST", headers: { "content-type": "application/json", "x-tg-init-data": (tg && tg.initData) || "" },
+    body: JSON.stringify({ day: state.bookDay, start: state.bookStart, tzOffset: bkOffsetH(), move: !!state.bookMove }) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      state._bookSending = false;
+      if (d && d.ok) { state.bookDone = { kind: d.kind, day: state.bookDay, start: state.bookStart }; state.book = null; }
+      else { state.bookErr = (d && d.e) || "Не получилось, нажми ещё раз"; state.book = null; }
+      render();
+    }, function () { state._bookSending = false; state.bookErr = "Нет связи, нажми ещё раз"; render(); });
+}
+function renderBook() {
+  var top = function (title, sub) {
+    return '<div class="top pb8">' + backBtn("back") + '<div><div class="top-title lg">' + title + '</div>' + (sub ? '<div class="top-sub">' + sub + '</div>' : '') + '</div></div>';
+  };
+  var wrap = function (html) { return '<div style="padding:8px 18px 140px;display:flex;flex-direction:column;gap:12px;">' + html + '</div>'; };
+  if (state.bookDone) {
+    var dn = state.bookDone, dd = bkDate(dn.day), t = bkHM(bkLocal(dn.start, 5));
+    var msg = dn.kind === "trial"
+      ? "Время держу за тобой час. Реквизиты для оплаты и куда прислать чек — уже в чате с ботом."
+      : dn.kind === "move" ? "Урок перенесён. Напоминание придёт в бот." : "Урок записан. Напоминание придёт в бот.";
+    app.innerHTML = top(dn.kind === "trial" ? "Пробный урок" : "Запись", "") + wrap(
+      '<div class="cab-card" style="text-align:center;padding:28px 18px;margin:0;">' +
+        '<div style="width:72px;height:72px;border-radius:50%;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;font-size:32px;color:oklch(72% 0.13 150);background:oklch(72% 0.13 150 / .14);">✓</div>' +
+        '<div style="font-size:20px;font-weight:700;">' + (dn.kind === "trial" ? "Записал на пробный" : dn.kind === "move" ? "Перенесено" : "Записано") + '</div>' +
+        '<div class="lesson-sub" style="margin-top:6px;font-size:14px;">' + BK_WDF[dd.getDay()].replace(/у$/, "а").replace(/^с.*/, function (x) { return x; }) + ", " + dd.getDate() + " " + BK_MON[dd.getMonth()] + ", " + t + '</div>' +
+        '<div class="lesson-sub" style="margin-top:12px;line-height:1.45;">' + msg + '</div></div>' +
+      '<button class="cta terra" data-act="book-done">Готово</button>');
+    wireActs(); return;
+  }
+  loadBook();
+  var b = state.book;
+  if (!b) { app.innerHTML = top("Запись", "") + wrap('<div class="courses-empty">Смотрю свободное время…</div>'); wireActs(); return; }
+  if (!b.ok) { app.innerHTML = top("Запись", "") + wrap('<div class="courses-empty">' + esc(b.e || "Не получилось загрузить время. Закрой экран и открой ещё раз.") + '</div>'); wireActs(); return; }
+  var title = b.mode === "trial" ? "Пробный урок" : "Запись на урок";
+  if (b.mode === "nosub") {
+    app.innerHTML = top(title, "") + wrap('<div class="cab-card" style="margin:0;"><div style="font-size:17px;font-weight:700;">Уроки в абонементе закончились</div><div class="lesson-sub" style="margin-top:6px;">Пополни уроки — и сразу выберешь время.</div></div>' +
+      '<button class="cta terra" data-act="cab-renew">Пополнить уроки</button>');
+    wireActs(); return;
+  }
+  var html = '';
+  if (b.mode === "student" && b.next) {
+    var nd = bkDate(b.next.day);
+    html += '<div class="cab-card" style="margin:0;"><div class="lesson-sub">Ближайший урок</div>' +
+      '<div style="font-size:20px;font-weight:700;margin:4px 0 10px;">' + BK_WD[nd.getDay()] + ", " + nd.getDate() + " " + BK_MON[nd.getMonth()] + " · " + bkHM(bkLocal(b.next.start, b.teacherOffset)) + '</div>' +
+      (b.next.canMove
+        ? '<button class="filter-btn' + (state.bookMove ? ' active-blue' : '') + '" data-act="book-move" style="width:100%;height:44px;">' + (state.bookMove ? "Переношу этот урок — выбери новое время" : "Перенести этот урок") + '</button>'
+        : '<div class="lesson-sub">Перенести уже нельзя: до урока меньше 24 часов.</div>') +
+      '</div>';
+  }
+  html += '<div class="lesson-sub" style="margin:4px 2px 0;">' + (b.mode === "trial" ? "45 минут, онлайн. " : "") + 'Время по твоему телефону. Записаться можно минимум за 24 часа.</div>';
+  var days = (b.days || []).filter(function (d) { return d.starts.length; });
+  if (!days.length) {
+    html += '<div class="courses-empty">Свободного времени пока нет. Напиши Николаю — подберём вместе.</div>';
+  } else {
+    if (!state.bookDay || !days.some(function (d) { return d.day === state.bookDay; })) state.bookDay = days[0].day;
+    html += '<div style="display:flex;gap:8px;overflow-x:auto;padding:4px 2px 8px;margin:0 -18px;padding-left:18px;padding-right:18px;scrollbar-width:none;">' +
+      days.map(function (d) {
+        var dt = bkDate(d.day), on = d.day === state.bookDay;
+        return '<button data-act="book-day" data-day="' + d.day + '" style="flex:none;width:56px;border:none;border-radius:16px;padding:8px 0;font:inherit;cursor:pointer;' +
+          (on ? 'background:var(--blue);color:#fff;' : 'background:var(--bg);color:var(--gray);box-shadow:var(--raised-sm);') + '">' +
+          '<div style="font-size:11px;">' + BK_WD[dt.getDay()] + '</div><div style="font-size:18px;font-weight:700;' + (on ? '' : 'color:var(--ink);') + '">' + dt.getDate() + '</div>' +
+          '<div style="font-size:9.5px;opacity:.8;">' + BK_MON[dt.getMonth()].slice(0, 3) + '</div></button>';
+      }).join("") + '</div>';
+    var cur = days.filter(function (d) { return d.day === state.bookDay; })[0];
+    var cd = bkDate(cur.day);
+    html += '<div class="lesson-sub" style="margin:0 2px;text-transform:uppercase;letter-spacing:.05em;">' + BK_WDF[cd.getDay()].replace(/у$/, "а") + ", " + cd.getDate() + " " + BK_MON[cd.getMonth()] + '</div>';
+    html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:9px;">' + cur.starts.map(function (m) {
+      var on = state.bookStart === m;
+      return '<button data-act="book-slot" data-start="' + m + '" style="border:none;border-radius:13px;padding:11px 0;font:600 14.5px inherit;font-family:inherit;cursor:pointer;' +
+        (on ? 'background:var(--blue);color:#fff;' : 'background:var(--bg);color:var(--ink);box-shadow:var(--raised-sm);') + '">' + bkHM(bkLocal(m, b.teacherOffset)) + '</button>';
+    }).join("") + '</div>';
+  }
+  if (state.bookErr) html += '<div class="lesson-sub" style="color:oklch(65% 0.17 25);">' + esc(state.bookErr) + '</div>';
+  var label = state._bookSending ? "Записываю…" : state.bookStart == null ? "Выбери время"
+    : (state.bookMove ? "Перенести на " : "Записаться на ") + BK_WDF[bkDate(state.bookDay).getDay()] + ", " + bkHM(bkLocal(state.bookStart, b.teacherOffset));
+  html += '<button class="cta terra" data-act="book-go"' + (state.bookStart == null || state._bookSending ? " disabled" : "") + ' style="margin-top:6px;">' + label + '</button>';
+  app.innerHTML = top(title, b.mode === "trial" ? "Выбери день и время" : (b.left ? "Осталось " + b.left + " " + plural(b.left, "урок", "урока", "уроков") : "")) + wrap(html);
+  wireActs();
+}
+
 /* ---------- запись на занятие: календарь → время → подтверждение (1:1 по макету) ---------- */
 
 var CAL_MONTHS = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
@@ -2870,23 +2983,12 @@ function renderMore() {
   // Тест-драйв: никаких входов по коду (Николай, 20.11)
   if (window.GUEST_ON) items = items.filter(function (it) { return !it.reset; });
   // Виден только Николаю (chatId === ADMIN_CHAT_ID на сервере) — скрыт от учеников.
+  // 26.11 (Николай): один пункт «Админ» вместо тумблера и «Панели админа» —
+  // нажал и сразу внутри: Сегодня, Расписание, ученики и всё остальное.
   if (readAdminKey() && !window.GUEST_ON) {
     items.push({
-      label: "Режим админа", isToggle: true, on: !!s.isAdmin, adminToggle: true,
-      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1.5l5.5 2v4c0 3.6-2.3 6-5.5 7-3.2-1-5.5-3.4-5.5-7v-4L8 1.5z" stroke="var(--gray)" stroke-width="1.4" stroke-linejoin="round"/></svg>',
-      iconBg: "var(--bgmuted)"
-    });
-  }
-  if (s.isAdmin) {
-    // Единая точка входа для всего, что видно только преподавателю — сейчас
-    // внутри выбор ученика (имперсонация) и дни рождения, дальше сюда же
-    // будут добавляться новые admin-only функции (см. renderAdminHub).
-    // Фон иконки — var(--bgmuted), как у остальных пунктов списка: раньше
-    // тут был var(--soft-blue), который в тёмной теме не темнеет (акцентные
-    // цвета для .dark сознательно не переопределены) и «горел» слишком ярко.
-    items.push({
-      label: "Панель админа", isLink: true, adminEntry: true,
-      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1.5l5.5 2v4c0 3.6-2.3 6-5.5 7-3.2-1-5.5-3.4-5.5-7v-4L8 1.5z" stroke="var(--gray)" stroke-width="1.4" stroke-linejoin="round"/><path d="M6 8l1.5 1.5L10.5 6" stroke="var(--gray)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      label: "Админ", isLink: true, adminEntry: true,
+      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1.5l5.5 2v4c0 3.6-2.3 6-5.5 7-3.2-1-5.5-3.4-5.5-7v-4L8 1.5z" stroke="var(--gray)" stroke-width="1.4" stroke-linejoin="round"/><path d="M6 8l1.5 1.5L10.5 6" stroke="var(--terra)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
       iconBg: "var(--bgmuted)"
     });
   }
@@ -2921,7 +3023,7 @@ function renderMore() {
       // съезжает, как только в список добавят ещё один пункт выше.
       if (item.reset) { resetProgress(); return; }
       if (item.doc) { openDoc(item.doc); return; }
-      if (item.adminEntry) { go("admin-hub"); return; }
+      if (item.adminEntry) { if (!state.isAdmin) setAdminOn(true); else go("admin-hub"); return; }
       if (item.adminToggle) { setAdminOn(!state.isAdmin); return; }
       if (item.support) { openSupport(); return; }
     });
@@ -3387,7 +3489,7 @@ function renderAdminHub() {
   }).join("");
   app.innerHTML =
     '<div class="top pb8">' + backBtn("back") +
-      '<div><div class="top-title lg">Режим админа</div><div class="top-sub">Видно только преподавателю</div></div>' +
+      '<div><div class="top-title lg">Админ</div><div class="top-sub">Видно только тебе</div></div>' +
     "</div>" +
     '<div style="padding:8px 16px 130px;display:flex;flex-direction:column;gap:10px;">' + itemsHtml + "</div>";
   wireActs();
@@ -6103,6 +6205,12 @@ var ACTS = {
   "cab-voice": function () { go("cab-voice"); },
   "cab-wheel": function () { state._wheelZone = null; go("cab-wheel"); },
   "cab-renew": function () { openRenew(); },
+  "cab-book": function () { openBooking(); },
+  "book-day": function (el) { state.bookDay = el.getAttribute("data-day"); state.bookStart = null; state.bookErr = ""; render(); },
+  "book-slot": function (el) { state.bookStart = +el.getAttribute("data-start"); state.bookErr = ""; render(); },
+  "book-move": function () { state.bookMove = !state.bookMove; state.bookStart = null; render(); },
+  "book-go": function () { submitBooking(); },
+  "book-done": function () { state.bookDone = null; go(window.GUEST_ON ? "courses" : "profile"); },
   "go-courses": function () { go("courses"); },
   "go-questions": function () { go("questions"); },
   "go-more": function () { go("more"); },
@@ -6256,6 +6364,7 @@ function render() {
     case "admin-students": renderAdminStudents(); break;
     case "admin-birthdays": renderAdminBirthdays(); break;
     case "admin-today": renderAdminToday(); break;
+    case "book": renderBook(); break;
     case "admin-week": renderAdminWeek(); break;
     case "admin-dash": if (window.renderAdminDash) renderAdminDash(); break;
     case "admin-guests": if (window.renderAdminGuests) renderAdminGuests(); break;
