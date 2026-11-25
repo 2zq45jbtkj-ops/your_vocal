@@ -62,6 +62,9 @@
   G.trkShown = {};
   window.GUEST = G;
   window.GUEST_ON = false;
+  // 26.11: ?td=1&replay=1 — приложение внутри «Пути гостя» у Николая: тест-драйв без записи
+  // статистики и без всплывающих окон; экран переключает родитель (postMessage).
+  try { G.replay = new URLSearchParams(location.search).get("replay") === "1" && window.parent !== window; } catch (e) { G.replay = false; }
 
   var realFetch = window.fetch.bind(window);
 
@@ -70,7 +73,7 @@
     if (!G.store.anon) G.store.anon = "a" + Math.random().toString(36).slice(2) + Date.now().toString(36);
     if (!Array.isArray(G.store.explored)) G.store.explored = [];
   }
-  function saveStore() { try { localStorage.setItem(LS_KEY, JSON.stringify(G.store)); } catch (e) {} }
+  function saveStore() { if (G.replay) return; try { localStorage.setItem(LS_KEY, JSON.stringify(G.store)); } catch (e) {} }
 
   function startParam() {
     var sp = tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param;
@@ -107,7 +110,8 @@
     }
     // настоящий ученик с кодом доступа открыл ссылку — просто его приложение
     if (state.accessToken && !state.isAdmin && state.accessToken !== GUEST_TOKEN) return false;
-    loadStore();
+    if (G.replay) G.store = { anon: "replay", explored: [], popupAt: 9e15, welcomed: true };
+    else loadStore();
     G.on = true; window.GUEST_ON = true;
     document.documentElement.classList.add("guest-mode");
     var u = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
@@ -474,6 +478,7 @@
   /* ---------- журнал для «Тестовых клиентов» ---------- */
 
   function log(e) {
+    if (G.replay) return;
     e.ts = Date.now();
     e.screen = G.cur ? G.cur.label : (SCREEN_NAMES[state.screen] || state.screen || "");
     G.queue.push(e);
@@ -508,12 +513,14 @@
     return b;
   }
   function post(action, extra) {
+    if (G.replay) return Promise.resolve(new Response("{}"));
     return realFetch(API + "?action=" + action, {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify(payload(extra || {})), keepalive: true
     }).catch(function () {});
   }
   function flush(beacon) {
+    if (G.replay) { G.queue = []; return; }
     if (!G.queue.length) return;
     var evs = G.queue.splice(0, 80);
     var body = JSON.stringify(payload({ events: evs, explored: G.store.explored }));
@@ -669,14 +676,17 @@
       return '<span class="rp-st" data-rpi="' + x.i + '" style="flex:none;display:inline-flex;align-items:center;gap:5px;padding:7px 10px;border-radius:12px;background:var(--bgmuted);font-size:12px;color:var(--gray);transition:background .25s,color .25s;">' +
         rpIcon(x.label) + ' ' + esc(String(x.label).split(":")[0].slice(0, 18)) + '</span>' + (k < scr.length - 1 ? '<span style="flex:none;color:var(--gray);opacity:.5;">›</span>' : "");
     }).join("");
-    return '<div class="gd-card" style="display:flex;flex-direction:column;gap:14px;">' +
+    var W = 234, S = W / 390, H = Math.round(844 * S);
+    return '<div class="gd-card" style="display:flex;flex-direction:column;gap:14px;align-items:stretch;">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;"><b style="font-size:15px;">Путь по приложению</b><span id="rp-step" class="lesson-sub">' + scr.length + ' экранов</span></div>' +
-      '<div style="border-radius:20px;box-shadow:var(--inset);padding:18px 16px;min-height:220px;display:flex;flex-direction:column;align-items:center;text-align:center;">' +
-        '<div id="rp-ico" style="width:64px;height:64px;border-radius:20px;background:var(--bg);box-shadow:var(--raised-sm);display:flex;align-items:center;justify-content:center;font-size:30px;">▶</div>' +
-        '<div id="rp-scr" style="font-weight:700;font-size:17px;margin-top:12px;transition:opacity .2s;">Нажми «Смотреть»</div>' +
-        '<div id="rp-sub" class="lesson-sub" style="margin-top:4px;">покажу экраны и нажатия гостя по порядку</div>' +
-        '<div id="rp-taps" style="display:flex;flex-direction:column;gap:6px;width:100%;margin-top:14px;"></div>' +
+      '<div style="align-self:center;position:relative;width:' + (W + 14) + 'px;height:' + (H + 14) + 'px;border-radius:38px;background:#0d0f11;padding:7px;box-shadow:0 10px 30px rgba(0,0,0,.45);">' +
+        '<div style="position:relative;width:' + W + 'px;height:' + H + 'px;border-radius:31px;overflow:hidden;background:var(--bg);">' +
+          '<iframe id="rp-frame" src="/?td=1&replay=1" tabindex="-1" style="width:390px;height:844px;border:0;transform:scale(' + S + ');transform-origin:0 0;pointer-events:none;"></iframe>' +
+          '<div id="rp-dot" style="position:absolute;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;background:rgba(245,197,66,.55);border:2px solid #F5C542;opacity:0;pointer-events:none;transition:left .35s ease,top .35s ease,opacity .2s;"></div>' +
+          '<div id="rp-cap" style="position:absolute;left:10px;right:10px;top:10px;text-align:center;font-size:11px;line-height:1.3;color:#fff;background:rgba(15,17,20,.82);border-radius:10px;padding:6px 8px;opacity:0;transition:opacity .2s;pointer-events:none;"></div>' +
+        '</div>' +
       '</div>' +
+      '<div style="text-align:center;"><div id="rp-scr" style="font-weight:700;font-size:15px;">Нажми «Смотреть»</div><div id="rp-sub" class="lesson-sub" style="margin-top:2px;">жёлтый круг — куда нажал гость</div></div>' +
       '<div id="rp-strip" style="display:flex;align-items:center;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;">' + strip + '</div>' +
       '<div style="height:6px;border-radius:4px;background:var(--bgmuted);overflow:hidden;"><i id="rp-bar" style="display:block;height:100%;width:0;background:var(--blue);transition:width .3s;"></i></div>' +
       '<div style="display:flex;gap:10px;align-items:center;">' +
@@ -689,15 +699,14 @@
   }
   function rpShow(e) {
     var scr = document.getElementById("rp-scr"); if (!scr) { RP.playing = false; return; }
-    var ico = document.getElementById("rp-ico"), sub = document.getElementById("rp-sub"), taps = document.getElementById("rp-taps");
+    var sub = document.getElementById("rp-sub"), dot = document.getElementById("rp-dot"), cap = document.getElementById("rp-cap");
+    var fr = document.getElementById("rp-frame");
     document.getElementById("rp-bar").style.width = Math.round((RP.i + 1) / RP.evs.length * 100) + "%";
     if (e.kind === "screen") {
-      scr.style.opacity = 0;
-      setTimeout(function () { scr.textContent = e.label; scr.style.opacity = 1; }, 120);
-      ico.textContent = rpIcon(e.label);
-      ico.animate([{ transform: "scale(.85)" }, { transform: "scale(1)" }], { duration: 300, easing: "ease-out" });
+      scr.textContent = rpIcon(e.label) + " " + e.label;
       sub.textContent = "заход " + e.visit + " · пробыл " + fmtDur(Number(e.dur_ms) || 0);
-      taps.innerHTML = "";
+      dot.style.opacity = 0; cap.style.opacity = 0;
+      try { fr.contentWindow.postMessage({ rp: "go", screen: rpScreenKey(e.label) }, location.origin); } catch (x) {}
       var cur = null;
       Array.prototype.forEach.call(document.querySelectorAll(".rp-st"), function (el) {
         var on = +el.getAttribute("data-rpi") === RP.i;
@@ -708,12 +717,12 @@
       var st = document.getElementById("rp-step"); var n = rpScreens().filter(function (x) { return x.i <= RP.i; }).length;
       if (st) st.textContent = "экран " + n + " из " + rpScreens().length;
     } else {
-      var row = document.createElement("div");
-      row.style.cssText = "display:flex;align-items:center;gap:8px;text-align:left;font-size:13px;padding:8px 10px;border-radius:12px;background:var(--bg);box-shadow:var(--raised-sm);";
-      row.innerHTML = '<span style="width:8px;height:8px;border-radius:50%;flex:none;background:' + (e.kind === "trial" ? "oklch(78% 0.12 80)" : "var(--terra)") + ';"></span><span>' + (e.kind === "trial" ? "🔥 " : "нажал «") + esc(e.label) + (e.kind === "trial" ? "" : "»") + '</span>';
-      taps.appendChild(row);
-      row.animate([{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }], { duration: 250 });
-      while (taps.children.length > 4) taps.removeChild(taps.firstChild);
+      var has = e.x != null && e.y != null;
+      dot.style.left = (has ? e.x * 100 : 50) + "%"; dot.style.top = (has ? e.y * 100 : 85) + "%";
+      dot.style.opacity = 1;
+      dot.animate([{ transform: "scale(.5)", boxShadow: "0 0 0 0 rgba(245,197,66,.7)" }, { transform: "scale(1)", boxShadow: "0 0 0 16px rgba(245,197,66,0)" }], { duration: 650, easing: "ease-out" });
+      cap.textContent = (e.kind === "trial" ? "🔥 " : "нажал «") + e.label + (e.kind === "trial" ? "" : "»") + (has ? "" : " · место не записано");
+      cap.style.opacity = 1;
     }
   }
   function rpStep() {
@@ -764,6 +773,23 @@
       else out += '<div class="gd-ev"><span class="gd-ev-t">' + t + "</span>" + esc(e.label) + "</div>";
     });
     return '<div class="gd-card gd-tl">' + out + "</div>";
+  }
+  if (G.replay) {
+    window.addEventListener("message", function (ev) {
+      if (ev.origin !== location.origin || !ev.data || ev.data.rp !== "go") return;
+      try { if (window.go) window.go(ev.data.screen); } catch (e) {}
+    });
+  }
+  function rpScreenKey(label) {
+    label = String(label || "");
+    var best = "", key = "profile";
+    for (var k in SCREEN_NAMES) {
+      var n = SCREEN_NAMES[k];
+      if (label.indexOf(n) === 0 && n.length > best.length) { best = n; key = k; }
+    }
+    if (key === "karaoke-play") key = "karaoke";
+    if (/^pitch-/.test(key)) key = "pitch";
+    return key;
   }
   // «Назад» из истории гостя — к списку
   G.adminBack = function () {
