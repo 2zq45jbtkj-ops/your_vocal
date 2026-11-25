@@ -344,6 +344,13 @@ export default async function handler(req) {
           // 20.11: убрать запись «Проверка», которую оставила проверка входа без кода (не настоящий гость)
           await sql`DELETE FROM guest_events WHERE gid = 'tg:111222333'`;
           await sql`DELETE FROM guest_users WHERE id = 'tg:111222333' AND verified = false AND username = 'probe_guest'`;
+          // 26.11 (Николай): убрать анонимные «Открыл в браузере» — без имени, неизвестно кто
+          var done = await sql`SELECT 1 FROM guest_kv WHERE k = 'anon_purged_2611'`;
+          if (!done.length) {
+            await sql`DELETE FROM guest_events WHERE gid LIKE 'anon:%'`;
+            await sql`DELETE FROM guest_users WHERE id LIKE 'anon:%'`;
+            await sql`INSERT INTO guest_kv (k, v) VALUES ('anon_purged_2611', '1') ON CONFLICT (k) DO NOTHING`;
+          }
           var users = await sql`SELECT id, tg_id, first_name, last_name, username, verified, is_owner, src,
               first_at, last_at, visits, explored, trial_clicks, trial_at
             FROM guest_users ORDER BY last_at DESC LIMIT 200`;
@@ -352,6 +359,8 @@ export default async function handler(req) {
           var byG = {};
           secs.forEach(function (r) { byG[r.gid] = { ms: Number(r.ms) || 0, taps: r.taps }; });
           users.forEach(function (u) { var x = byG[u.id] || { ms: 0, taps: 0 }; u.total_ms = x.ms; u.taps = x.taps; });
+          // пустые анонимные заходы (0 с, 0 нажатий) — шум, не показываем
+          users = users.filter(function (u) { return !(String(u.id).indexOf("anon:") === 0 && !u.taps && u.total_ms < 3000); });
           return json({ ok: true, guests: users });
         }
         var gid = cut(url.searchParams.get("gid"), 60);

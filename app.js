@@ -2619,7 +2619,7 @@ function openRenew() {
    расписание, что у карточек бота, поэтому накладок нет. Новичок → пробный урок
    (место держится час, реквизиты и чек — в боте), ученик → следующий урок из
    абонемента или перенос ближайшего (правило 24 часов). Время — по часам телефона. */
-var BOOK_API = "https://vocal-bot.vercel.app/api/app_book";
+var BOOK_API = "/api/bot?path=app_book";
 var BK_WD = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
 var BK_WDF = ["воскресенье", "понедельник", "вторник", "среду", "четверг", "пятницу", "субботу"];
 var BK_MON = ["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
@@ -3544,7 +3544,7 @@ function renderAdminStudents() {
 /* ---------- «Сегодня» и «Расписание» в режиме админа (26.11) ----------
    Данные — из бота записи (vocal-bot /api/app_admin): те же таблицы, что у кнопки
    «Сегодня» в боте. Бот сам проверяет подпись Telegram и отдаёт данные только Николаю. */
-var BOT_API = "https://vocal-bot.vercel.app/api/app_admin";
+var BOT_API = "/api/bot?path=app_admin";
 var ADM_KIND = {
   mine:   { label: "твой урок", bg: "oklch(56% 0.09 235)", fg: "#fff" },
   trial:  { label: "пробный",   bg: "oklch(78% 0.12 80 / .16)", fg: "oklch(82% 0.12 82)" },
@@ -3557,7 +3557,7 @@ var ADM_MON = ["января","февраля","марта","апреля","ма
 function admHM(m) { return ("0" + Math.floor(m / 60)).slice(-2) + ":" + ("0" + (m % 60)).slice(-2); }
 function admRub(n) { return String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " ₽"; }
 function admFetch(q) {
-  return fetch(BOT_API + q, { headers: { "x-tg-init-data": (tg && tg.initData) || "" } })
+  return fetch(BOT_API + "&" + q.replace(/^\?/, ""), { headers: { "x-tg-init-data": (tg && tg.initData) || "", "x-site-auth": state._siteAuth || "" } })
     .then(function (r) { return r.json().catch(function () { return { ok: false }; }); })
     .then(function (d) {
       if (d && d.ok) return d;
