@@ -1076,6 +1076,10 @@ function chipsHtml(arr) {
    открытии Кабинета — studentPublicData сбрасывается на null при старте. */
 function loadStudentPublicData() {
   if (!state.accessToken || state.studentPublicData) return;
+  // 26.11: after a failed load the screen re-renders and would call this again at once —
+  // an endless request loop (and a frozen page when the error comes back instantly).
+  // Keep the error on screen; the next try comes when the cabinet is opened again later.
+  if (state._profileErr && Date.now() - (state._profileErrAt || 0) < 15000) return;
   state.studentPublicData = "loading"; // prevents double fetch
   state._profileErr = null;
   var httpStatus = 0;
@@ -1130,7 +1134,7 @@ function loadStudentPublicData() {
         // 500/503 и прочие сбои сервера: спящая база, холодный старт, таймаут.
         // Код доступа верный — не стираем его и никуда не выкидываем.
         state.studentPublicData = null;
-        state._profileErr = "server";
+        state._profileErr = "server"; state._profileErrAt = Date.now();
         if (isCabinetScreen(state.screen)) render();
         return;
       }
@@ -1140,7 +1144,7 @@ function loadStudentPublicData() {
     })
     .catch(function () {
       state.studentPublicData = null;
-      state._profileErr = "net";
+      state._profileErr = "net"; state._profileErrAt = Date.now();
       if (isCabinetScreen(state.screen)) render();
     });
 }
@@ -3725,7 +3729,7 @@ function renderAdminWeek() {
   else {
     var H0 = 9 * 60, H1 = 21 * 60;
     d.events.forEach(function (e) { if (e.start < H0) H0 = Math.floor(e.start / 60) * 60; if (e.end > H1) H1 = Math.ceil(e.end / 60) * 60; });
-    var PX = 0.9, gh = (H1 - H0) * PX;
+    var PX = 0.9, gh = (H1 - H0) * PX, mv = state.admMove;
     var p = d.start.split("-"), first = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2]));
     var last = new Date(first.getTime() + 6 * 864e5);
     title = first.getUTCDate() + " " + ADM_MON[first.getUTCMonth()] + " – " + last.getUTCDate() + " " + ADM_MON[last.getUTCMonth()];
@@ -3735,12 +3739,13 @@ function renderAdminWeek() {
       head += '<div style="text-align:center;font-size:11px;color:var(--gray);padding-bottom:4px;">' + ADM_DAYS[i] +
         '<div style="font-size:15px;font-weight:700;color:' + (isT ? 'var(--terra)' : 'var(--ink)') + ';">' + dd.getUTCDate() + '</div></div>';
       var evs = d.events.filter(function (e) { return e.day === iso; });
-      cols += '<div style="position:relative;height:' + gh + 'px;border-left:1px solid var(--line);' + (isT ? 'background:oklch(60% 0.13 38 / .06);' : '') + '">' +
+      cols += '<div class="admw-col" data-day="' + iso + '" style="position:relative;height:' + gh + 'px;border-left:1px solid var(--line);' + (isT ? 'background:oklch(60% 0.13 38 / .06);' : '') + (mv ? 'background:oklch(60% 0.13 38 / .05);cursor:crosshair;' : '') + '">' +
         evs.map(function (e) {
           var k = ADM_KIND[e.kind] || ADM_KIND.mine, top = (e.start - H0) * PX, h = Math.max(14, (e.end - e.start) * PX - 2);
           var border = (e.kind === "life" || e.kind === "block") ? 'border:1px dashed var(--line);' : e.kind === "trial" ? 'border:1px solid oklch(78% 0.12 80 / .7);' : '';
           var stripes = e.kind === "studio" ? 'background:repeating-linear-gradient(135deg,var(--bgmuted) 0 4px,transparent 4px 8px);' : 'background:' + k.bg + ';';
-          return '<div style="position:absolute;left:2px;right:2px;top:' + top + 'px;height:' + h + 'px;border-radius:6px;padding:2px 3px;overflow:hidden;font-size:8.5px;line-height:1.15;color:' + k.fg + ';' + stripes + border + '">' +
+          var isMv = mv && mv.id === e.id && mv.day === e.day;
+          return '<div class="admw-ev" data-ev="' + d.events.indexOf(e) + '" style="position:absolute;left:2px;right:2px;top:' + top + 'px;height:' + h + 'px;border-radius:6px;' + (isMv ? 'outline:2px solid var(--terra);opacity:.55;' : '') + '-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;padding:2px 3px;overflow:hidden;font-size:8.5px;line-height:1.15;color:' + k.fg + ';' + stripes + border + '">' +
             admHM(e.start) + '<br>' + esc((e.name || k.label).split(" ")[0]) + '</div>';
         }).join("") + '</div>';
     }
@@ -3757,7 +3762,12 @@ function renderAdminWeek() {
       '<span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--bgmuted);vertical-align:-1px;margin-right:4px"></i>студия</span>' +
       '<span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;border:1px solid oklch(78% 0.12 80);vertical-align:-1px;margin-right:4px"></i>пробный</span>' +
       '<span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;border:1px dashed var(--gray);vertical-align:-1px;margin-right:4px"></i>личное · закрыто</span></div>';
-    body = nav + grid + legend;
+    var banner = mv ? '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:10px;border-radius:12px;background:oklch(60% 0.13 38 / .12);border:1px solid oklch(60% 0.13 38 / .35);">' +
+      '<div style="flex:1;font-size:13px;line-height:1.3;"><b>Перенос: ' + esc(mv.name || "") + '</b><br><span style="color:var(--gray)">Нажми на новое место в сетке — время округлю до 15 минут</span></div>' +
+      '<button class="filter-btn" id="admw-mv-x">Отмена</button></div>' : '';
+    body = banner + nav + '<div id="admw-grid">' + grid + '</div>' + legend +
+      (mv ? '' : '<div class="lesson-sub" style="margin-top:8px;font-size:11.5px;">Нажми на занятие — подробности. Удерживай — перенести или отменить.</div>');
+    state._admWk = { H0: H0, PX: PX };
   }
   app.innerHTML =
     '<div class="top pb8">' + backBtn("back") +
@@ -3765,6 +3775,147 @@ function renderAdminWeek() {
     "</div>" +
     '<div style="padding:8px 12px 130px;">' + body + "</div>";
   wireActs();
+  if (d && d.ok) admWeekWire(d);
+}
+
+/* 26.11 (Коля, ответ «А»): долгое нажатие на занятие в «Расписании» — перенести / отменить.
+   Свои ученики — меняется в боте, ученик получает сообщение о переносе (об отмене — нет,
+   отмену Николай обговаривает сам). Студия — меняется только у Николая и переживает
+   обновление из кабинета студии; в самом кабинете студии нужно поменять тоже. */
+function admHaptic(kind) { try { tg && tg.HapticFeedback && (kind === "ok" ? tg.HapticFeedback.notificationOccurred("success") : tg.HapticFeedback.impactOccurred(kind || "medium")); } catch (e) {} }
+function admDayLabel(iso) { var p = iso.split("-"), dt = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])); return ADM_DAYS[(dt.getUTCDay() + 6) % 7] + ", " + dt.getUTCDate() + " " + ADM_MON[dt.getUTCMonth()]; }
+function admWeekWire(d) {
+  var xb = document.getElementById("admw-mv-x");
+  if (xb) xb.onclick = function () { state.admMove = null; render(); };
+  Array.prototype.forEach.call(app.querySelectorAll(".admw-ev"), function (el) {
+    var e = d.events[+el.getAttribute("data-ev")], timer = null, long = false, sx = 0, sy = 0;
+    function start(x, y) { if (state.admMove) return; long = false; sx = x; sy = y; clearTimeout(timer); timer = setTimeout(function () { long = true; admHaptic("medium"); admSheet(e, true); }, 450); }
+    function cancel() { clearTimeout(timer); }
+    el.addEventListener("touchstart", function (ev) { var t = ev.touches[0]; start(t.clientX, t.clientY); }, { passive: true });
+    el.addEventListener("touchmove", function (ev) { var t = ev.touches[0]; if (Math.abs(t.clientX - sx) + Math.abs(t.clientY - sy) > 10) cancel(); }, { passive: true });
+    el.addEventListener("touchend", cancel);
+    el.addEventListener("mousedown", function (ev) { start(ev.clientX, ev.clientY); });
+    el.addEventListener("mouseup", cancel);
+    el.addEventListener("mouseleave", cancel);
+    el.addEventListener("contextmenu", function (ev) { ev.preventDefault(); });
+    el.addEventListener("click", function (ev) {
+      if (state.admMove) return;           // в режиме переноса нажатие идёт в колонку
+      ev.stopPropagation();
+      if (long) { long = false; return; }
+      admSheet(e, false);
+    });
+  });
+  if (!state.admMove) return;
+  Array.prototype.forEach.call(app.querySelectorAll(".admw-col"), function (col) {
+    col.addEventListener("click", function (ev) {
+      var r = col.getBoundingClientRect(), k = state._admWk;
+      var m = k.H0 + (ev.clientY - r.top) / k.PX, mv = state.admMove, len = mv.end - mv.start;
+      m = Math.round(m / 15) * 15;
+      m = Math.max(0, Math.min(24 * 60 - len, m));
+      admHaptic("light");
+      admConfirmMove(mv, col.getAttribute("data-day"), m, false);
+    });
+  });
+}
+function admSheetClose() { var o = document.getElementById("adm-sheet"); if (o) o.remove(); }
+function admSheetOpen(inner) {
+  admSheetClose();
+  var o = document.createElement("div");
+  o.id = "adm-sheet";
+  o.style.cssText = "position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.42);display:flex;align-items:flex-end;justify-content:center;";
+  o.innerHTML = '<div style="width:100%;max-width:520px;background:var(--bg);border-radius:18px 18px 0 0;padding:16px 16px calc(18px + env(safe-area-inset-bottom));box-shadow:0 -8px 30px rgba(0,0,0,.25);">' +
+    '<div style="width:38px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 12px;"></div>' + inner + '</div>';
+  o.addEventListener("click", function (ev) { if (ev.target === o) admSheetClose(); });
+  document.body.appendChild(o);
+  return o;
+}
+function admBtn(id, label, style) { return '<button id="' + id + '" style="display:block;width:100%;padding:13px 14px;margin-top:8px;border-radius:12px;border:1px solid var(--line);background:var(--bgmuted);color:var(--ink);font:inherit;font-size:15px;text-align:left;' + (style || '') + '">' + label + '</button>'; }
+function admSheet(e, actions) {
+  var kinds = { mine: "твой ученик", trial: "пробный урок", studio: "студия «Лаборатория звука»", life: "личное", block: "время закрыто" };
+  var head = '<div style="font-size:17px;font-weight:700;">' + esc(e.name || "Занятие") + '</div>' +
+    '<div class="lesson-sub" style="margin-top:3px;">' + admDayLabel(e.day) + ' · ' + admHM(e.start) + '–' + admHM(e.end) + ' · ' + (kinds[e.kind] || "") + (e.rep ? ' · каждую неделю' : '') + '</div>';
+  var can = e.id && (e.kind === "mine" || e.kind === "trial" || e.kind === "studio");
+  if (!actions || !can) {
+    var hint = !e.id || e.kind === "life" || e.kind === "block" ? "Это время меняется в боте, в «Расписании»." :
+      e.rep ? "Повторяющийся урок переносят и отменяют в боте, в «Расписании»." : "Удерживай занятие, чтобы перенести или отменить.";
+    var o0 = admSheetOpen(head + '<div class="lesson-sub" style="margin-top:12px;">' + hint + '</div>' + admBtn("adm-s-x", "Закрыть", "text-align:center;"));
+    o0.querySelector("#adm-s-x").onclick = admSheetClose;
+    return;
+  }
+  if (e.rep) {
+    var o1 = admSheetOpen(head + '<div class="lesson-sub" style="margin-top:12px;">Это повторяющийся урок — его переносят и отменяют в боте, в «Расписании». Здесь — только разовые занятия.</div>' + admBtn("adm-s-x", "Понятно", "text-align:center;"));
+    o1.querySelector("#adm-s-x").onclick = admSheetClose;
+    return;
+  }
+  var studio = e.kind === "studio", html = head;
+  if (studio) {
+    html += '<div style="margin-top:12px;padding:10px 12px;border-radius:12px;background:oklch(70% 0.13 80 / .14);font-size:13px;line-height:1.35;">Поменяется только в твоём календаре и останется после обновления из студии. В кабинете студии поменяй тоже.</div>' +
+      admBtn("adm-s-mv", "🔄 Перенести у себя") + admBtn("adm-s-cx", "✕ Отменить у себя", "color:oklch(60% 0.17 25);");
+  } else {
+    html += admBtn("adm-s-mv", "🔄 Перенести") +
+      admBtn("adm-s-cx", "✕ Отменить · урок не списывать", "color:oklch(60% 0.17 25);") +
+      (e.kind === "mine" ? admBtn("adm-s-cc", "✕ Отменить · засчитать урок<div style=\"font-size:12px;color:var(--gray);margin-top:2px;\">когда ученик отменил меньше чем за 24 часа</div>", "color:oklch(60% 0.17 25);") : "");
+  }
+  html += admBtn("adm-s-x", "Закрыть", "text-align:center;background:transparent;");
+  var o = admSheetOpen(html);
+  o.querySelector("#adm-s-x").onclick = admSheetClose;
+  o.querySelector("#adm-s-mv").onclick = function () { admSheetClose(); state.admMove = e; render(); try { window.scrollTo(0, 0); } catch (er) {} };
+  o.querySelector("#adm-s-cx").onclick = function () { admConfirmCancel(e, false); };
+  var cc = o.querySelector("#adm-s-cc"); if (cc) cc.onclick = function () { admConfirmCancel(e, true); };
+}
+function admPost(op, body) {
+  return fetch(BOT_API + "&op=" + op, { method: "POST", headers: { "content-type": "application/json", "x-tg-init-data": (tg && tg.initData) || "", "x-site-auth": state._siteAuth || "" }, body: JSON.stringify(body) })
+    .then(function (r) { return r.json().catch(function () { return { ok: false }; }); }, function () { return { ok: false, e: "Нет связи, попробуй ещё раз" }; });
+}
+function admDone(text) {
+  admSheetClose(); admHaptic("ok");
+  state.admMove = null; state.adminWeek = null; state.adminToday = null;
+  render();
+  var t = document.createElement("div");
+  t.style.cssText = "position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:9999;max-width:86%;padding:10px 14px;border-radius:12px;background:var(--ink);color:var(--bg);font-size:13.5px;line-height:1.3;box-shadow:0 6px 20px rgba(0,0,0,.25);";
+  t.textContent = text; document.body.appendChild(t);
+  setTimeout(function () { t.remove(); }, 3200);
+}
+function admConfirmMove(e, day, m, force) {
+  var studio = e.kind === "studio";
+  var html = '<div style="font-size:17px;font-weight:700;">' + (studio ? 'Перенести у себя?' : 'Перенести?') + '</div>' +
+    '<div style="margin-top:10px;font-size:14.5px;line-height:1.45;">' + esc(e.name || "") + '<br><span style="color:var(--gray)">' + admDayLabel(e.day) + ', ' + admHM(e.start) + '</span> → <b>' + admDayLabel(day) + ', ' + admHM(m) + '–' + admHM(m + e.end - e.start) + '</b></div>' +
+    (studio ? '<div class="lesson-sub" style="margin-top:8px;">В кабинете студии перенеси тоже.</div>' : e.tg ? '<div class="lesson-sub" style="margin-top:8px;">Ученику придёт сообщение о переносе.</div>' : '') +
+    '<div id="adm-s-err" style="display:none;margin-top:10px;color:oklch(60% 0.17 25);font-size:13.5px;"></div>' +
+    admBtn("adm-s-ok", force ? "Всё равно перенести" : "Перенести", "text-align:center;background:var(--terra);color:#fff;border-color:transparent;font-weight:600;") +
+    admBtn("adm-s-x", "Выбрать другое время", "text-align:center;background:transparent;");
+  var o = admSheetOpen(html);
+  o.querySelector("#adm-s-x").onclick = admSheetClose;
+  var ok = o.querySelector("#adm-s-ok");
+  ok.onclick = function () {
+    ok.disabled = true; ok.textContent = "Переношу…";
+    admPost("move", { id: e.id, day: day, start: m, force: !!force }).then(function (r) {
+      if (r && r.ok) return admDone(studio ? "Перенёс у себя. Не забудь кабинет студии." : "Перенёс" + (e.tg ? ", ученик получил сообщение." : "."));
+      if (r && r.clash && !force) { admHaptic("heavy"); return admConfirmMove(e, day, m, true), (document.getElementById("adm-s-err").style.display = "block", document.getElementById("adm-s-err").textContent = "В это время уже есть занятие. Перенести поверх?"); }
+      var er = document.getElementById("adm-s-err"); er.style.display = "block"; er.textContent = (r && r.e) || "Не получилось. Попробуй ещё раз.";
+      ok.disabled = false; ok.textContent = force ? "Всё равно перенести" : "Перенести";
+    });
+  };
+}
+function admConfirmCancel(e, count) {
+  var studio = e.kind === "studio";
+  var html = '<div style="font-size:17px;font-weight:700;">' + (studio ? 'Отменить у себя?' : 'Отменить урок?') + '</div>' +
+    '<div style="margin-top:10px;font-size:14.5px;line-height:1.45;">' + esc(e.name || "") + '<br><span style="color:var(--gray)">' + admDayLabel(e.day) + ', ' + admHM(e.start) + '–' + admHM(e.end) + '</span></div>' +
+    '<div class="lesson-sub" style="margin-top:8px;">' + (studio ? 'В кабинете студии отмени тоже.' : count ? 'Урок спишется с абонемента. Ученику бот ничего не пишет.' : 'Урок останется в абонементе. Ученику бот ничего не пишет.') + '</div>' +
+    '<div id="adm-s-err" style="display:none;margin-top:10px;color:oklch(60% 0.17 25);font-size:13.5px;"></div>' +
+    admBtn("adm-s-ok", "Да, отменить", "text-align:center;background:oklch(60% 0.17 25);color:#fff;border-color:transparent;font-weight:600;") +
+    admBtn("adm-s-x", "Не отменять", "text-align:center;background:transparent;");
+  var o = admSheetOpen(html);
+  o.querySelector("#adm-s-x").onclick = admSheetClose;
+  var ok = o.querySelector("#adm-s-ok");
+  ok.onclick = function () {
+    ok.disabled = true; ok.textContent = "Отменяю…";
+    admPost("cancel", { id: e.id, count: !!count }).then(function (r) {
+      if (r && r.ok) return admDone(studio ? "Отменил у себя. Не забудь кабинет студии." : count ? "Отменил, урок списан." : "Отменил, урок остался в абонементе.");
+      var er = document.getElementById("adm-s-err"); er.style.display = "block"; er.textContent = (r && r.e) || "Не получилось. Попробуй ещё раз.";
+      ok.disabled = false; ok.textContent = "Да, отменить";
+    });
+  };
 }
 
 /* «Дни рождения» — те, у кого до дня рождения ≤30 дней. Экран пока всегда
@@ -6306,7 +6457,7 @@ var ACTS = {
   "admin-hub-today": function () { state.adminToday = null; go("admin-today"); },
   "admin-hub-active": function () { go("admin-active"); },
   "admin-hub-money": function () { state.adminMoney = null; go("admin-money"); },
-  "admin-hub-week": function () { state.adminWeek = null; go("admin-week"); },
+  "admin-hub-week": function () { state.adminWeek = null; state.admMove = null; go("admin-week"); },
   "admin-week-prev": function () { shiftAdminWeek(-7); },
   "admin-week-next": function () { shiftAdminWeek(7); },
   "admin-week-now": function () { state.adminWeekStart = null; state.adminWeek = null; render(); },

@@ -150,12 +150,14 @@
     if (!G.demoP) {
       G.demoP = realFetch(API + "?action=demo").then(function (r) { return r.json(); }).catch(function () { return null; })
         .then(function (d) {
-          if (!d || !d.ok) d = { student: { student: { name: "", status: "active" }, unlockedLessons: [], progressByLesson: {} }, songs: [], karaoke: { ok: true, marks: {}, meta: {}, covers: {} } };
+          if (!d || !d.ok || !d.student || typeof d.student !== "object") d = { student: { student: { name: "", status: "active" }, unlockedLessons: [], progressByLesson: {} }, songs: [], karaoke: { ok: true, marks: {}, meta: {}, covers: {} } };
           var nm = ((state.firstName || "") + " " + (state.lastName || "")).trim() || "Гость";
           d.student.student = { name: nm, status: "active" };
           d.student.unlockedLessons = []; d.student.progressByLesson = {};
           return d;
         });
+      // a failed promise must not stay cached: every later request would fail instantly
+      G.demoP.catch(function () { G.demoP = null; });
     }
     return G.demoP;
   }
