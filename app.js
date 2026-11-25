@@ -3558,7 +3558,19 @@ function admHM(m) { return ("0" + Math.floor(m / 60)).slice(-2) + ":" + ("0" + (
 function admRub(n) { return String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " ₽"; }
 function admFetch(q) {
   return fetch(BOT_API + q, { headers: { "x-tg-init-data": (tg && tg.initData) || "" } })
-    .then(function (r) { return r.json().catch(function () { return { ok: false }; }); });
+    .then(function (r) { return r.json().catch(function () { return { ok: false }; }); })
+    .then(function (d) {
+      if (d && d.ok) return d;
+      // 26.11: диагностика — почему бот не отдал данные (подпись Telegram / версия)
+      return fetch("/api/whoami", { headers: { "x-tg-init-data": (tg && tg.initData) || "" } })
+        .then(function (r) { return r.json(); }).then(function (w) { state._admDiag = w; return d || { ok: false }; },
+          function () { return d || { ok: false }; });
+    });
+}
+function admDiagText() {
+  var w = state._admDiag; if (!w) return "";
+  return '<div class="lesson-sub" style="margin-top:10px;font-size:11px;opacity:.7;">код: ' +
+    [w.hasInit ? "i1" : "i0", w.hasHash ? "h1" : "h0", "a" + w.ageMin, w.verifiedHere ? "v1" : "v0", w.adminHere ? "m1" : "m0", w.claimsAdmin ? "c1" : "c0"].join("·") + '</div>';
 }
 function loadAdminToday() {
   if (state.adminToday || state._admTodayBusy) return;
@@ -3576,7 +3588,7 @@ function renderAdminToday() {
   loadAdminToday();
   var d = state.adminToday, body;
   if (!d) body = '<div class="courses-empty">Загружаю день…</div>';
-  else if (!d.ok) body = '<div class="courses-empty">Бот не ответил. Закрой экран и открой ещё раз.</div>';
+  else if (!d.ok) body = '<div class="courses-empty">Бот не ответил. Закрой экран и открой ещё раз.' + admDiagText() + '</div>';
   else {
     var p = d.date.split("-"), dt = new Date(+p[0], +p[1] - 1, +p[2]);
     var cards = '';
@@ -3636,7 +3648,7 @@ function renderAdminMoney() {
   loadAdminMoney();
   var d = state.adminMoney, body;
   if (!d) body = '<div class="courses-empty">Считаю…</div>';
-  else if (!d.ok) body = '<div class="courses-empty">Бот не ответил. Закрой экран и открой ещё раз.</div>';
+  else if (!d.ok) body = '<div class="courses-empty">Бот не ответил. Закрой экран и открой ещё раз.' + admDiagText() + '</div>';
   else {
     var cur = d.months[0], prev = d.months[1];
     var diff = prev && prev.total ? Math.round((cur.total - prev.total) / prev.total * 100) : null;
@@ -3699,7 +3711,7 @@ function renderAdminWeek() {
   loadAdminWeek();
   var d = state.adminWeek, body, title = "Неделя";
   if (!d) body = '<div class="courses-empty">Загружаю неделю…</div>';
-  else if (!d.ok) body = '<div class="courses-empty">Бот не ответил. Закрой экран и открой ещё раз.</div>';
+  else if (!d.ok) body = '<div class="courses-empty">Бот не ответил. Закрой экран и открой ещё раз.' + admDiagText() + '</div>';
   else {
     var H0 = 9 * 60, H1 = 21 * 60;
     d.events.forEach(function (e) { if (e.start < H0) H0 = Math.floor(e.start / 60) * 60; if (e.end > H1) H1 = Math.ceil(e.end / 60) * 60; });
