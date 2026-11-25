@@ -446,3 +446,51 @@ html .kp .lyr.free p .mk.mbad { color: oklch(72% 0.17 25); text-shadow: none; }
 .kp .kfx-ball i.kmt-art { display: flex; align-items: center; justify-content: center; }
 .kp .kfx-ball i.kmt-art svg { width: 27px; height: 27px; display: block; }
 .kp .kmarks .kfx-pill.off .kfx-ball { filter: none; }
+
+/* Запись в караоке (25.11) */
+.kp .gch.kr-ch { gap: 7px; }
+.kp .gch.kr-ch i { width: 9px; height: 9px; border-radius: 50%; background: oklch(64% 0.21 25); box-shadow: 0 0 8px oklch(64% 0.21 25 / .7); }
+.kp .krs .kr-p { font: 500 13.5px/1.5 Inter, sans-serif; color: var(--gtx); margin-top: 12px; }
+.kp .krs .kr-row { display: flex; gap: 10px; margin-top: 16px; }
+.kp .krs .kr-steps { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+.kp .krs .kr-st { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 16px; background: var(--glass); border: 1px solid var(--glass-b);
+  font: 600 14px/1.4 Inter, sans-serif; color: var(--gtx); }
+.kp .krs .kr-st b { width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  background: var(--hi); color: oklch(35% 0.08 40); font: 800 14px Manrope, sans-serif; }
+.kp .krs .kr-warn { display: flex; gap: 8px; margin-top: 12px; padding: 10px 12px; border-radius: 14px; background: oklch(60% 0.16 30 / .18);
+  border: 1px solid oklch(65% 0.16 30 / .4); font: 600 13px/1.45 Inter, sans-serif; color: var(--gtx); }
+.kp .krs .kr-dots { display: flex; justify-content: center; gap: 12px; margin: 22px 0 10px; }
+.kp .krs .kr-dots i { width: 14px; height: 14px; border-radius: 50%; background: var(--glass); border: 1px solid var(--glass-b); transition: background .15s, transform .15s; }
+.kp .krs .kr-dots i.on { background: var(--hi); transform: scale(1.15); }
+.kp .krs .kr-big { text-align: center; font: 800 44px/1 Manrope, sans-serif; margin-top: 14px; }
+.kp .krs .kr-big small { font-size: 18px; color: var(--dim); }
+.kp .krs .kr-hp { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 12px; font: 600 13px Inter, sans-serif; color: var(--dim); }
+.kp .krs .kr-hp b { color: var(--hi); font: 700 13px Manrope, sans-serif; cursor: pointer; white-space: nowrap; }
+.kp .krs .kr-sw { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding: 12px 14px; border-radius: 16px; cursor: pointer;
+  background: var(--glass); border: 1px solid var(--glass-b); font: 700 14px Manrope, sans-serif; }
+.kp .krs .kr-sw.off { opacity: .5; }
+.kp .krs .kr-sw i { width: 46px; height: 28px; border-radius: 14px; background: oklch(100% 0 0 / .18); position: relative; flex-shrink: 0; transition: background .25s; }
+.kp .krs .kr-sw i:after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; transition: transform .25s cubic-bezier(.3,.7,.3,1); }
+.kp .krs .kr-sw i.on { background: oklch(62% 0.13 150); } .kp .krs .kr-sw i.on:after { transform: translateX(18px); }
+.kp .krs .kr-note { font: 500 12px/1.45 Inter, sans-serif; color: var(--dim); margin: 6px 4px 0; }
+.kp .krs .kr-sl { margin-top: 14px; }
+.kp .krs .kr-sl-t { display: flex; justify-content: space-between; font: 700 14px Manrope, sans-serif; margin: 0 4px 8px; }
+.kp .krs .kr-sl input { width: 100%; accent-color: var(--hi); }
+.kp .krs .kr-recbt { gap: 8px; }
+.kp .krs .kr-recbt i { width: 10px; height: 10px; border-radius: 50%; background: oklch(60% 0.22 25); }
+.kp .krs .kr-play { display: flex; align-items: center; gap: 12px; margin-top: 14px; padding: 8px 14px 8px 8px; border-radius: 22px; cursor: pointer;
+  background: var(--glass); border: 1px solid var(--glass-b); font: 700 15px Manrope, sans-serif; }
+.kp .krs .kr-pbtn { width: 44px; height: 44px; border-radius: 50%; background: var(--hi); display: flex; align-items: center; justify-content: center; }
+.kp .krs .kr-pbtn svg { transform: scale(.8); }
+.kp .krs .kr-msg { font: 600 13px/1.45 Inter, sans-serif; text-align: center; margin-top: 12px; color: var(--gtx); }
+.kp .krs .kr-msg.err { color: oklch(78% 0.13 30); }
+.kp .krs .kr-link { text-align: center; margin-top: 12px; font: 700 14px Manrope, sans-serif; color: var(--dim); cursor: pointer; }
+.kp .kr-bar { position: relative; padding-bottom: 92px; }
+.kp .kr-live { display: flex; align-items: center; justify-content: center; gap: 10px; font: 800 16px Manrope, sans-serif; }
+.kp .kr-live i { width: 10px; height: 10px; border-radius: 50%; background: oklch(64% 0.22 25); animation: krblink 1.2s ease-in-out infinite; }
+.kp .kr-live .kr-cd { font: 600 13px Inter, sans-serif; color: var(--dim); }
+@keyframes krblink { 50% { opacity: .25; } }
+.kp .kr-stop { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); width: 68px; height: 68px; border-radius: 50%; cursor: pointer;
+  border: 3px solid var(--hi); display: flex; align-items: center; justify-content: center; }
+.kp .kr-stop i { width: 24px; height: 24px; border-radius: 6px; background: oklch(60% 0.22 25); }
+.kp:has(.krs) .kbottom { visibility: hidden; } /* шторки записи не просвечивают кнопки под собой */

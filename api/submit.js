@@ -69,6 +69,7 @@ function fileOf(msg) {
   if (!msg) return {};
   if (msg.video) return { fileId: msg.video.file_id, fileType: "video" };
   if (msg.photo && msg.photo.length) return { fileId: msg.photo[msg.photo.length - 1].file_id, fileType: "photo" };
+  if (msg.audio) return { fileId: msg.audio.file_id, fileType: "audio" };
   if (msg.document) return { fileId: msg.document.file_id, fileType: "document" };
   return {};
 }
@@ -191,6 +192,18 @@ export default async function handler(req) {
 
     var file = form.get("file");
     if (!file) return json({ ok: false, error: "Файл не передан" }, 400);
+
+    // Дубль из караоке (25.11): голос с обработкой + минус, mp3
+    if (kind === "karaoke-take") {
+      var tnote = (form.get("note") || "").toString().slice(0, 400);
+      var cap = "🎙 Дубль из караоке\n" + (tnote ? tnote + "\n" : "") + head;
+      var ra = await tgSendFile(token, chatId, "sendAudio", "audio", file, cap);
+      if (!ra.ok) ra = await tgSendFile(token, chatId, "sendDocument", "document", file, cap);
+      if (!ra.ok) return json({ ok: false, error: ra.description || "Telegram отклонил файл" }, 502);
+      if (ra.result) await rememberMessage(ra.result.message_id, tagKey).catch(function () {});
+      await save("audio", "Дубль из караоке", tnote, ra.result);
+      return json({ ok: true });
+    }
 
     var isSong = kind === "song";
     var label = isSong ? "🎵 Разметка песни (фото)" : "🎤 Распевки (видео)";

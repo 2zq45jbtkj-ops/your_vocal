@@ -389,6 +389,7 @@ function karKillShifter() {
 
 function karTime() {
   if (!KE) return 0;
+  if (window.krSongTime) { var rt = krSongTime(); if (rt != null) return rt; } // идёт запись или прослушивание дубля
   if (KE.pitch === 0) return KE.el.currentTime || 0;
   if (KE.playing && KE.shifter) {
     var ctx = getAudioCtx();
@@ -625,7 +626,7 @@ function karPaintLyrics() {
       if (KP.swiped) { KP.swiped = false; return; } // это был свайп по тексту, а не тап по строке
       if (KP.free) karFreeOff(); // тап по строке после свайпа — петь с неё, текст снова идёт за музыкой
       if (KP.fixPick) { karFixTapGo(k); return; } // «Исправить тап»: выбрана строка
-      if (KP.tap) return; // при разметке строки не трогаем — тапают только кнопку
+      if (KP.tap || KP.recOn || KP.recPrep) return; // при разметке и записи строки не трогаем
       if (KP.mark) { karStuOpenLine(k); return; } // ученик размечает дыхание (25.11)
       if (KP.rev) { karRevOpenLine(k); return; }  // Николай проверяет разметку ученика
       karLineTap(k);
@@ -847,6 +848,7 @@ function karRangeTimes(a, b) {
 
 function karPaintBottom() {
   var box = KP.root.querySelector(".kbottom");
+  if (KP.recOn || KP.recPrep) { krPaintRecBar(box); return; } // запись в караоке (25.11)
   if (KP.mark || KP.rev || KP.ask) { karStuPaintBar(box); return; }
   if (KP.fixPick) {
     box.innerHTML = '<div class="selbar"><div class="t">Исправить тап</div><div class="s">Тапни строку — музыка начнётся чуть раньше неё</div>' +
@@ -939,10 +941,13 @@ function karPaintChips() {
   chs.innerHTML =
     (hasVoice ? '<span class="gch' + (KE.voice ? " on" : "") + '" data-kp="voice">С голосом <b>' + (KE.voice ? "вкл" : "выкл") + "</b></span>" : "") +
     // редкие настройки (тональность, темп, пометки, фон) — за значком (20.11)
-    '<span class="gch kset-ch" data-kp="settings" role="button" aria-label="Настройки: тональность, темп, пометки, фон">' + KAR_SET_ICO + "Настройки</span>";
+    '<span class="gch kset-ch" data-kp="settings" role="button" aria-label="Настройки: тональность, темп, пометки, фон">' + KAR_SET_ICO + "Настройки</span>" +
+    (window.krOpen && !KP.tap && !KAR.fromAdmEdit ? '<span class="gch kr-ch" data-kp="rec" role="button" aria-label="Записать себя"><i></i>Запись</span>' : "");
   var vc = chs.querySelector('[data-kp="voice"]');
   if (vc) vc.onclick = function () { karSetVoice(!KE.voice); };
   chs.querySelector('[data-kp="settings"]').onclick = karOpenSettings;
+  var rc = chs.querySelector('[data-kp="rec"]');
+  if (rc) rc.onclick = krOpen;
 }
 
 var KAR_SET_ICO = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="16" cy="7" r="2.2" stroke="currentColor" stroke-width="2"/><circle cx="10" cy="17" r="2.2" stroke="currentColor" stroke-width="2"/></svg>';
@@ -1350,7 +1355,7 @@ function karEnergy(t) {
 }
 
 function karLoop(ts) {
-  if (!KP.root || !document.body.contains(KP.root)) { karEngineStop(); KP.root = null; return; }
+  if (!KP.root || !document.body.contains(KP.root)) { karEngineStop(); if (window.krLeave) krLeave(); KP.root = null; return; }
   karTick(false, ts);
   KP.raf = requestAnimationFrame(karLoop);
 }
@@ -1379,6 +1384,7 @@ function karTick(force, ts) {
   var now = ts || performance.now();
   // фон рисует KarFx; прежние CSS-огоньки — только если WebGL недоступен
   if (!(window.KarFx && KarFx.tick(t, now, KE))) karGlow(t, now);
+  if (KP.recOn && window.krTickBar) krTickBar();
 }
 
 function karSetCur(cur) {
