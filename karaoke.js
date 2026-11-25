@@ -2148,6 +2148,28 @@ var KAR_THEMES = {
 };
 var KAR_THEME_ORDER = ["breath", "reg", "onset", "folds", "belt", "twang"];
 
+/* Картинки тем в шариках (25.11, вместо кадра фона): белый рисунок на
+   градиенте палитры темы. Связки — вид сверху: передняя спайка вверху,
+   черпаловидные хрящи — треугольники со скруглёнными углами. */
+var KAR_THEME_ART = {
+  breath: { bg: "linear-gradient(145deg,#d9874f,#8a3a1c)",
+    svg: '<path d="M10.6 8.8C8.2 6.4 4.4 7.8 3.8 12.3c-.5 3.9.3 7 2.8 7.4 2.6.4 4-1.4 4-4.2V8.8ZM13.4 8.8c2.4-2.4 6.2-1 6.8 3.5.5 3.9-.3 7-2.8 7.4-2.6.4-4-1.4-4-4.2V8.8Z" fill="rgba(255,255,255,.28)" /><path d="M12 2.8v8.6m0 0-1.6 1.5M12 11.4l1.6 1.5" />' },
+  reg: { bg: "linear-gradient(145deg,#7d74e6,#2c2a78)",
+    svg: '<path d="M4 19.5h4.5V15H13v-4.5h4.5V6H20" /><circle cx="20" cy="4.2" r="1.3" fill="#fff" stroke="none" /><circle cx="4.5" cy="16.5" r="1.3" fill="#fff" stroke="none" />' },
+  onset: { bg: "linear-gradient(145deg,#d95a6e,#6e1830)",
+    svg: '<path d="M3 12h2.2l1.3-7 1.6 14 1.5-11 1.5 8.5 1.4-5.5 1.4 3.5 1.3-2 1.2 1H21" /><path d="M5.2 4v16" opacity=".55" />' },
+  folds: { bg: "linear-gradient(145deg,#c24d63,#5a1428)",
+    svg: '<ellipse cx="12" cy="12.2" rx="8.6" ry="9" opacity=".45" /><path d="M12 4.8 7.6 16l1.8.4ZM12 4.8 16.4 16l-1.8.4ZM7.3 16.9h2.6l-1.4 2.7ZM14.1 16.9h2.6l-1.2 2.7Z" fill="#fff" stroke-width="1.2" />' },
+  belt: { bg: "linear-gradient(145deg,#e39a55,#93401b)",
+    svg: '<circle cx="6" cy="12" r="1.6" fill="#fff" stroke="none" /><path d="M10 8.5a5 5 0 0 1 0 7M13.3 5.8a9 9 0 0 1 0 12.4M16.6 3.2a13 13 0 0 1 0 17.6" />' },
+  twang: { bg: "linear-gradient(145deg,#6f8fe8,#25306e)",
+    svg: '<path d="M3 6.5h6.5l3 5.5-3 5.5H3" /><path d="M13.5 12l1.2-2.6 1.3 5.2 1.3-5.2 1.3 5.2 1.2-2.6H21" />' }
+};
+function karThemeBall(k) {
+  var a = KAR_THEME_ART[k];
+  return '<i class="kmt-art" style="background:' + a.bg + '"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + a.svg + "</svg></i>";
+}
+
 var KM_ICO = {
   pen: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="m13.5 6.5 4 4" stroke="currentColor" stroke-width="2"/></svg>',
   send: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -2245,7 +2267,7 @@ function karPaintMarksSheet() {
   var th = KAR_THEME_ORDER.map(function (k) {
     var T = KAR_THEMES[k];
     return '<span class="kfx-pill kset-pill' + (k === karTheme() ? " on" : "") + (T.syms.length ? "" : " off") + '" data-kt="' + k + '" role="button">' +
-      '<span class="kfx-ball">' + (window.KarFx && KarFx.staticBall ? KarFx.staticBall(T.combo) : "") + "</span>" + T.label + "</span>";
+      '<span class="kfx-ball">' + karThemeBall(k) + "</span>" + T.label + "</span>";
   }).join("");
   d.innerHTML = '<div class="t">Пометки</div>' +
     '<div class="kfxs-in"><div class="kfx-l kmt-l">Тема</div><div class="kfx-row kset-pills kmt-row">' + th + "</div>" +
@@ -2254,7 +2276,6 @@ function karPaintMarksSheet() {
   var q = function (k) { return d.querySelector('[data-km="' + k + '"]'); };
   var close = function () { if (d.parentNode) d.parentNode.removeChild(d); KP.sheet = null; };
   q("ok").onclick = close;
-  if (window.KarFx && KarFx.paintStill) KarFx.paintStill(d);
   Array.prototype.forEach.call(d.querySelectorAll("[data-kt]"), function (el) {
     el.onclick = function () {
       var k = el.getAttribute("data-kt");

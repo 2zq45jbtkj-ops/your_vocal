@@ -443,3 +443,6 @@ html .kp .lyr p.f1 .mk.mok, html .kp .lyr p.f2 .mk.mok, html .kp .lyr p.f3 .mk.m
 html .kp .lyr p.f1 .mk.mbad, html .kp .lyr p.f2 .mk.mbad, html .kp .lyr p.f3 .mk.mbad { color: transparent; text-shadow: 0 0 2.4px oklch(72% 0.17 25); }
 html .kp .lyr.free p .mk.mok { color: oklch(84% 0.14 150); text-shadow: none; }
 html .kp .lyr.free p .mk.mbad { color: oklch(72% 0.17 25); text-shadow: none; }
+.kp .kfx-ball i.kmt-art { display: flex; align-items: center; justify-content: center; }
+.kp .kfx-ball i.kmt-art svg { width: 27px; height: 27px; display: block; }
+.kp .kmarks .kfx-pill.off .kfx-ball { filter: none; }
