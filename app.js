@@ -469,6 +469,7 @@ function backTarget() {
     case "admin-birthdays": return "admin-active";
     case "admin-today": return "admin-hub";
     case "admin-active": return "admin-hub";
+    case "admin-money": return "admin-hub";
     case "book": return window.GUEST_ON ? "courses" : "profile";
     case "admin-week": return "admin-hub";
     case "admin-dash": return "admin-hub";
@@ -3468,6 +3469,7 @@ function renderAdminHub() {
       sub: d ? (d.lessons.length + " " + plural(d.lessons.length, "урок", "урока", "уроков") + " сегодня" + (waiting ? " · ждут: чеки " + d.receipts.length + ", вопросы " + d.questions : "")) : "Уроки дня, чеки и вопросы, которые ждут" },
     { label: "Расписание", act: "admin-hub-week", icon: ADM_ICONS["Расписание"], sub: "Неделя сеткой: твои уроки, студия, обед и английский" },
     { label: "Действующие ученики", act: "admin-hub-active", icon: ADM_ICONS["Выбор ученика"], sub: "Пройти урок глазами ученика, дни рождения, песни для караоке" },
+    { label: "Финансы", act: "admin-hub-money", icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="4" width="12" height="8.5" rx="2" stroke="var(--gray)" stroke-width="1.4"/><circle cx="8" cy="8.2" r="1.7" stroke="var(--terra)" stroke-width="1.3"/></svg>', sub: "Доход за месяц: студия и свои ученики, траты, план" },
     { label: "Новые клиенты", act: "admin-hub-guests", icon: ADM_ICONS["Тестовые клиенты"], badge: newc,
       sub: newc ? "Заявок на пробный: " + newc + " · кто открывал тест-драйв и что нажимал" : "Кто открывал тест-драйв и что нажимал — анимацией" }
   ];
@@ -3616,6 +3618,61 @@ function renderAdminToday() {
       '<div><div class="top-title lg">Сегодня</div><div class="top-sub">Режим админа</div></div>' +
     "</div>" +
     '<div style="padding:8px 16px 130px;display:flex;flex-direction:column;gap:10px;">' + body + "</div>";
+  wireActs();
+}
+
+/* ---------- «Финансы» (26.11) — из бота: оплаты учеников, «зарплата студии +N»,
+   свои «+» и траты «−», ступени плана месяца. ---------- */
+var MON_RU = ["январь","февраль","март","апрель","май","июнь","июль","август","сентябрь","октябрь","ноябрь","декабрь"];
+function loadAdminMoney() {
+  if (state.adminMoney || state._admMoneyBusy) return;
+  state._admMoneyBusy = true;
+  admFetch("?op=money").then(function (d) {
+    state._admMoneyBusy = false; state.adminMoney = d && d.ok ? d : { ok: false };
+    if (state.screen === "admin-money") render();
+  }, function () { state._admMoneyBusy = false; state.adminMoney = { ok: false }; if (state.screen === "admin-money") render(); });
+}
+function renderAdminMoney() {
+  loadAdminMoney();
+  var d = state.adminMoney, body;
+  if (!d) body = '<div class="courses-empty">Считаю…</div>';
+  else if (!d.ok) body = '<div class="courses-empty">Бот не ответил. Закрой экран и открой ещё раз.</div>';
+  else {
+    var cur = d.months[0], prev = d.months[1];
+    var diff = prev && prev.total ? Math.round((cur.total - prev.total) / prev.total * 100) : null;
+    var steps = d.steps || [], next = steps.filter(function (x) { return cur.total < x; })[0], top = steps.length ? steps[steps.length - 1] : 0;
+    var card = function (h) { return '<div class="cab-card" style="margin:0;">' + h + '</div>'; };
+    var row = function (l, r, c) { return '<div style="display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-top:1px solid var(--line);font-size:14.5px;"><span>' + l + '</span><b style="' + (c || '') + '">' + r + '</b></div>'; };
+    body = card('<div class="lesson-sub">Доход за ' + MON_RU[cur.m - 1] + '</div>' +
+      '<div style="font-size:34px;font-weight:700;margin:2px 0;">' + admRub(cur.total) + '</div>' +
+      (diff !== null ? '<div class="lesson-sub"><b style="color:' + (diff >= 0 ? 'oklch(72% 0.13 150)' : 'oklch(65% 0.17 25)') + '">' + (diff >= 0 ? '+' : '') + diff + '%</b> к ' + MON_RU[prev.m - 1] + 'ю</div>' : '') +
+      (steps.length ? '<div style="position:relative;height:10px;border-radius:6px;background:var(--bgmuted);box-shadow:var(--inset-sm);margin:16px 0 6px;overflow:hidden;"><i style="display:block;height:100%;width:' + Math.min(100, Math.round(cur.total / top * 100)) + '%;background:oklch(72% 0.13 150);border-radius:6px;"></i></div>' +
+        '<div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--gray);">' + steps.map(function (x) { return '<span>' + (cur.total >= x ? '✓ ' : '') + Math.round(x / 1000) + 'k</span>'; }).join("") + '</div>' +
+        (next ? '<div class="lesson-sub" style="margin-top:6px;">До ступени ' + admRub(next) + ' осталось ' + admRub(next - cur.total) + '</div>' : '<div class="lesson-sub" style="margin-top:6px;">План месяца выполнен ✅</div>') : ''));
+    var mx = Math.max.apply(null, d.months.map(function (m) { return m.total; }).concat([1]));
+    body += card('<div class="lesson-sub" style="margin-bottom:10px;">По месяцам</div><div style="display:flex;align-items:flex-end;gap:8px;height:120px;">' +
+      d.months.slice().reverse().map(function (m, i, a) {
+        var last = i === a.length - 1;
+        return '<div style="flex:1;text-align:center;font-size:10.5px;color:' + (last ? 'var(--ink)' : 'var(--gray)') + ';"><div style="font-size:9.5px;margin-bottom:3px;">' + (m.total ? Math.round(m.total / 1000) + 'k' : '') + '</div><i style="display:block;height:' + Math.max(3, Math.round(m.total / mx * 88)) + 'px;border-radius:6px 6px 3px 3px;background:' + (last ? 'var(--blue)' : 'oklch(56% 0.09 235 / .45)') + ';"></i><div style="margin-top:4px;">' + MON_RU[m.m - 1].slice(0, 3) + '</div></div>';
+      }).join("") + '</div>');
+    body += card('<div class="lesson-sub">Из чего сложилось</div>' +
+      row("Студия «Лаборатория звука»", admRub(cur.studio)) + row("Свои ученики", admRub(cur.own)) +
+      row("Траты", (cur.spent ? "−" : "") + admRub(cur.spent), cur.spent ? 'color:oklch(65% 0.17 25)' : '') +
+      row("Предоплата, ещё не отработана", admRub(d.prepaid), 'color:oklch(72% 0.13 80)'));
+    var st = d.entries.filter(function (e) { return e.kind === "studio"; });
+    var sp = d.entries.filter(function (e) { return e.kind !== "studio" && e.amount < 0; });
+    var fmtDay = function (iso) { var q = iso.split("-"); return (+q[2]) + " " + ADM_MON[+q[1] - 1]; };
+    body += card('<div class="lesson-sub">Зарплата студии — когда забирал</div>' +
+      (st.length ? st.map(function (e) { return row(fmtDay(e.day) + (e.note ? ' · ' + esc(e.note) : ''), admRub(e.amount), 'color:oklch(72% 0.13 150)'); }).join("") : '<div class="lesson-sub" style="margin-top:8px;">Пока нет записей. Напиши боту «зарплата студии +10 000» — и она появится здесь с датой.</div>'));
+    body += card('<div class="lesson-sub">Траты и подписки</div>' +
+      (sp.length ? sp.map(function (e) { return row(fmtDay(e.day) + (e.note ? ' · ' + esc(e.note) : ''), "−" + admRub(-e.amount), 'color:oklch(65% 0.17 25)'); }).join("") : '<div class="lesson-sub" style="margin-top:8px;">Пока нет. Напиши боту «−990 подписка Claude» — трата появится здесь.</div>'));
+    if (d.payments.length) body += card('<div class="lesson-sub">Оплаты учеников</div>' + d.payments.map(function (p) { return row(fmtDay(p.day) + ' · ' + esc(p.name), admRub(p.amount), 'color:oklch(72% 0.13 150)'); }).join(""));
+  }
+  app.innerHTML =
+    '<div class="top pb8">' + backBtn("back") +
+      '<div><div class="top-title lg">Финансы</div><div class="top-sub">Админ</div></div>' +
+    "</div>" +
+    '<div style="padding:8px 16px 130px;display:flex;flex-direction:column;gap:12px;">' + body + "</div>";
   wireActs();
 }
 function shiftAdminWeek(days) {
@@ -6226,6 +6283,7 @@ var ACTS = {
   "admin-hub-birthdays": function () { go("admin-birthdays"); },
   "admin-hub-today": function () { state.adminToday = null; go("admin-today"); },
   "admin-hub-active": function () { go("admin-active"); },
+  "admin-hub-money": function () { state.adminMoney = null; go("admin-money"); },
   "admin-hub-week": function () { state.adminWeek = null; go("admin-week"); },
   "admin-week-prev": function () { shiftAdminWeek(-7); },
   "admin-week-next": function () { shiftAdminWeek(7); },
@@ -6363,6 +6421,7 @@ function render() {
     case "admin-birthdays": renderAdminBirthdays(); break;
     case "admin-today": renderAdminToday(); break;
     case "admin-active": renderAdminActive(); break;
+    case "admin-money": renderAdminMoney(); break;
     case "book": renderBook(); break;
     case "admin-week": renderAdminWeek(); break;
     case "admin-dash": if (window.renderAdminDash) renderAdminDash(); break;
