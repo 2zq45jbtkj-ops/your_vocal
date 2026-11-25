@@ -90,6 +90,11 @@
 
   /* ---------- хранение ---------- */
   function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  /* Читабельность текста на фоне «Цветной дым» (25.11, Коля): 0 — как было,
+     100% — дым приглушён и ровнее, текст читается легче. Одна настройка на все песни. */
+  var K_READ = "kar.fx.smokeRead";
+  var READ = null;
+  function smokeRead() { if (READ == null) { var v = Number(lsGet(K_READ)); READ = v >= 0 && v <= 1 ? v : 0; } return READ; }
   function lsSet(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} }
 
   function getMode() { var m = lsGet(K_MODE); return m === "ivory" || m === "black" ? m : "auto"; }
@@ -172,12 +177,12 @@
     "vec3 col=body*bd*.75+hot*core*.8+vec3(rr*.9,0.,bb)*core*.25;c+=col*al*(.45+.55*r4)*(1.+B*.5);}" +
     "gl_FragColor=vec4(c,1.);}"
   ];
-  var FS_GLASS = "precision highp float;uniform sampler2D S;uniform vec2 R;uniform float T,RW,DP,K,M,TS;uniform vec3 D,HL;" + NOISE +
+  var FS_GLASS = "precision highp float;uniform sampler2D S;uniform vec2 R;uniform float T,RW,DP,K,M,TS,VIS;uniform vec3 D,HL;" + NOISE +
     "vec3 sm(float x,float y){return texture2D(S,vec2(x,y)/R).rgb;}" +
     "vec3 fin(vec3 c,vec2 px){c=clamp(c,0.,1.);vec3 li=pow(c,vec3(2.2));float Lm=dot(li,vec3(.2126,.7152,.0722));if(Lm>.16)c*=pow(.16/Lm,1./2.2);vec2 q=px/R-.5;c*=1.-dot(q,q)*.3;return c;}" +
     "void main(){vec2 px=gl_FragCoord.xy;" +
     "if(M>.5&&M<1.5){float rr=R.x*.045;vec3 c=vec3(0.);for(int i=0;i<20;i++){float fi=float(i);float a=fi*2.39996;float r=sqrt((fi+.5)/20.)*rr;c+=sm(px.x+cos(a)*r,px.y+sin(a)*r);}c/=20.;" +
-    "float lu=dot(c,vec3(.3,.59,.11));float g=smoothstep(K,K+.1,lu);c=mix(D+c*.12,c,g);" +
+    "float lu=dot(c,vec3(.3,.59,.11));float g=smoothstep(K,K+.1,lu);c=mix(D+c*.12,c,g);c=mix(c,D+c*.22,VIS);" +
     "vec2 uv=px/R;c+=HL*.05*smoothstep(.9,.2,length(uv-vec2(.15,.95)));" +
     "float tex=n(px*.35)*.5+n(px*.9)*.5;c*=.96+.06*tex;" +
     // блики на матовом: мягкие косые мазки, медленно плывут
@@ -191,7 +196,7 @@
     // каждая плитка — как линза: показывает пятно шире себя, сжатым к центру (как на референсе)
     "vec2 sp0=cp+l*ts*.5*1.75+nr*ts*.35;float br=ts*.15;" +
     "vec3 c=vec3(0.);for(int i=0;i<14;i++){float fi=float(i);float a=fi*2.39996;float r=sqrt((fi+.5)/14.)*br;c+=sm(sp0.x+cos(a)*r,sp0.y+sin(a)*r);}c/=14.;" +
-    "float lu=dot(c,vec3(.3,.59,.11));float g=smoothstep(K,K+.1,lu);c=mix(D+c*.12,c,g);" +
+    "float lu=dot(c,vec3(.3,.59,.11));float g=smoothstep(K,K+.1,lu);c=mix(D+c*.12,c,g);c=mix(c,D+c*.22,VIS);" +
     "vec3 L=normalize(vec3(-.5,.45,.75));float dl=dot(Nn,L);float sp=pow(max(dot(reflect(-L,Nn),vec3(0,0,1)),0.),30.);" +
     "float tex=n(px*.4)*.5+n(px*1.1)*.5;c*=.94+.08*tex;" +
     "c*=.80+.28*dl;c+=sp*HL*.22*bv;" +
@@ -203,7 +208,7 @@
     "float sx=cx+xc*w*.5*DP;float bw=w*.12*DP;" +
     "vec3 c=vec3(0.);for(int i=-3;i<=3;i++){c+=sm(sx+float(i)*bw*.33,px.y);}c/=7.;" +
     "float ca=w*.05*DP*xc;c.r=mix(c.r,sm(sx+ca,px.y).r,.6);c.b=mix(c.b,sm(sx-ca,px.y).b,.6);" +
-    "float lu=dot(c,vec3(.3,.59,.11));float g=smoothstep(K,K+.1,lu);c=mix(D+c*.12,c,g);" +
+    "float lu=dot(c,vec3(.3,.59,.11));float g=smoothstep(K,K+.1,lu);c=mix(D+c*.12,c,g);c=mix(c,D+c*.22,VIS);" +
     "vec3 L=normalize(vec3(-.55,.25,.8));float d=dot(Nn,L);float lv=n(vec2(id*.37,px.y/R.y*2.5+T*.03));" +
     "float sp=pow(max(dot(reflect(-L,Nn),vec3(0,0,1)),0.),48.);float fr=pow(1.-nz,2.5);" +
     "c*=.78+.32*d;c=mix(c,HL*.8,fr*.18*(.5+lv));c+=sp*HL*(.14+.4*lv);" +
@@ -223,7 +228,7 @@
       gl.attachShader(p, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs));
       gl.bindAttribLocation(p, 0, "a"); gl.linkProgram(p);
       if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error("link");
-      var u = {}; ["T", "A", "B", "C0", "C1", "C2", "C3", "S", "R", "RW", "DP", "K", "M", "D", "HL", "TS", "SL"].forEach(function (k) { u[k] = gl.getUniformLocation(p, k); });
+      var u = {}; ["T", "A", "B", "C0", "C1", "C2", "C3", "S", "R", "RW", "DP", "K", "M", "D", "HL", "TS", "SL", "VIS"].forEach(function (k) { u[k] = gl.getUniformLocation(p, k); });
       return { p: p, u: u };
     }
     var UP = FS_UNDER.map(pr), PG = pr(FS_GLASS);
@@ -281,6 +286,7 @@
       gl.uniform1i(PG.u.S, 0); gl.uniform2f(PG.u.R, W, H); gl.uniform1f(PG.u.T, T);
       var sc = opt.scale || 1;
       gl.uniform1f(PG.u.RW, RIB * dpr * sc); gl.uniform1f(PG.u.TS, TILE * dpr * sc); gl.uniform1f(PG.u.DP, DEPTH); gl.uniform1f(PG.u.M, this.combo.g);
+      gl.uniform1f(PG.u.VIS, this.combo.u === 2 ? smokeRead() * 0.75 : 0); // «Читабельность текста» у дыма (25.11)
       gl.uniform1f(PG.u.K, K); gl.uniform3fv(PG.u.D, C[0]);
       gl.uniform3fv(PG.u.HL, [(1 + C[2][0]) / 2, (1 + C[2][1]) / 2, (1 + C[2][2]) / 2]);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -540,6 +546,8 @@
         GLASS.map(function (n, i) { return card("data-fg", i, n, c.g === i, withK(c, "g", i)); }).join("") + "</div>" +
         '<div class="kfx-l">Свет под стеклом</div><div class="kfx-row">' +
         UNDER_ORDER.map(function (i) { return card("data-fu", i, UNDER[i], c.u === i, withK(c, "u", i)); }).join("") + "</div>" +
+        (c.u === 2 ? '<div class="kfx-l">Читабельность текста</div><div class="kfx-read"><span>Ярче дым</span>' +
+          '<input type="range" min="0" max="100" step="1" value="' + Math.round(smokeRead() * 100) + '" data-fread><span>Чётче текст</span></div>' : "") +
         colorBlock(c);
     }
     html += '<div class="row" style="display:flex;gap:10px;margin-top:16px">' +
@@ -575,6 +583,8 @@
       });
     }
     if (mode === "auto" && S.combo) { upd("g", "data-fg"); upd("u", "data-fu"); wireColor(kp, d); }
+    var rd = d.querySelector("[data-fread]");
+    if (rd) rd.oninput = function () { READ = rd.value / 100; lsSet(K_READ, String(READ)); };
     var rb = d.querySelector('[data-s="rnd"]');
     if (rb) rb.onclick = function () { if (S.combo) { stopEdit(); var r = randomCombo(null, S.combo); TAB = getPal(r.p).n; setCombo(r); paintSheet(kp); } };
     d.querySelector('[data-s="ok"]').onclick = function () {

@@ -520,3 +520,7 @@ html .kp.fx-ivory .kr-fab { border-color: #2b2622; }
 .kp .chs3 .kr-fab.big { width: 40px; height: 40px; border-width: 3px; transform: scale(1.55); }
 .kp .chs3 .kr-fab.big i { width: 28px; height: 28px; }
 .kp .chs3 .kr-fab { transition: transform .25s cubic-bezier(.3,.7,.3,1); }
+/* «Читабельность текста» у дыма (25.11) */
+.kp .kfx-read { display: flex; align-items: center; gap: 10px; font: 600 12px Inter, sans-serif; color: var(--dim); }
+.kp .kfx-read input { flex: 1; accent-color: var(--hi); }
+.kp .kfx-read span { white-space: nowrap; }
