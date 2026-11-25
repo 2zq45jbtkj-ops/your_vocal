@@ -2704,15 +2704,15 @@ function renderBook() {
         return '<button data-act="book-day" data-day="' + d.day + '" style="flex:none;width:56px;border:none;border-radius:16px;padding:8px 0;font:inherit;cursor:pointer;' +
           (on ? 'background:var(--blue);color:#fff;' : 'background:var(--bg);color:var(--gray);box-shadow:var(--raised-sm);') + '">' +
           '<div style="font-size:11px;">' + BK_WD[dt.getDay()] + '</div><div style="font-size:18px;font-weight:700;' + (on ? '' : 'color:var(--ink);') + '">' + dt.getDate() + '</div>' +
-          '<div style="font-size:9.5px;opacity:.8;">' + BK_MON[dt.getMonth()].slice(0, 3) + '</div></button>';
+          '<div style="font-size:9.5px;opacity:.8;">' + ((d.best || []).length ? "★ утро" : BK_MON[dt.getMonth()].slice(0, 3)) + '</div></button>';
       }).join("") + '</div>';
     var cur = days.filter(function (d) { return d.day === state.bookDay; })[0];
     var cd = bkDate(cur.day);
     html += '<div class="lesson-sub" style="margin:0 2px;text-transform:uppercase;letter-spacing:.05em;">' + BK_WDF[cd.getDay()].replace(/у$/, "а") + ", " + cd.getDate() + " " + BK_MON[cd.getMonth()] + '</div>';
     html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:9px;">' + cur.starts.map(function (m) {
-      var on = state.bookStart === m;
+      var on = state.bookStart === m, best = (cur.best || []).indexOf(m) !== -1;
       return '<button data-act="book-slot" data-start="' + m + '" style="border:none;border-radius:13px;padding:11px 0;font:600 14.5px inherit;font-family:inherit;cursor:pointer;' +
-        (on ? 'background:var(--blue);color:#fff;' : 'background:var(--bg);color:var(--ink);box-shadow:var(--raised-sm);') + '">' + bkHM(bkLocal(m, b.teacherOffset)) + '</button>';
+        (on ? 'background:var(--blue);color:#fff;' : 'background:var(--bg);color:var(--ink);box-shadow:var(--raised-sm);' + (best ? 'outline:1.5px solid oklch(78% 0.12 80 / .8);' : '')) + '">' + bkHM(bkLocal(m, b.teacherOffset)) + '</button>';
     }).join("") + '</div>';
   }
   if (state.bookErr) html += '<div class="lesson-sub" style="color:oklch(65% 0.17 25);">' + esc(state.bookErr) + '</div>';
