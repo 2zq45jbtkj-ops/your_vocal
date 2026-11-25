@@ -465,9 +465,10 @@ function backTarget() {
     case "doc": return "more";
     case "support": return "more";
     case "admin-hub": return "more";
-    case "admin-students": return "admin-hub";
-    case "admin-birthdays": return "admin-hub";
+    case "admin-students": return "admin-active";
+    case "admin-birthdays": return "admin-active";
     case "admin-today": return "admin-hub";
+    case "admin-active": return "admin-hub";
     case "book": return window.GUEST_ON ? "courses" : "profile";
     case "admin-week": return "admin-hub";
     case "admin-dash": return "admin-hub";
@@ -483,7 +484,7 @@ function backTarget() {
     case "trainer": case "trainer-ex": case "trainer-rec": case "trainer-done": return window.trainerBackTarget ? trainerBackTarget() : "profile";
     case "pitch-topic": return "pitch";
     case "pitch-sing": case "pitch-score": return "pitch-topic";
-    case "admin-karaoke": return "admin-hub";
+    case "admin-karaoke": return "admin-active";
     case "admin-karaoke-songs": return (window.KAR && KAR.adm && KAR.adm.fromKar) ? "karaoke" : "admin-karaoke";
     case "admin-karaoke-edit": return "admin-karaoke-songs";
     case "lecture": case "warmups": case "song": case "quiz-result": return "lesson-home";
@@ -3444,54 +3445,50 @@ function sendSupport() {
    «Ещё» сразу вёл на список учеников; теперь сначала показывает список
    разделов (задел на будущее — сюда будут добавляться новые admin-only
    функции, не разбросанные по верхнему уровню «Ещё»). */
+var ADM_ICONS = {"Сегодня": "<svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\"><circle cx=\"8\" cy=\"8\" r=\"5.6\" stroke=\"var(--gray)\" stroke-width=\"1.4\"/><path d=\"M8 5v3.2l2 1.3\" stroke=\"var(--terra)\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>", "Расписание": "<svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\"><rect x=\"2.5\" y=\"3.5\" width=\"11\" height=\"10\" rx=\"2\" stroke=\"var(--gray)\" stroke-width=\"1.4\"/><path d=\"M2.5 6.5h11M5.5 2v3M10.5 2v3\" stroke=\"var(--gray)\" stroke-width=\"1.4\" stroke-linecap=\"round\"/></svg>", "Тестовые клиенты": "<svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\"><circle cx=\"6\" cy=\"5.5\" r=\"2.4\" stroke=\"var(--gray)\" stroke-width=\"1.4\"/><path d=\"M1.8 13.5c0-2.4 1.9-4.2 4.2-4.2s4.2 1.8 4.2 4.2\" stroke=\"var(--gray)\" stroke-width=\"1.4\" stroke-linecap=\"round\"/><path d=\"M11 3.2l.6 1.3 1.4.2-1 1 .2 1.4-1.2-.7-1.2.7.2-1.4-1-1 1.4-.2z\" stroke=\"var(--terra)\" stroke-width=\"1.1\" stroke-linejoin=\"round\"/></svg>", "Выбор ученика": "<svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\"><circle cx=\"8\" cy=\"5.5\" r=\"2.8\" stroke=\"var(--gray)\" stroke-width=\"1.4\"/><path d=\"M2.8 14c0-2.9 2.3-5 5.2-5s5.2 2.1 5.2 5\" stroke=\"var(--gray)\" stroke-width=\"1.4\" stroke-linecap=\"round\"/></svg>", "Дни рождения": "<svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\"><path d=\"M3 14v-5.5a2 2 0 012-2h6a2 2 0 012 2V14M3 14h10M3 14a1 1 0 100 2h10a1 1 0 100-2M8 6.5V3M6 3.2c0 .8.5 1 1 .5s.5-1.2 1-1.2 1 .4 1 1.2-.5 1-1 .5\" stroke=\"var(--gray)\" stroke-width=\"1.3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>", "Разметка караоке": "<svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\"><path d=\"M9 18V5l11-2v13\" stroke=\"var(--gray)\" stroke-width=\"1.9\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><circle cx=\"6\" cy=\"18\" r=\"3\" stroke=\"var(--gray)\" stroke-width=\"1.9\"/><circle cx=\"17\" cy=\"16\" r=\"3\" stroke=\"var(--gray)\" stroke-width=\"1.9\"/></svg>", "Дашборд": "<svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\"><path d=\"M2.5 13.5h11\" stroke=\"var(--gray)\" stroke-width=\"1.4\" stroke-linecap=\"round\"/><rect x=\"3.5\" y=\"8\" width=\"2\" height=\"4\" rx=\".6\" stroke=\"var(--gray)\" stroke-width=\"1.3\"/><rect x=\"7\" y=\"5\" width=\"2\" height=\"7\" rx=\".6\" stroke=\"var(--gray)\" stroke-width=\"1.3\"/><rect x=\"10.5\" y=\"2.5\" width=\"2\" height=\"9.5\" rx=\".6\" stroke=\"var(--gray)\" stroke-width=\"1.3\"/></svg>"};
+/* 26.11 (Николай): разделы сгруппированы — Сегодня, Расписание, Действующие ученики,
+   Новые клиенты. Цветной кружок с числом — что изменилось и ждёт тебя. */
+function admHubItem(item) {
+  var badge = item.badge ? '<span style="min-width:24px;height:24px;padding:0 7px;border-radius:12px;background:' + (item.badgeColor || "var(--terra)") + ';color:#fff;font:700 12.5px Inter,sans-serif;display:inline-flex;align-items:center;justify-content:center;margin-right:6px;">' + item.badge + '</span>' : "";
+  return '<div class="more-item" data-act="' + item.act + '">' +
+      '<div class="more-item-icon" style="background:var(--bgmuted);">' + item.icon + "</div>" +
+      '<div style="flex:1;min-width:0;">' +
+        '<div class="more-item-label">' + esc(item.label) + "</div>" +
+        '<div class="lesson-sub" style="margin-top:1px;">' + esc(item.sub) + "</div>" +
+      "</div>" + badge + SVG.chevronRight +
+    "</div>";
+}
 function renderAdminHub() {
+  loadAdminToday();
+  var d = state.adminToday && state.adminToday.ok ? state.adminToday : null;
+  var waiting = d ? d.receipts.length + d.questions : 0;
+  var newc = d ? d.trials.length : 0;
   var items = [
-    {
-      label: "Сегодня", act: "admin-hub-today", sub: "Уроки дня, заявки на пробный и чеки, которые ждут",
-      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.6" stroke="var(--gray)" stroke-width="1.4"/><path d="M8 5v3.2l2 1.3" stroke="var(--terra)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
-    },
-    {
-      label: "Расписание", act: "admin-hub-week", sub: "Неделя сеткой: твои уроки, студия, обед и английский",
-      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="3.5" width="11" height="10" rx="2" stroke="var(--gray)" stroke-width="1.4"/><path d="M2.5 6.5h11M5.5 2v3M10.5 2v3" stroke="var(--gray)" stroke-width="1.4" stroke-linecap="round"/></svg>'
-    },
-    {
-      label: "Дашборд", act: "admin-hub-dash", sub: "Активность, уроки, ДЗ и результаты учеников",
-      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2.5 13.5h11" stroke="var(--gray)" stroke-width="1.4" stroke-linecap="round"/><rect x="3.5" y="8" width="2" height="4" rx=".6" stroke="var(--gray)" stroke-width="1.3"/><rect x="7" y="5" width="2" height="7" rx=".6" stroke="var(--gray)" stroke-width="1.3"/><rect x="10.5" y="2.5" width="2" height="9.5" rx=".6" stroke="var(--gray)" stroke-width="1.3"/></svg>'
-    },
-    {
-      label: "Тестовые клиенты", act: "admin-hub-guests", sub: "Кто открыл тест-драйв из Instagram: экраны, время, нажатия",
-      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="6" cy="5.5" r="2.4" stroke="var(--gray)" stroke-width="1.4"/><path d="M1.8 13.5c0-2.4 1.9-4.2 4.2-4.2s4.2 1.8 4.2 4.2" stroke="var(--gray)" stroke-width="1.4" stroke-linecap="round"/><path d="M11 3.2l.6 1.3 1.4.2-1 1 .2 1.4-1.2-.7-1.2.7.2-1.4-1-1 1.4-.2z" stroke="var(--terra)" stroke-width="1.1" stroke-linejoin="round"/></svg>'
-    },
-    {
-      label: "Выбор ученика", act: "admin-hub-students", sub: "Пройти урок глазами ученика",
-      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="5.5" r="2.8" stroke="var(--gray)" stroke-width="1.4"/><path d="M2.8 14c0-2.9 2.3-5 5.2-5s5.2 2.1 5.2 5" stroke="var(--gray)" stroke-width="1.4" stroke-linecap="round"/></svg>'
-    },
-    {
-      label: "Дни рождения", act: "admin-hub-birthdays", sub: "Ближайшие 30 дней",
-      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 14v-5.5a2 2 0 012-2h6a2 2 0 012 2V14M3 14h10M3 14a1 1 0 100 2h10a1 1 0 100-2M8 6.5V3M6 3.2c0 .8.5 1 1 .5s.5-1.2 1-1.2 1 .4 1 1.2-.5 1-1 .5" stroke="var(--gray)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>'
-    },
-    {
-      label: "Разметка караоке", act: "admin-hub-karaoke", sub: "Минус, текст и тайминг строк для песен ученика",
-      icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 18V5l11-2v13" stroke="var(--gray)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="18" r="3" stroke="var(--gray)" stroke-width="1.9"/><circle cx="17" cy="16" r="3" stroke="var(--gray)" stroke-width="1.9"/></svg>'
-    }
+    { label: "Сегодня", act: "admin-hub-today", icon: ADM_ICONS["Сегодня"], badge: waiting, badgeColor: "oklch(70% 0.13 80)",
+      sub: d ? (d.lessons.length + " " + plural(d.lessons.length, "урок", "урока", "уроков") + " сегодня" + (waiting ? " · ждут: чеки " + d.receipts.length + ", вопросы " + d.questions : "")) : "Уроки дня, чеки и вопросы, которые ждут" },
+    { label: "Расписание", act: "admin-hub-week", icon: ADM_ICONS["Расписание"], sub: "Неделя сеткой: твои уроки, студия, обед и английский" },
+    { label: "Действующие ученики", act: "admin-hub-active", icon: ADM_ICONS["Выбор ученика"], sub: "Пройти урок глазами ученика, дни рождения, песни для караоке" },
+    { label: "Новые клиенты", act: "admin-hub-guests", icon: ADM_ICONS["Тестовые клиенты"], badge: newc,
+      sub: newc ? "Заявок на пробный: " + newc + " · кто открывал тест-драйв и что нажимал" : "Кто открывал тест-драйв и что нажимал — анимацией" }
   ];
-  var itemsHtml = items.map(function (item) {
-    return (
-      '<div class="more-item" data-act="' + item.act + '">' +
-        '<div class="more-item-icon" style="background:var(--bgmuted);">' + item.icon + "</div>" +
-        '<div style="flex:1;min-width:0;">' +
-          '<div class="more-item-label">' + esc(item.label) + "</div>" +
-          '<div class="lesson-sub" style="margin-top:1px;">' + esc(item.sub) + "</div>" +
-        "</div>" +
-        SVG.chevronRight +
-      "</div>"
-    );
-  }).join("");
   app.innerHTML =
     '<div class="top pb8">' + backBtn("back") +
       '<div><div class="top-title lg">Админ</div><div class="top-sub">Видно только тебе</div></div>' +
     "</div>" +
-    '<div style="padding:8px 16px 130px;display:flex;flex-direction:column;gap:10px;">' + itemsHtml + "</div>";
+    '<div style="padding:8px 16px 130px;display:flex;flex-direction:column;gap:10px;">' + items.map(admHubItem).join("") + "</div>";
+  wireActs();
+}
+function renderAdminActive() {
+  var items = [
+    { label: "Выбор ученика", act: "admin-hub-students", icon: ADM_ICONS["Выбор ученика"], sub: "Пройти урок глазами ученика" },
+    { label: "Дни рождения", act: "admin-hub-birthdays", icon: ADM_ICONS["Дни рождения"], sub: "Ближайшие 30 дней" },
+    { label: "Разметка караоке", act: "admin-hub-karaoke", icon: ADM_ICONS["Разметка караоке"], sub: "Минус, текст и тайминг строк для песен ученика" }
+  ];
+  app.innerHTML =
+    '<div class="top pb8">' + backBtn("back") +
+      '<div><div class="top-title lg">Действующие ученики</div><div class="top-sub">Админ</div></div>' +
+    "</div>" +
+    '<div style="padding:8px 16px 130px;display:flex;flex-direction:column;gap:10px;">' + items.map(admHubItem).join("") + "</div>";
   wireActs();
 }
 
@@ -3567,7 +3564,7 @@ function loadAdminToday() {
   admFetch("?op=today").then(function (d) {
     state._admTodayBusy = false;
     state.adminToday = d && d.ok ? d : { ok: false };
-    if (state.screen === "admin-today") render();
+    if (state.screen === "admin-today" || state.screen === "admin-hub") render();
   }, function () {
     state._admTodayBusy = false; state.adminToday = { ok: false };
     if (state.screen === "admin-today") render();
@@ -6228,6 +6225,7 @@ var ACTS = {
   "admin-hub-students": function () { go("admin-students"); },
   "admin-hub-birthdays": function () { go("admin-birthdays"); },
   "admin-hub-today": function () { state.adminToday = null; go("admin-today"); },
+  "admin-hub-active": function () { go("admin-active"); },
   "admin-hub-week": function () { state.adminWeek = null; go("admin-week"); },
   "admin-week-prev": function () { shiftAdminWeek(-7); },
   "admin-week-next": function () { shiftAdminWeek(7); },
@@ -6364,6 +6362,7 @@ function render() {
     case "admin-students": renderAdminStudents(); break;
     case "admin-birthdays": renderAdminBirthdays(); break;
     case "admin-today": renderAdminToday(); break;
+    case "admin-active": renderAdminActive(); break;
     case "book": renderBook(); break;
     case "admin-week": renderAdminWeek(); break;
     case "admin-dash": if (window.renderAdminDash) renderAdminDash(); break;

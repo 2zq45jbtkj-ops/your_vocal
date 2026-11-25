@@ -497,7 +497,10 @@
     if (el.matches('[data-kp="settings"]') || el.closest('[data-kp="settings"]')) mark("karset");
     var lb = el.getAttribute("aria-label") || (el.textContent || "").replace(/\s+/g, " ").trim();
     if (!lb) lb = el.getAttribute("data-act") || el.getAttribute("data-kp") || "кнопка";
-    log({ kind: "tap", label: lb.slice(0, 80) });
+    var vw = window.innerWidth || 1, vh = window.innerHeight || 1;
+    log({ kind: "tap", label: lb.slice(0, 80), screen: G.cur ? G.cur.label : "",
+          x: Math.round(Math.max(0, Math.min(1, e.clientX / vw)) * 1000) / 1000,
+          y: Math.round(Math.max(0, Math.min(1, e.clientY / vh)) * 1000) / 1000 });
   }
   function payload(extra) {
     var b = { initData: tg ? tg.initData : "", anon: G.store.anon };
@@ -635,8 +638,80 @@
     if (evs === undefined || evs === "loading") list = '<div class="courses-empty">Загружаю историю…</div>';
     else if (evs === "err") list = '<div class="courses-empty">Не получилось загрузить историю.</div>';
     else if (!evs.length) list = '<div class="courses-empty">Истории пока нет.</div>';
-    else list = timelineHtml(evs);
+    else list = replayHtml(evs) + '<details class="gd-card" style="padding:10px 16px;"><summary style="cursor:pointer;color:var(--gray);font-size:14px;">Подробный список по секундам</summary>' + timelineHtml(evs).replace('<div class="gd-card gd-tl">', '<div class="gd-tl">') + '</details>';
+    setTimeout(wireReplay, 0);
     return top + list;
+  }
+  /* ---------- 26.11: анимация пути гостя (вместо списка по секундам) ----------
+     Мини-телефон: экраны сменяются как у гостя, на месте нажатия вспыхивает точка
+     (у старых заходов места нет — точка внизу экрана с подписью кнопки). */
+  var RP = { evs: null, i: 0, t: null, speed: 2, playing: false };
+  function replayHtml(evs) {
+    RP.evs = evs.filter(function (e) { return e.kind === "screen" || e.kind === "tap" || e.kind === "trial"; });
+    RP.i = 0; RP.playing = false; if (RP.t) clearTimeout(RP.t);
+    var visits = {}; RP.evs.forEach(function (e) { visits[e.visit] = 1; });
+    return '<div class="gd-card" style="display:flex;flex-direction:column;align-items:center;gap:12px;">' +
+      '<div id="rp-phone" style="position:relative;width:210px;height:430px;border-radius:30px;background:var(--bgmuted);box-shadow:var(--inset);overflow:hidden;">' +
+        '<div id="rp-scr" style="position:absolute;left:0;right:0;top:34px;text-align:center;font-weight:700;font-size:15px;padding:0 12px;transition:opacity .25s;"></div>' +
+        '<div id="rp-sub" style="position:absolute;left:0;right:0;top:58px;text-align:center;font-size:11px;color:var(--gray);"></div>' +
+        '<div id="rp-dot" style="position:absolute;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;background:oklch(60% 0.13 38 / .85);box-shadow:0 0 0 0 oklch(60% 0.13 38 / .5);opacity:0;transition:left .35s,top .35s,opacity .2s;"></div>' +
+        '<div id="rp-cap" style="position:absolute;left:10px;right:10px;bottom:56px;text-align:center;font-size:11.5px;line-height:1.3;background:var(--bg);border-radius:12px;padding:7px 8px;opacity:0;transition:opacity .2s;"></div>' +
+        '<div style="position:absolute;left:14px;right:14px;bottom:12px;height:32px;border-radius:14px;background:var(--bg);display:flex;justify-content:space-around;align-items:center;font-size:9px;color:var(--gray);"><span>Кабинет</span><span>Уроки</span><span>Ещё</span></div>' +
+      '</div>' +
+      '<div style="width:100%;height:6px;border-radius:4px;background:var(--bgmuted);overflow:hidden;"><i id="rp-bar" style="display:block;height:100%;width:0;background:var(--blue);"></i></div>' +
+      '<div style="display:flex;gap:8px;width:100%;">' +
+        '<button class="filter-btn active-terra" data-rp="play" style="flex:2;height:44px;">▶ Смотреть</button>' +
+        '<button class="filter-btn" data-rp="s1" style="height:44px;">×1</button><button class="filter-btn active-blue" data-rp="s2" style="height:44px;">×2</button><button class="filter-btn" data-rp="s4" style="height:44px;">×4</button>' +
+      '</div>' +
+      '<div class="lesson-sub" style="text-align:center;">' + Object.keys(visits).length + ' ' + (Object.keys(visits).length === 1 ? "заход" : "захода") + ' · ' + RP.evs.length + ' шагов</div>' +
+    '</div>';
+  }
+  function rpShow(e) {
+    var scr = document.getElementById("rp-scr"); if (!scr) { RP.playing = false; return; }
+    var dot = document.getElementById("rp-dot"), cap = document.getElementById("rp-cap"), sub = document.getElementById("rp-sub");
+    document.getElementById("rp-bar").style.width = Math.round((RP.i + 1) / RP.evs.length * 100) + "%";
+    if (e.kind === "screen") {
+      scr.style.opacity = 0;
+      setTimeout(function () { scr.textContent = e.label; scr.style.opacity = 1; }, 150);
+      sub.textContent = "Заход " + e.visit + " · пробыл " + fmtDur(Number(e.dur_ms) || 0);
+      dot.style.opacity = 0; cap.style.opacity = 0;
+    } else {
+      var has = e.x != null && e.y != null;
+      dot.style.left = (has ? e.x * 100 : 50) + "%"; dot.style.top = (has ? e.y * 100 : 78) + "%";
+      dot.style.opacity = 1;
+      dot.animate([{ transform: "scale(.6)", boxShadow: "0 0 0 0 oklch(60% 0.13 38 / .6)" }, { transform: "scale(1)", boxShadow: "0 0 0 18px oklch(60% 0.13 38 / 0)" }], { duration: 600 });
+      cap.textContent = (e.kind === "trial" ? "🔥 " : "нажал «") + e.label + (e.kind === "trial" ? "" : "»"); cap.style.opacity = 1;
+      if (e.screen) scr.textContent = e.screen;
+    }
+  }
+  function rpStep() {
+    if (!RP.playing || !RP.evs || RP.i >= RP.evs.length) { RP.playing = false; rpBtn(); return; }
+    var e = RP.evs[RP.i]; rpShow(e);
+    var next = RP.evs[RP.i + 1];
+    var gap = next ? Math.min(3500, Math.max(700, new Date(next.ts) - new Date(e.ts))) : 0;
+    if (e.kind === "screen") gap = Math.max(gap, Math.min(3500, (Number(e.dur_ms) || 0) * 0.25));
+    RP.i++;
+    RP.t = setTimeout(rpStep, gap / RP.speed);
+  }
+  function rpBtn() {
+    var b = document.querySelector('[data-rp="play"]'); if (!b) return;
+    b.textContent = RP.playing ? "❚❚ Пауза" : (RP.i >= (RP.evs || []).length ? "↻ Сначала" : "▶ Смотреть");
+  }
+  function wireReplay() {
+    Array.prototype.forEach.call(document.querySelectorAll("[data-rp]"), function (b) {
+      if (b._rp) return; b._rp = 1;
+      b.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        var k = b.getAttribute("data-rp");
+        if (k === "play") {
+          if (RP.playing) { RP.playing = false; clearTimeout(RP.t); }
+          else { if (RP.i >= RP.evs.length) RP.i = 0; RP.playing = true; rpStep(); }
+          rpBtn(); return;
+        }
+        RP.speed = +k.slice(1);
+        Array.prototype.forEach.call(document.querySelectorAll('[data-rp^="s"]'), function (x) { x.classList.toggle("active-blue", x === b); });
+      });
+    });
   }
   function exploredText(ex) {
     if (!Array.isArray(ex) || !ex.length) return "пока ничего";

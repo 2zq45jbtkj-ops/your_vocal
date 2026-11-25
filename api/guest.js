@@ -59,6 +59,9 @@ async function ensure(sql) {
     dur_ms INT NOT NULL DEFAULT 0
   )`;
   await sql`CREATE INDEX IF NOT EXISTS guest_events_gid ON guest_events (gid, ts)`;
+  // 26.11: где на экране нажал (доли ширины/высоты) — для анимации пути гостя
+  await sql`ALTER TABLE guest_events ADD COLUMN IF NOT EXISTS x REAL`;
+  await sql`ALTER TABLE guest_events ADD COLUMN IF NOT EXISTS y REAL`;
   await sql`CREATE TABLE IF NOT EXISTS guest_kv (
     k TEXT PRIMARY KEY,
     v TEXT NOT NULL,
@@ -352,7 +355,7 @@ export default async function handler(req) {
           return json({ ok: true, guests: users });
         }
         var gid = cut(url.searchParams.get("gid"), 60);
-        var ev = await sql`SELECT visit, ts, kind, screen, label, dur_ms FROM guest_events WHERE gid = ${gid} ORDER BY ts ASC, id ASC LIMIT 3000`;
+        var ev = await sql`SELECT visit, ts, kind, screen, label, dur_ms, x, y FROM guest_events WHERE gid = ${gid} ORDER BY ts ASC, id ASC LIMIT 3000`;
         return json({ ok: true, events: ev });
       }
       return json({ ok: false }, 400);
@@ -384,8 +387,10 @@ export default async function handler(req) {
         var ts = Number(e.ts);
         if (!(ts > 1.7e12 && ts < Date.now() + 60000)) ts = Date.now();
         var dur = Math.max(0, Math.min(6 * 3600 * 1000, Math.round(Number(e.dur) || 0)));
-        await sql`INSERT INTO guest_events (gid, visit, ts, kind, screen, label, dur_ms)
-          VALUES (${g.id}, ${v}, ${new Date(ts).toISOString()}, ${kind}, ${cut(e.screen, 60)}, ${cut(e.label, 120)}, ${dur})`;
+        var px = Number(e.x), py = Number(e.y);
+        px = px >= 0 && px <= 1 ? px : null; py = py >= 0 && py <= 1 ? py : null;
+        await sql`INSERT INTO guest_events (gid, visit, ts, kind, screen, label, dur_ms, x, y)
+          VALUES (${g.id}, ${v}, ${new Date(ts).toISOString()}, ${kind}, ${cut(e.screen, 60)}, ${cut(e.label, 120)}, ${dur}, ${px}, ${py})`;
       }
       if (Array.isArray(body.explored)) {
         var ex = body.explored.map(function (x) { return cut(x, 20); }).filter(Boolean).slice(0, 12);
