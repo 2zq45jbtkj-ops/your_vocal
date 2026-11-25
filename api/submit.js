@@ -80,9 +80,9 @@ async function recordForBot(initData, accessToken, rec) {
   if (!initData && !accessToken) return;
   if (initData) rec.initData = initData;
   else rec.accessToken = accessToken;
-  // не больше 5 секунд: ученик не должен ждать бота записи
+  // не больше 8 секунд: ученик не должен ждать бота записи
   var ctl = new AbortController();
-  var timer = setTimeout(function () { ctl.abort(); }, 5000);
+  var timer = setTimeout(function () { ctl.abort(); }, 8000);
   try {
     await fetch(process.env.HW_INTAKE_URL || HW_INTAKE_URL, {
       method: "POST",
@@ -129,12 +129,14 @@ export default async function handler(req) {
   var accessToken = (form.get("accessToken") || "").toString().trim().toLowerCase();
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(accessToken)) accessToken = "";
   var lessonNo = (form.get("lessonNo") || "").toString();
-  var save = function (kind2, title, body, msg) {
+  var save = function (kind2, title, body, msg, extra) {
     var f = fileOf(msg);
-    return recordForBot(initData, accessToken, {
+    var rec = {
       kind: kind2, title: title, body: body || "", lessonNo: lessonNo, topic: lessonTitle,
       fileId: f.fileId || "", fileType: f.fileType || ""
-    }).catch(function () {});
+    };
+    if (extra) Object.keys(extra).forEach(function (k) { rec[k] = extra[k]; });
+    return recordForBot(initData, accessToken, rec).catch(function () {});
   };
   var who = (lastName + " " + firstName).trim() || "Без имени";
   var tagKey = studentHashtag(lastName, firstName);
@@ -201,7 +203,9 @@ export default async function handler(req) {
       if (!ra.ok) ra = await tgSendFile(token, chatId, "sendDocument", "document", file, cap);
       if (!ra.ok) return json({ ok: false, error: ra.description || "Telegram отклонил файл" }, 502);
       if (ra.result) await rememberMessage(ra.result.message_id, tagKey).catch(function () {});
-      await save("audio", "Дубль из караоке", tnote, ra.result);
+      // бот ставит под этим сообщением «Ответить …» и кладёт дубль в «Ученики → Записи»
+      await save("audio", "Дубль из караоке", tnote, ra.result,
+        ra.result ? { adminChatId: ra.result.chat && ra.result.chat.id, adminMsgId: ra.result.message_id } : null);
       return json({ ok: true });
     }
 

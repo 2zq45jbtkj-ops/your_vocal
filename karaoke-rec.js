@@ -508,7 +508,7 @@ function krPaintTake(state) {
   if (!d || !d.parentNode || !t) return;
   if (state) d._state = state;
   var st = d._state || "", playing = !!KREC.play;
-  var msg = { render: "Свожу голос с музыкой…", send: "Отправляю Николаю…", sent: "Отправлено Николаю ✓", big: "Дубль слишком длинный для отправки — запиши кусок покороче (до 4 минут).", error: "Не отправилось. Проверь интернет и попробуй ещё раз." }[st] || "";
+  var msg = { render: "Свожу голос с музыкой…", send: "Отправляю Николаю…", sent: "Отправлено Николаю ✓ Его ответ придёт в бот — раздел «🎙 Мои записи».", big: "Дубль слишком длинный для отправки — запиши кусок покороче (до 4 минут).", error: "Не отправилось. Проверь интернет и попробуй ещё раз." }[st] || "";
   d.innerHTML = '<div class="t">Дубль готов</div><div class="s">' + karFmt(t.dur) + " · с " + karFmt(t.p0) + "</div>" +
     '<div class="kr-play" data-k="play"><span class="kr-pbtn">' + (playing ? KAR_ICO.pause : KAR_ICO.play) + "</span>" + (playing ? "Пауза" : "Прослушать") + "</div>" +
     (msg ? '<div class="kr-msg' + (st === "error" || st === "big" ? " err" : "") + '">' + msg + "</div>" : "") +
