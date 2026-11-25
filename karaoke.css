@@ -524,3 +524,4 @@ html .kp.fx-ivory .kr-fab { border-color: #2b2622; }
 .kp .kfx-read { display: flex; align-items: center; gap: 10px; font: 600 12px Inter, sans-serif; color: var(--dim); }
 .kp .kfx-read input { flex: 1; accent-color: var(--hi); }
 .kp .kfx-read span { white-space: nowrap; }
+.kp .kfx-read span:first-child { width: 68px; } .kp .kfx-read span:last-child { width: 86px; text-align: right; }

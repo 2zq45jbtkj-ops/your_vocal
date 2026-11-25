@@ -93,6 +93,10 @@
   /* Читабельность текста на фоне «Цветной дым» (25.11, Коля): 0 — как было,
      100% — дым приглушён и ровнее, текст читается легче. Одна настройка на все песни. */
   var K_READ = "kar.fx.smokeRead";
+  /* Пульсация фона в такт (BPM песни), 25.11: 0 — без пульсации, 50% — как
+     было (мягкая), 100% — вдвое заметнее. Одна настройка на все песни. */
+  var K_PULSE = "kar.fx.pulse", PULSE = null;
+  function pulseAmt() { if (PULSE == null) { var v = lsGet(K_PULSE); v = v == null ? 0.5 : Number(v); PULSE = v >= 0 && v <= 1 ? v : 0.5; } return PULSE; }
   var READ = null;
   function smokeRead() { if (READ == null) { var v = Number(lsGet(K_READ)); READ = v >= 0 && v <= 1 ? v : 0; } return READ; }
   function lsSet(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} }
@@ -377,7 +381,7 @@
     var B = 0;
     if (playing && bpm) {
       var ph = ((t * bpm / 60) % 1 + 1) % 1;
-      B = Math.pow(0.5 + 0.5 * Math.cos(ph * 2 * Math.PI), 2) * FLASH;
+      B = Math.pow(0.5 + 0.5 * Math.cos(ph * 2 * Math.PI), 2) * FLASH * pulseAmt() * 2; // ползунок «Пульсация», 50% — как было
     }
     S.r.draw(S.tAcc, B, ts);
     return true;
@@ -546,6 +550,8 @@
         GLASS.map(function (n, i) { return card("data-fg", i, n, c.g === i, withK(c, "g", i)); }).join("") + "</div>" +
         '<div class="kfx-l">Свет под стеклом</div><div class="kfx-row">' +
         UNDER_ORDER.map(function (i) { return card("data-fu", i, UNDER[i], c.u === i, withK(c, "u", i)); }).join("") + "</div>" +
+        '<div class="kfx-l">Пульсация в такт музыке</div><div class="kfx-read"><span>Нет</span>' +
+          '<input type="range" min="0" max="100" step="1" value="' + Math.round(pulseAmt() * 100) + '" data-fpulse><span>Сильнее</span></div>' +
         (c.u === 2 ? '<div class="kfx-l">Читабельность текста</div><div class="kfx-read"><span>Ярче дым</span>' +
           '<input type="range" min="0" max="100" step="1" value="' + Math.round(smokeRead() * 100) + '" data-fread><span>Чётче текст</span></div>' : "") +
         colorBlock(c);
@@ -585,6 +591,8 @@
     if (mode === "auto" && S.combo) { upd("g", "data-fg"); upd("u", "data-fu"); wireColor(kp, d); }
     var rd = d.querySelector("[data-fread]");
     if (rd) rd.oninput = function () { READ = rd.value / 100; lsSet(K_READ, String(READ)); };
+    var pu = d.querySelector("[data-fpulse]");
+    if (pu) pu.oninput = function () { PULSE = pu.value / 100; lsSet(K_PULSE, String(PULSE)); };
     var rb = d.querySelector('[data-s="rnd"]');
     if (rb) rb.onclick = function () { if (S.combo) { stopEdit(); var r = randomCombo(null, S.combo); TAB = getPal(r.p).n; setCombo(r); paintSheet(kp); } };
     d.querySelector('[data-s="ok"]').onclick = function () {
