@@ -467,6 +467,8 @@ function backTarget() {
     case "admin-hub": return "more";
     case "admin-students": return "admin-hub";
     case "admin-birthdays": return "admin-hub";
+    case "admin-today": return "admin-hub";
+    case "admin-week": return "admin-hub";
     case "admin-dash": return "admin-hub";
     case "admin-guests": return "admin-hub";
     case "admin-plans": return "admin-hub";
@@ -3343,6 +3345,14 @@ function sendSupport() {
 function renderAdminHub() {
   var items = [
     {
+      label: "Сегодня", act: "admin-hub-today", sub: "Уроки дня, заявки на пробный и чеки, которые ждут",
+      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.6" stroke="var(--gray)" stroke-width="1.4"/><path d="M8 5v3.2l2 1.3" stroke="var(--terra)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    },
+    {
+      label: "Расписание", act: "admin-hub-week", sub: "Неделя сеткой: твои уроки, студия, обед и английский",
+      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="3.5" width="11" height="10" rx="2" stroke="var(--gray)" stroke-width="1.4"/><path d="M2.5 6.5h11M5.5 2v3M10.5 2v3" stroke="var(--gray)" stroke-width="1.4" stroke-linecap="round"/></svg>'
+    },
+    {
       label: "Дашборд", act: "admin-hub-dash", sub: "Активность, уроки, ДЗ и результаты учеников",
       icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2.5 13.5h11" stroke="var(--gray)" stroke-width="1.4" stroke-linecap="round"/><rect x="3.5" y="8" width="2" height="4" rx=".6" stroke="var(--gray)" stroke-width="1.3"/><rect x="7" y="5" width="2" height="7" rx=".6" stroke="var(--gray)" stroke-width="1.3"/><rect x="10.5" y="2.5" width="2" height="9.5" rx=".6" stroke="var(--gray)" stroke-width="1.3"/></svg>'
     },
@@ -3427,6 +3437,155 @@ function renderAdminStudents() {
       '<div><div class="top-title lg">Режим админа</div><div class="top-sub">Выбери ученика, чтобы пройти урок его глазами</div></div>' +
     "</div>" +
     '<div style="padding:8px 16px 130px;display:flex;flex-direction:column;gap:10px;">' + ownMsg + body + "</div>";
+  wireActs();
+}
+
+/* ---------- «Сегодня» и «Расписание» в режиме админа (26.11) ----------
+   Данные — из бота записи (vocal-bot /api/app_admin): те же таблицы, что у кнопки
+   «Сегодня» в боте. Бот сам проверяет подпись Telegram и отдаёт данные только Николаю. */
+var BOT_API = "https://vocal-bot.vercel.app/api/app_admin";
+var ADM_KIND = {
+  mine:   { label: "твой урок", bg: "oklch(56% 0.09 235)", fg: "#fff" },
+  trial:  { label: "пробный",   bg: "oklch(78% 0.12 80 / .16)", fg: "oklch(82% 0.12 82)" },
+  studio: { label: "студия",    bg: "var(--bgmuted)", fg: "var(--gray)" },
+  life:   { label: "личное",    bg: "transparent", fg: "var(--gray)" },
+  block:  { label: "закрыто",   bg: "transparent", fg: "var(--gray)" }
+};
+var ADM_DAYS = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"];
+var ADM_MON = ["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
+function admHM(m) { return ("0" + Math.floor(m / 60)).slice(-2) + ":" + ("0" + (m % 60)).slice(-2); }
+function admRub(n) { return String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " ₽"; }
+function admFetch(q) {
+  return fetch(BOT_API + q, { headers: { "x-tg-init-data": (tg && tg.initData) || "" } })
+    .then(function (r) { return r.json().catch(function () { return { ok: false }; }); });
+}
+function loadAdminToday() {
+  if (state.adminToday || state._admTodayBusy) return;
+  state._admTodayBusy = true;
+  admFetch("?op=today").then(function (d) {
+    state._admTodayBusy = false;
+    state.adminToday = d && d.ok ? d : { ok: false };
+    if (state.screen === "admin-today") render();
+  }, function () {
+    state._admTodayBusy = false; state.adminToday = { ok: false };
+    if (state.screen === "admin-today") render();
+  });
+}
+function renderAdminToday() {
+  loadAdminToday();
+  var d = state.adminToday, body;
+  if (!d) body = '<div class="courses-empty">Загружаю день…</div>';
+  else if (!d.ok) body = '<div class="courses-empty">Бот не ответил. Закрой экран и открой ещё раз.</div>';
+  else {
+    var p = d.date.split("-"), dt = new Date(+p[0], +p[1] - 1, +p[2]);
+    var cards = '';
+    var waits = [["Чеки", d.receipts.length], ["Заявки", d.trials.length], ["Вопросы", d.questions]];
+    cards += '<div style="display:flex;gap:10px;">' + waits.map(function (w) {
+      var hot = w[1] > 0;
+      return '<div class="cab-card" style="flex:1;margin:0;padding:12px 14px;border-radius:18px;' + (hot ? 'outline:1px solid oklch(78% 0.12 80 / .6);' : '') + '">' +
+        '<div class="lesson-sub">' + w[0] + '</div><div style="font-size:22px;font-weight:700;' + (hot ? 'color:oklch(72% 0.13 80);' : '') + '">' + w[1] + '</div></div>';
+    }).join("") + '</div>';
+    var ls = d.lessons;
+    cards += '<div class="lesson-sub" style="margin:16px 4px 2px;text-transform:uppercase;letter-spacing:.05em;">Уроки · ' + ls.length + '</div>';
+    if (!ls.length) cards += '<div class="courses-empty">Сегодня уроков нет.</div>';
+    ls.forEach(function (e) {
+      var k = ADM_KIND[e.kind] || ADM_KIND.mine, past = e.end <= d.now;
+      cards += '<div class="lesson-card"' + (past ? ' style="opacity:.55"' : '') + '>' +
+        '<div style="width:54px;font-weight:700;font-variant-numeric:tabular-nums;">' + admHM(e.start) + '<div class="lesson-sub" style="font-weight:500">до ' + admHM(e.end) + '</div></div>' +
+        '<div class="lesson-body"><div class="lesson-name">' + esc(e.name || k.label) + '</div><div class="lesson-sub">' + k.label + (e.outcome ? " · отмечен" : past ? " · прошёл" : "") + '</div></div>' +
+        '<span style="width:10px;height:10px;border-radius:50%;background:' + (e.kind === "mine" ? "oklch(56% 0.09 235)" : e.kind === "trial" ? "oklch(78% 0.12 80)" : "var(--disabled)") + '"></span>' +
+      '</div>';
+    });
+    if (d.receipts.length) {
+      cards += '<div class="lesson-sub" style="margin:16px 4px 2px;text-transform:uppercase;letter-spacing:.05em;">Чеки ждут подтверждения</div>';
+      d.receipts.forEach(function (r) {
+        cards += '<div class="lesson-card"><div class="lesson-body"><div class="lesson-name">' + esc(r.name) + ' · ' + admRub(r.amount) + '</div><div class="lesson-sub">' + esc(r.what) + ' · подтверди в боте</div></div></div>';
+      });
+    }
+    if (d.trials.length) {
+      cards += '<div class="lesson-sub" style="margin:16px 4px 2px;text-transform:uppercase;letter-spacing:.05em;">Заявки на пробный</div>';
+      d.trials.forEach(function (t) {
+        var when = "";
+        if (t.day) { var q = t.day.split("-"); when = (+q[2]) + " " + ADM_MON[+q[1] - 1] + ", " + admHM(t.start || 0); }
+        cards += '<div class="lesson-card"><div class="lesson-body"><div class="lesson-name">' + esc(t.name || "Без имени") + (t.user ? ' · @' + esc(t.user) : '') + '</div><div class="lesson-sub">' + when + ' · ' + (t.status === "receipt_sent" ? "чек прислан" : "ждёт оплаты") + '</div></div></div>';
+      });
+    }
+    body = '<div style="font-size:20px;font-weight:700;margin:0 4px 4px;">' + ["Воскресенье","Понедельник","Вторник","Среда","Четверг","Пятница","Суббота"][dt.getDay()] + ', ' + dt.getDate() + ' ' + ADM_MON[dt.getMonth()] + '</div>' + cards;
+  }
+  app.innerHTML =
+    '<div class="top pb8">' + backBtn("back") +
+      '<div><div class="top-title lg">Сегодня</div><div class="top-sub">Режим админа</div></div>' +
+    "</div>" +
+    '<div style="padding:8px 16px 130px;display:flex;flex-direction:column;gap:10px;">' + body + "</div>";
+  wireActs();
+}
+function shiftAdminWeek(days) {
+  var base = state.adminWeekStart || (state.adminWeek && state.adminWeek.start);
+  if (!base) return;
+  var p = base.split("-"), dt = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2] + days));
+  state.adminWeekStart = dt.toISOString().slice(0, 10);
+  state.adminWeek = null;
+  render();
+}
+function loadAdminWeek() {
+  if (state.adminWeek || state._admWeekBusy) return;
+  state._admWeekBusy = true;
+  admFetch("?op=week" + (state.adminWeekStart ? "&start=" + state.adminWeekStart : "")).then(function (d) {
+    state._admWeekBusy = false;
+    state.adminWeek = d && d.ok ? d : { ok: false };
+    if (state.screen === "admin-week") render();
+  }, function () {
+    state._admWeekBusy = false; state.adminWeek = { ok: false };
+    if (state.screen === "admin-week") render();
+  });
+}
+function renderAdminWeek() {
+  loadAdminWeek();
+  var d = state.adminWeek, body, title = "Неделя";
+  if (!d) body = '<div class="courses-empty">Загружаю неделю…</div>';
+  else if (!d.ok) body = '<div class="courses-empty">Бот не ответил. Закрой экран и открой ещё раз.</div>';
+  else {
+    var H0 = 9 * 60, H1 = 21 * 60;
+    d.events.forEach(function (e) { if (e.start < H0) H0 = Math.floor(e.start / 60) * 60; if (e.end > H1) H1 = Math.ceil(e.end / 60) * 60; });
+    var PX = 0.9, gh = (H1 - H0) * PX;
+    var p = d.start.split("-"), first = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2]));
+    var last = new Date(first.getTime() + 6 * 864e5);
+    title = first.getUTCDate() + " " + ADM_MON[first.getUTCMonth()] + " – " + last.getUTCDate() + " " + ADM_MON[last.getUTCMonth()];
+    var head = '<div></div>', cols = '';
+    for (var i = 0; i < 7; i++) {
+      var dd = new Date(first.getTime() + i * 864e5), iso = dd.toISOString().slice(0, 10), isT = iso === d.today;
+      head += '<div style="text-align:center;font-size:11px;color:var(--gray);padding-bottom:4px;">' + ADM_DAYS[i] +
+        '<div style="font-size:15px;font-weight:700;color:' + (isT ? 'var(--terra)' : 'var(--ink)') + ';">' + dd.getUTCDate() + '</div></div>';
+      var evs = d.events.filter(function (e) { return e.day === iso; });
+      cols += '<div style="position:relative;height:' + gh + 'px;border-left:1px solid var(--line);' + (isT ? 'background:oklch(60% 0.13 38 / .06);' : '') + '">' +
+        evs.map(function (e) {
+          var k = ADM_KIND[e.kind] || ADM_KIND.mine, top = (e.start - H0) * PX, h = Math.max(14, (e.end - e.start) * PX - 2);
+          var border = (e.kind === "life" || e.kind === "block") ? 'border:1px dashed var(--line);' : e.kind === "trial" ? 'border:1px solid oklch(78% 0.12 80 / .7);' : '';
+          var stripes = e.kind === "studio" ? 'background:repeating-linear-gradient(135deg,var(--bgmuted) 0 4px,transparent 4px 8px);' : 'background:' + k.bg + ';';
+          return '<div style="position:absolute;left:2px;right:2px;top:' + top + 'px;height:' + h + 'px;border-radius:6px;padding:2px 3px;overflow:hidden;font-size:8.5px;line-height:1.15;color:' + k.fg + ';' + stripes + border + '">' +
+            admHM(e.start) + '<br>' + esc((e.name || k.label).split(" ")[0]) + '</div>';
+        }).join("") + '</div>';
+    }
+    var hrs = '<div style="position:relative;height:' + gh + 'px;">';
+    for (var h = H0; h <= H1; h += 60) hrs += '<span style="position:absolute;right:4px;top:' + ((h - H0) * PX - 6) + 'px;font-size:9.5px;color:var(--gray);">' + (h / 60) + '</span>';
+    hrs += '</div>';
+    var grid = '<div style="display:grid;grid-template-columns:24px repeat(7,1fr);">' + head + hrs + cols + '</div>';
+    var nav = '<div style="display:flex;gap:8px;margin-bottom:10px;">' +
+      '<button class="filter-btn" data-act="admin-week-prev" style="flex:1">‹ Раньше</button>' +
+      '<button class="filter-btn" data-act="admin-week-now" style="flex:1">Эта неделя</button>' +
+      '<button class="filter-btn" data-act="admin-week-next" style="flex:1">Позже ›</button></div>';
+    var legend = '<div style="display:flex;flex-wrap:wrap;gap:6px 12px;font-size:11px;color:var(--gray);margin-top:10px;">' +
+      '<span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:oklch(56% 0.09 235);vertical-align:-1px;margin-right:4px"></i>твои ученики</span>' +
+      '<span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--bgmuted);vertical-align:-1px;margin-right:4px"></i>студия</span>' +
+      '<span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;border:1px solid oklch(78% 0.12 80);vertical-align:-1px;margin-right:4px"></i>пробный</span>' +
+      '<span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;border:1px dashed var(--gray);vertical-align:-1px;margin-right:4px"></i>личное · закрыто</span></div>';
+    body = nav + grid + legend;
+  }
+  app.innerHTML =
+    '<div class="top pb8">' + backBtn("back") +
+      '<div><div class="top-title lg">Расписание</div><div class="top-sub">' + esc(title) + '</div></div>' +
+    "</div>" +
+    '<div style="padding:8px 12px 130px;">' + body + "</div>";
   wireActs();
 }
 
@@ -5960,6 +6119,11 @@ var ACTS = {
   "go-favorites": function () { go("favorites"); },
   "admin-hub-students": function () { go("admin-students"); },
   "admin-hub-birthdays": function () { go("admin-birthdays"); },
+  "admin-hub-today": function () { state.adminToday = null; go("admin-today"); },
+  "admin-hub-week": function () { state.adminWeek = null; go("admin-week"); },
+  "admin-week-prev": function () { shiftAdminWeek(-7); },
+  "admin-week-next": function () { shiftAdminWeek(7); },
+  "admin-week-now": function () { state.adminWeekStart = null; state.adminWeek = null; render(); },
   "admin-hub-dash": function () { go("admin-dash"); },
   "admin-hub-guests": function () { if (window.GUEST) GUEST.adminOpenList(); },
   "admin-hub-plans": function () { go("admin-plans"); },
@@ -6091,6 +6255,8 @@ function render() {
     case "admin-hub": renderAdminHub(); break;
     case "admin-students": renderAdminStudents(); break;
     case "admin-birthdays": renderAdminBirthdays(); break;
+    case "admin-today": renderAdminToday(); break;
+    case "admin-week": renderAdminWeek(); break;
     case "admin-dash": if (window.renderAdminDash) renderAdminDash(); break;
     case "admin-guests": if (window.renderAdminGuests) renderAdminGuests(); break;
     case "admin-plans": renderAdminPlans(); break;
