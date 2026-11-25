@@ -3459,7 +3459,17 @@ function admHubItem(item) {
       "</div>" + badge + SVG.chevronRight +
     "</div>";
 }
+function syncStudio() {
+  // раз за сессию: расписание студии → календарь бота, потом свежие «Сегодня»/«Расписание»
+  if (state._studioSynced) return;
+  state._studioSynced = true;
+  fetch("/api/bot?path=studio_sync", { method: "POST", headers: { "x-tg-init-data": (tg && tg.initData) || "", "x-site-auth": state._siteAuth || "" } })
+    .then(function (r) { return r.json(); }).then(function (d) {
+      if (d && d.ok) { state.adminToday = null; state.adminWeek = null; if (/^admin-(hub|today|week)$/.test(state.screen)) render(); }
+    }, function () {});
+}
 function renderAdminHub() {
+  syncStudio();
   loadAdminToday();
   var d = state.adminToday && state.adminToday.ok ? state.adminToday : null;
   var waiting = d ? d.receipts.length + d.questions : 0;

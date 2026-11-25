@@ -6,7 +6,7 @@
 import { json, isAdminReq, verifiedTgId } from "./_db.js";
 export const config = { runtime: "edge" };
 var BOT = "https://vocal-bot.vercel.app/api/";
-var PATHS = { app_admin: 1, app_book: 1 };
+var PATHS = { app_admin: 1, app_book: 1, studio_sync: 1 };
 function hex(buf) { return Array.prototype.map.call(new Uint8Array(buf), function (b) { return ("0" + b.toString(16)).slice(-2); }).join(""); }
 async function hmac(key, msg) {
   var k = await crypto.subtle.importKey("raw", key, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
@@ -34,6 +34,16 @@ export default async function handler(req) {
   var user = { id: Number(uid), first_name: orig.first_name || (uid === String(admin) ? "Николай" : "Ученик") };
   if (orig.last_name) user.last_name = orig.last_name;
   if (orig.username) user.username = orig.username;
+  /* studio_sync: расписание студии (data/studio.json, обновляет Claude из кабинета педагога)
+     → в календарь бота как занятия «студия»: их видно в «Сегодня»/«Расписании», и запись
+     учеников их обходит. Только от имени Николая. */
+  if (path === "studio_sync") {
+    if (uid !== String(admin)) return json({ ok: false }, 403);
+    var st = await (await fetch(new URL("/data/studio.json", req.url))).text();
+    var rr = await fetch(BOT + "app_admin?op=studio_set", { method: "POST",
+      headers: { "X-Tg-Init-Data": await sign({ id: Number(uid), first_name: "Николай" }, token), "content-type": "application/json" }, body: st });
+    return new Response(await rr.text(), { status: rr.status, headers: { "content-type": "application/json" } });
+  }
   url.searchParams.delete("path");
   var qs = url.searchParams.toString();
   var init = { method: req.method, headers: { "X-Tg-Init-Data": await sign(user, token), "content-type": "application/json" } };
