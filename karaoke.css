@@ -398,3 +398,35 @@ html .kp.fx-black .ksheet, html.dark .kp.fx-black .ksheet { background: rgba(14,
 .kp .kset-v { font: 800 14px/1 Manrope, sans-serif; letter-spacing: -.01em; }
 .kp .kset-v.sm { font-size: 11.5px; }
 .kp .kfx-pill.on .kset-ball { background: oklch(35% 0.08 40 / .14); color: oklch(35% 0.08 40); }
+
+/* Пометки ученика и проверка Николая (25.11) */
+.kp .kset-pill.off { opacity: .45; }
+.kp .mk.mok { color: oklch(84% 0.14 150); }
+.kp .mk.mok::after { content: "✓"; font: 700 10px Inter, sans-serif; margin-left: 1px; vertical-align: 6px; }
+.kp .mk.mbad { color: oklch(72% 0.17 25); }
+.kp .mk.mbad::after { content: "✗"; font: 700 10px Inter, sans-serif; margin-left: 1px; vertical-align: 6px; }
+.kp .mk.mmiss { border: 1.5px dashed currentColor; border-radius: 6px; padding: 0 3px; opacity: .85; }
+html .kp.fx-ivory .mk.mok { color: #2f7d4a; } html .kp.fx-ivory .mk.mbad { color: #b3261e; }
+.kp .ktag.kcom:before { background: var(--terra); }
+.kp .kedit .kmW, .kp .kedit .ch.onW { background: oklch(42% 0.09 35); border-color: oklch(42% 0.09 35); }
+.kp .kedit .km.kr { background: oklch(100% 0 0 / .2); border: 1px solid oklch(100% 0 0 / .25); padding: 0 6px; }
+.kp .kedit .km.rok { background: oklch(55% 0.13 150); border-color: oklch(55% 0.13 150); }
+.kp .kedit .km.rbad { background: oklch(55% 0.18 25); border-color: oklch(55% 0.18 25); }
+.kp .kedit .km.rmiss { background: transparent; border: 1.5px dashed oklch(100% 0 0 / .65); }
+.kp .kedit .kref { margin-top: 8px; font: 500 13px/1.5 Inter, sans-serif; color: oklch(100% 0 0 / .6); }
+.kp .kedit .kref b { color: oklch(85% 0.08 50); margin: 0 3px; font-family: "JetBrains Mono", ui-monospace, monospace; }
+.kp .kedit .kta { min-height: 110px; resize: none; font: 500 14px/1.45 Inter, sans-serif; }
+.kp .selbar .bt.off { opacity: .45; }
+.kp .selbar .kgen { display: flex; gap: 8px; align-items: center; margin-top: 12px; padding: 10px 12px; border-radius: 14px; cursor: pointer;
+  background: var(--glass); border: 1px solid var(--glass-b); font: 600 13px/1.35 Inter, sans-serif; color: var(--gtx); }
+.kp .selbar .kgen svg { flex-shrink: 0; }
+.kp .selbar .kgen span { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.kp .kcoms .kcl-wrap { max-height: 46vh; overflow: auto; margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.kp .kcoms .kcl { padding: 12px 14px; border-radius: 16px; background: var(--glass); border: 1px solid var(--glass-b); cursor: pointer; }
+.kp .kcoms .kcl-l { font: 700 15px/1.45 Manrope, sans-serif; }
+.kp .kcoms .kcl-l .mk { font-size: 13px; margin: 0 3px; }
+.kp .kcoms .kcl-c { display: flex; gap: 8px; font: 500 13px/1.45 Inter, sans-serif; margin-top: 4px; }
+.kp .kcoms .kcl-c:before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--terra); flex-shrink: 0; margin-top: 6px; }
+.kp .kcoms .kcl-gen .kcl-c { margin-top: 0; font-weight: 600; }
+.kadm .kstu-row { margin-top: 10px; cursor: pointer; }
+.kadm .khl-row .l b.W { color: oklch(45% 0.09 35); }
