@@ -939,16 +939,21 @@ function karPaintChips() {
     return;
   }
   var hasVoice = !!(KE.song.voice && KE.song.voice.url);
+  // три зоны (25.11, просьба Николая): слева «С голосом» круглой кнопкой,
+  // в центре «Настройки», справа запись — ничего не пересекается
+  chs.classList.add("chs3");
   chs.innerHTML =
-    (hasVoice ? '<span class="gch' + (KE.voice ? " on" : "") + '" data-kp="voice">С голосом <b>' + (KE.voice ? "вкл" : "выкл") + "</b></span>" : "") +
+    '<span class="kslot l">' + (hasVoice ? '<span class="kvoice' + (KE.voice ? " on" : "") + '" data-kp="voice" role="button" aria-label="С голосом Николая">' + KAR_VOICE_ICO + "</span>" : "") + "</span>" +
     // редкие настройки (тональность, темп, пометки, фон) — за значком (20.11)
-    '<span class="gch kset-ch" data-kp="settings" role="button" aria-label="Настройки: тональность, темп, пометки, фон">' + KAR_SET_ICO + "Настройки</span>";
+    '<span class="gch kset-ch" data-kp="settings" role="button" aria-label="Настройки: тональность, темп, пометки, фон">' + KAR_SET_ICO + "Настройки</span>" +
+    '<span class="kslot r"></span>';
   var vc = chs.querySelector('[data-kp="voice"]');
-  if (vc) vc.onclick = function () { karSetVoice(!KE.voice); };
+  if (vc) vc.onclick = function () { karSetVoice(!KE.voice); karToast(KE.voice ? "С голосом Николая" : "Без голоса — поёшь ты"); };
   chs.querySelector('[data-kp="settings"]').onclick = karOpenSettings;
   if (window.krFab) krFab(); // кнопка записи справа внизу, как в распевках (25.11)
 }
 
+var KAR_VOICE_ICO = '<svg width="21" height="21" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="9" cy="8.2" r="3.3" stroke="currentColor" stroke-width="2"/><path d="M3.2 19.5c.7-3.4 3-5.3 5.8-5.3s5.1 1.9 5.8 5.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M18.5 3.5v8.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M18.5 3.5l2.6 1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="16.9" cy="12" r="1.9" fill="currentColor"/></svg>';
 var KAR_SET_ICO = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="16" cy="7" r="2.2" stroke="currentColor" stroke-width="2"/><circle cx="10" cy="17" r="2.2" stroke="currentColor" stroke-width="2"/></svg>';
 
 /* Шторка «Настройки» (20.11, просьба Николая): тональность, темп, пометки и

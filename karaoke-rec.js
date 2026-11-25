@@ -561,12 +561,14 @@ function krFab() {
   if (!KP.root) return;
   var f = KP.root.querySelector(".kr-fab");
   var show = !KP.tap && !KAR.fromAdmEdit && !KP.sel && !KP.fixPick && !KP.mark && !KP.rev && !KP.ask && !KP.recOn && !KP.recPrep;
-  if (!show) { if (f) f.parentNode.removeChild(f); return; }
-  if (f) return;
+  var slot = KP.root.querySelector(".chs .kslot.r");
+  if (!show || !slot) { if (f) f.parentNode.removeChild(f); return; }
+  if (f && f.parentNode === slot) return;
+  if (f) f.parentNode.removeChild(f);
   f = document.createElement("button");
   f.type = "button"; f.className = "kr-fab"; f.setAttribute("aria-label", "Запись");
   f.innerHTML = "<i></i>";
-  KP.root.appendChild(f);
+  slot.appendChild(f); // своя зона справа в нижнем ряду — ни с чем не пересекается
   var t = 0;
   f.onclick = function () {
     if (!f.classList.contains("big")) {
