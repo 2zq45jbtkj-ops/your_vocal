@@ -9,6 +9,7 @@
    быстрых ответов ученику через api/telegram-webhook.js). */
 
 import { kvSet } from "./_lib.js";
+import { verifyInitData } from "./_db.js";
 
 export const config = { runtime: "edge" };
 
@@ -144,7 +145,10 @@ export default async function handler(req) {
     "#" + tagKey + "\n" + who + " (" + (tgId || "TG ID не указан") + ")\nУрок: " + lessonTitle;
 
   // Запоминаем ученика (для быстрых ответов из бота), не блокируем ответ ученику из-за этого.
-  await rememberStudent(tagKey, studentChatId, firstName, lastName, tgId).catch(function () {});
+  // 26.11: chat_id для ответов берём только из подписи Telegram — иначе любой мог
+  // подставить чужое имя и свой chat_id и получать ответы Николая вместо ученика.
+  var verifiedId = await verifyInitData(initData).catch(function () { return null; });
+  if (verifiedId) await rememberStudent(tagKey, verifiedId, firstName, lastName, tgId).catch(function () {});
 
   try {
     if (kind === "quiz") {

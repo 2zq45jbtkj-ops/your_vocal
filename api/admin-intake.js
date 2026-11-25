@@ -4,7 +4,7 @@
    ON CONFLICT student_id DO UPDATE), потому что запись либо есть, либо
    создаётся при первом заполнении — отдельного "create" действия не нужно. */
 
-import { db, json, isAdminChatId, ensureStudent } from "./_db.js";
+import { db, json, isAdminReq, verifiedTgId, ensureStudent } from "./_db.js";
 
 export const config = { runtime: "edge" };
 
@@ -46,8 +46,9 @@ export default async function handler(req) {
     var url = new URL(req.url);
     var chatId = url.searchParams.get("chatId");
     var studentChatId = url.searchParams.get("studentChatId") || chatId;
-    var admin = isAdminChatId(chatId);
-    if (!admin && studentChatId !== chatId) return json({ ok: false, error: "Forbidden" }, 403);
+    var admin = await isAdminReq(req);
+    var me = admin ? null : await verifiedTgId(req);
+    if (!admin && (!me || String(studentChatId) !== me)) return json({ ok: false, error: "Forbidden" }, 403);
 
     var studentId = await studentIdFor(sql, studentChatId);
     if (!studentId) return json({ configured: true, found: false, intake: null });
@@ -60,7 +61,7 @@ export default async function handler(req) {
 
   var body;
   try { body = await req.json(); } catch (e) { return json({ ok: false, error: "Bad JSON" }, 400); }
-  if (!isAdminChatId(body.chatId)) return json({ ok: false, error: "Not admin" }, 403);
+  if (!(await isAdminReq(req))) return json({ ok: false, error: "Not admin" }, 403);
 
   var studentId2 = await ensureStudent(sql, body.studentChatId, body.firstName, body.lastName);
   var v = body.intake || {};

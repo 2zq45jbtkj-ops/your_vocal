@@ -2,7 +2,7 @@
    для чтения своих срезов), POST — только админ.
    См. kabinet-tz.md, раздел 2 и 7. */
 
-import { db, json, isAdminChatId } from "./_db.js";
+import { db, json, isAdminReq, verifiedTgId } from "./_db.js";
 
 export const config = { runtime: "edge" };
 
@@ -21,7 +21,7 @@ export default async function handler(req) {
   var body;
   try { body = await req.json(); } catch (e) { return json({ ok: false, error: "Bad JSON" }, 400); }
 
-  if (!isAdminChatId(body.chatId)) return json({ ok: false, error: "Not admin" }, 403);
+  if (!(await isAdminReq(req))) return json({ ok: false, error: "Not admin" }, 403);
 
   var action = body.action;
 

@@ -18,10 +18,7 @@ function json(obj, status) {
   });
 }
 
+import { isAdminReq } from "./_db.js";
 export default async function handler(req) {
-  var url = new URL(req.url);
-  var chatId = url.searchParams.get("chatId");
-  var adminChatId = process.env.ADMIN_CHAT_ID;
-  if (!chatId || !adminChatId) return json({ ok: true, isAdmin: false });
-  return json({ ok: true, isAdmin: String(chatId) === String(adminChatId) });
+  return json({ ok: true, isAdmin: await isAdminReq(req) });
 }

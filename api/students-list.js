@@ -8,7 +8,7 @@
    чтобы admin.html не переделывать. Поля status в этой таблице нет — отдаём
    пустую строку, панель её и так показывает через `s.status || ""`. */
 
-import { db, json, isAdminChatId } from "./_db.js";
+import { db, json, isAdminReq, verifiedTgId } from "./_db.js";
 
 export const config = { runtime: "edge" };
 
@@ -17,7 +17,7 @@ export default async function handler(req) {
   var chatId = url.searchParams.get("chatId");
   // Та же проверка, что была в notion-students-list.js: сверяем на сервере,
   // клиенту не доверяем.
-  if (!isAdminChatId(chatId)) {
+  if (!(await isAdminReq(req))) {
     return json({ ok: false, error: "Доступно только преподавателю" }, 403);
   }
 

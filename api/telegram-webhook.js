@@ -15,6 +15,11 @@ export const config = { runtime: "edge" };
 
 export default async function handler(req) {
   if (req.method !== "POST") return new Response("ok");
+  /* 26.11: принимаем только настоящие запросы Telegram — с секретом, заданным
+     в setWebhook (secret_token = TG_WEBHOOK_SECRET). Без секрета любой мог
+     прислать поддельный «ответ Николая» и написать ученику от его имени. */
+  var whSecret = process.env.TG_WEBHOOK_SECRET;
+  if (!whSecret || req.headers.get("x-telegram-bot-api-secret-token") !== whSecret) return new Response("ok");
 
   var token = process.env.TELEGRAM_BOT_TOKEN;
   var adminChatId = process.env.ADMIN_CHAT_ID;

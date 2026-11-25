@@ -117,6 +117,9 @@ var NOTES = (function () {
 })();
 
 function api(path, opts) {
+  opts = opts || {};
+  var tg = window.Telegram && window.Telegram.WebApp;
+  opts.headers = Object.assign({}, opts.headers || {}, { "x-tg-init-data": (tg && tg.initData) || "" });
   return fetch(path, opts).then(function (r) { return r.json(); });
 }
 

@@ -3,14 +3,14 @@
    везде, так что повторный вызов безопасен (идемпотентно), удалять этот
    файл после использования не обязательно, но можно. */
 
-import { db, json, isAdminChatId } from "./_db.js";
+import { db, json, isAdminReq, verifiedTgId } from "./_db.js";
 
 export const config = { runtime: "edge" };
 
 export default async function handler(req) {
   var url = new URL(req.url);
   var chatId = url.searchParams.get("chatId");
-  if (!isAdminChatId(chatId)) return json({ ok: false, error: "Not admin" }, 403);
+  if (!(await isAdminReq(req))) return json({ ok: false, error: "Not admin" }, 403);
 
   var sql = db();
   if (!sql) return json({ ok: false, error: "POSTGRES_URL not configured" }, 500);
