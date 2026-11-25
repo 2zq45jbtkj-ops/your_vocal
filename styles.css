@@ -1506,7 +1506,8 @@ html.dark .cab-zone.on, body.dark .cab-zone.on { background: color-mix(in srgb, 
   padding: 46px 22px 28px; border-radius: 28px;
   /* 22.11: матовое стекло — прозрачность 50% (30% + ещё 20%), размытие сильнее */
   background: color-mix(in srgb, var(--bg) 50%, transparent);
-  -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px);
+  /* размытие фона убрано: на iPhone оно заставляло блики за стеклом
+     отставать. Матовость даёт сам рисунок конфетти — за карточкой оно приглушено */
   box-shadow: var(--raised-lg);
 }
 .lm-card .lm-ring { margin-bottom: 30px; }

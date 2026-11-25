@@ -4429,7 +4429,7 @@ function renderLessonMaster() {
   wireActs();
   var scr = app.querySelector(".lm-screen");
   // конфетти летит за карточкой и кнопкой (behind), текст не перекрывает
-  if (window.playFoilConfetti) window.playFoilConfetti(scr, { loop: true, behind: true, avoid: [scr.querySelector(".lm-center"), scr.querySelector(".qr-cta")] });
+  if (window.playFoilConfetti) window.playFoilConfetti(scr, { loop: true, behind: true, frost: scr.querySelector(".lm-card"), avoid: [scr.querySelector(".lm-center"), scr.querySelector(".qr-cta")] });
 }
 
 function showStepDone(kind) {
