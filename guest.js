@@ -646,42 +646,74 @@
      Мини-телефон: экраны сменяются как у гостя, на месте нажатия вспыхивает точка
      (у старых заходов места нет — точка внизу экрана с подписью кнопки). */
   var RP = { evs: null, i: 0, t: null, speed: 2, playing: false };
+  /* 26.11 (Николай): вместо пустого «телефона» — понятная дорожка пути:
+     большая карточка текущего экрана (иконка, название, сколько пробыл), под ней нажатия
+     на этом экране, внизу лента всех экранов по порядку. */
+  function rpIcon(l) {
+    l = String(l || "").toLowerCase();
+    var map = [["караоке", "🎤"], ["лекци", "📖"], ["распев", "🎹"], ["тест", "✅"], ["прогресс", "📈"], ["колесо", "📈"],
+      ["урок", "📘"], ["кабинет", "👤"], ["дыхан", "🌬"], ["тренаж", "🌬"], ["было и стало", "🎧"], ["запис", "🗓"], ["ещё", "⋯"]];
+    for (var i = 0; i < map.length; i++) if (l.indexOf(map[i][0]) !== -1) return map[i][1];
+    return "📱";
+  }
+  function rpScreens() {
+    var out = [];
+    RP.evs.forEach(function (e, i) { if (e.kind === "screen") out.push({ i: i, label: e.label, dur: Number(e.dur_ms) || 0 }); });
+    return out;
+  }
   function replayHtml(evs) {
     RP.evs = evs.filter(function (e) { return e.kind === "screen" || e.kind === "tap" || e.kind === "trial"; });
     RP.i = 0; RP.playing = false; if (RP.t) clearTimeout(RP.t);
-    var visits = {}; RP.evs.forEach(function (e) { visits[e.visit] = 1; });
-    return '<div class="gd-card" style="display:flex;flex-direction:column;align-items:center;gap:12px;">' +
-      '<div id="rp-phone" style="position:relative;width:210px;height:430px;border-radius:30px;background:var(--bgmuted);box-shadow:var(--inset);overflow:hidden;">' +
-        '<div id="rp-scr" style="position:absolute;left:0;right:0;top:34px;text-align:center;font-weight:700;font-size:15px;padding:0 12px;transition:opacity .25s;"></div>' +
-        '<div id="rp-sub" style="position:absolute;left:0;right:0;top:58px;text-align:center;font-size:11px;color:var(--gray);"></div>' +
-        '<div id="rp-dot" style="position:absolute;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;background:oklch(60% 0.13 38 / .85);box-shadow:0 0 0 0 oklch(60% 0.13 38 / .5);opacity:0;transition:left .35s,top .35s,opacity .2s;"></div>' +
-        '<div id="rp-cap" style="position:absolute;left:10px;right:10px;bottom:56px;text-align:center;font-size:11.5px;line-height:1.3;background:var(--bg);border-radius:12px;padding:7px 8px;opacity:0;transition:opacity .2s;"></div>' +
-        '<div style="position:absolute;left:14px;right:14px;bottom:12px;height:32px;border-radius:14px;background:var(--bg);display:flex;justify-content:space-around;align-items:center;font-size:9px;color:var(--gray);"><span>Кабинет</span><span>Уроки</span><span>Ещё</span></div>' +
+    var scr = rpScreens();
+    var strip = scr.map(function (x, k) {
+      return '<span class="rp-st" data-rpi="' + x.i + '" style="flex:none;display:inline-flex;align-items:center;gap:5px;padding:7px 10px;border-radius:12px;background:var(--bgmuted);font-size:12px;color:var(--gray);transition:background .25s,color .25s;">' +
+        rpIcon(x.label) + ' ' + esc(String(x.label).split(":")[0].slice(0, 18)) + '</span>' + (k < scr.length - 1 ? '<span style="flex:none;color:var(--gray);opacity:.5;">›</span>' : "");
+    }).join("");
+    return '<div class="gd-card" style="display:flex;flex-direction:column;gap:14px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;"><b style="font-size:15px;">Путь по приложению</b><span id="rp-step" class="lesson-sub">' + scr.length + ' экранов</span></div>' +
+      '<div style="border-radius:20px;box-shadow:var(--inset);padding:18px 16px;min-height:220px;display:flex;flex-direction:column;align-items:center;text-align:center;">' +
+        '<div id="rp-ico" style="width:64px;height:64px;border-radius:20px;background:var(--bg);box-shadow:var(--raised-sm);display:flex;align-items:center;justify-content:center;font-size:30px;">▶</div>' +
+        '<div id="rp-scr" style="font-weight:700;font-size:17px;margin-top:12px;transition:opacity .2s;">Нажми «Смотреть»</div>' +
+        '<div id="rp-sub" class="lesson-sub" style="margin-top:4px;">покажу экраны и нажатия гостя по порядку</div>' +
+        '<div id="rp-taps" style="display:flex;flex-direction:column;gap:6px;width:100%;margin-top:14px;"></div>' +
       '</div>' +
-      '<div style="width:100%;height:6px;border-radius:4px;background:var(--bgmuted);overflow:hidden;"><i id="rp-bar" style="display:block;height:100%;width:0;background:var(--blue);"></i></div>' +
-      '<div style="display:flex;gap:8px;width:100%;">' +
-        '<button class="filter-btn active-terra" data-rp="play" style="flex:2;height:44px;">▶ Смотреть</button>' +
-        '<button class="filter-btn" data-rp="s1" style="height:44px;">×1</button><button class="filter-btn active-blue" data-rp="s2" style="height:44px;">×2</button><button class="filter-btn" data-rp="s4" style="height:44px;">×4</button>' +
+      '<div id="rp-strip" style="display:flex;align-items:center;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;">' + strip + '</div>' +
+      '<div style="height:6px;border-radius:4px;background:var(--bgmuted);overflow:hidden;"><i id="rp-bar" style="display:block;height:100%;width:0;background:var(--blue);transition:width .3s;"></i></div>' +
+      '<div style="display:flex;gap:10px;align-items:center;">' +
+        '<button class="filter-btn active-terra" data-rp="play" style="flex:1.4;height:46px;">▶ Смотреть</button>' +
+        '<div style="flex:1;display:flex;border-radius:14px;box-shadow:var(--inset-sm);padding:3px;height:46px;">' +
+          ['1', '2', '4'].map(function (k) { return '<button data-rp="s' + k + '" style="flex:1;border:none;border-radius:11px;font:700 13px Manrope,sans-serif;cursor:pointer;' + (k === "2" ? 'background:var(--blue);color:#fff;' : 'background:transparent;color:var(--gray);') + '">×' + k + '</button>'; }).join("") +
+        '</div>' +
       '</div>' +
-      '<div class="lesson-sub" style="text-align:center;">' + Object.keys(visits).length + ' ' + (Object.keys(visits).length === 1 ? "заход" : "захода") + ' · ' + RP.evs.length + ' шагов</div>' +
     '</div>';
   }
   function rpShow(e) {
     var scr = document.getElementById("rp-scr"); if (!scr) { RP.playing = false; return; }
-    var dot = document.getElementById("rp-dot"), cap = document.getElementById("rp-cap"), sub = document.getElementById("rp-sub");
+    var ico = document.getElementById("rp-ico"), sub = document.getElementById("rp-sub"), taps = document.getElementById("rp-taps");
     document.getElementById("rp-bar").style.width = Math.round((RP.i + 1) / RP.evs.length * 100) + "%";
     if (e.kind === "screen") {
       scr.style.opacity = 0;
-      setTimeout(function () { scr.textContent = e.label; scr.style.opacity = 1; }, 150);
-      sub.textContent = "Заход " + e.visit + " · пробыл " + fmtDur(Number(e.dur_ms) || 0);
-      dot.style.opacity = 0; cap.style.opacity = 0;
+      setTimeout(function () { scr.textContent = e.label; scr.style.opacity = 1; }, 120);
+      ico.textContent = rpIcon(e.label);
+      ico.animate([{ transform: "scale(.85)" }, { transform: "scale(1)" }], { duration: 300, easing: "ease-out" });
+      sub.textContent = "заход " + e.visit + " · пробыл " + fmtDur(Number(e.dur_ms) || 0);
+      taps.innerHTML = "";
+      var cur = null;
+      Array.prototype.forEach.call(document.querySelectorAll(".rp-st"), function (el) {
+        var on = +el.getAttribute("data-rpi") === RP.i;
+        el.style.background = on ? "var(--blue)" : "var(--bgmuted)"; el.style.color = on ? "#fff" : "var(--gray)";
+        if (on) cur = el;
+      });
+      if (cur && cur.scrollIntoView) cur.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+      var st = document.getElementById("rp-step"); var n = rpScreens().filter(function (x) { return x.i <= RP.i; }).length;
+      if (st) st.textContent = "экран " + n + " из " + rpScreens().length;
     } else {
-      var has = e.x != null && e.y != null;
-      dot.style.left = (has ? e.x * 100 : 50) + "%"; dot.style.top = (has ? e.y * 100 : 78) + "%";
-      dot.style.opacity = 1;
-      dot.animate([{ transform: "scale(.6)", boxShadow: "0 0 0 0 oklch(60% 0.13 38 / .6)" }, { transform: "scale(1)", boxShadow: "0 0 0 18px oklch(60% 0.13 38 / 0)" }], { duration: 600 });
-      cap.textContent = (e.kind === "trial" ? "🔥 " : "нажал «") + e.label + (e.kind === "trial" ? "" : "»"); cap.style.opacity = 1;
-      if (e.screen) scr.textContent = e.screen;
+      var row = document.createElement("div");
+      row.style.cssText = "display:flex;align-items:center;gap:8px;text-align:left;font-size:13px;padding:8px 10px;border-radius:12px;background:var(--bg);box-shadow:var(--raised-sm);";
+      row.innerHTML = '<span style="width:8px;height:8px;border-radius:50%;flex:none;background:' + (e.kind === "trial" ? "oklch(78% 0.12 80)" : "var(--terra)") + ';"></span><span>' + (e.kind === "trial" ? "🔥 " : "нажал «") + esc(e.label) + (e.kind === "trial" ? "" : "»") + '</span>';
+      taps.appendChild(row);
+      row.animate([{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }], { duration: 250 });
+      while (taps.children.length > 4) taps.removeChild(taps.firstChild);
     }
   }
   function rpStep() {
@@ -709,7 +741,7 @@
           rpBtn(); return;
         }
         RP.speed = +k.slice(1);
-        Array.prototype.forEach.call(document.querySelectorAll('[data-rp^="s"]'), function (x) { x.classList.toggle("active-blue", x === b); });
+        Array.prototype.forEach.call(document.querySelectorAll('[data-rp^="s"]'), function (x) { x.style.background = x === b ? "var(--blue)" : "transparent"; x.style.color = x === b ? "#fff" : "var(--gray)"; });
       });
     });
   }
