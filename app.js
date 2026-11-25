@@ -3361,14 +3361,6 @@ function renderAdminHub() {
     {
       label: "Разметка караоке", act: "admin-hub-karaoke", sub: "Минус, текст и тайминг строк для песен ученика",
       icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 18V5l11-2v13" stroke="var(--gray)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="18" r="3" stroke="var(--gray)" stroke-width="1.9"/><circle cx="17" cy="16" r="3" stroke="var(--gray)" stroke-width="1.9"/></svg>'
-    },
-    {
-      label: "Финальные заставки", act: "admin-hub-screens", sub: "Посмотреть заставки окончания шагов урока «Дыхание»",
-      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="var(--gray)" stroke-width="1.4"/><path d="M5.5 8.2l1.8 1.8 3.4-3.8" stroke="var(--terra)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
-    },
-    {
-      label: "Планы уроков", act: "admin-hub-plans", sub: "По темам срезов и колеса баланса",
-      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3.5 2.5h9a1 1 0 011 1v9a1 1 0 01-1 1h-9a1 1 0 01-1-1v-9a1 1 0 011-1z" stroke="var(--gray)" stroke-width="1.3" stroke-linejoin="round"/><path d="M5.5 6h5M5.5 8.5h5M5.5 11h3" stroke="var(--gray)" stroke-width="1.3" stroke-linecap="round"/></svg>'
     }
   ];
   var itemsHtml = items.map(function (item) {
