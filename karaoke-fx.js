@@ -183,7 +183,9 @@
     // блики на матовом: мягкие косые мазки, медленно плывут
     "c=fin(c,px);float gr=h(px+fract(T*9.)*511.)-.5;float l2=dot(c,vec3(.3,.59,.11));c+=gr*.09*(1.-abs(l2-.4));" +
     "c=mix(D,c,smoothstep(0.,.08,1.-px.y/R.y));gl_FragColor=vec4(c,1.);return;}" +
-    "if(M>1.5){float ts=TS;vec2 id=floor(px/ts);vec2 l=fract(px/ts)*2.-1.;vec2 cp=(id+.5)*ts;" +
+    // плитки ровно (25.11, Коля): по ширине помещается целое число плиток, а неполные ряды сверху и снизу одинаковые
+    "if(M>1.5){float cols=max(1.,floor(R.x/TS+.5));float ts=R.x/cols;float oy=mod(R.y,ts)*.5;vec2 q=vec2(px.x,px.y-oy);" +
+    "vec2 id=floor(q/ts);vec2 l=fract(q/ts)*2.-1.;vec2 cp=(id+.5)*ts+vec2(0.,oy);" +
     "float e=max(abs(l.x),abs(l.y));float bv=smoothstep(.62,1.,e);" +
     "vec2 nr=l*bv*.9;vec3 Nn=normalize(vec3(nr,1.));" +
     // каждая плитка — как линза: показывает пятно шире себя, сжатым к центру (как на референсе)
