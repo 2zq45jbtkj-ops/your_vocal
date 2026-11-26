@@ -139,6 +139,15 @@
       window.__splashOn = false;
       if (typeof window.applyDarkMode === "function") { try { window.applyDarkMode(); } catch (e) {} }
       else tgColor("#F1EEE8");
+      // 27.11 (Коля): без голубой полосы под часами после заставки — верхний край заставки
+      // сразу в цвет приложения, а iOS просим перерисовать верх (лёгкий сдвиг прокрутки).
+      try {
+        var appBg = getComputedStyle(document.body).backgroundColor;
+        root.style.background = appBg;
+        var m2 = document.querySelector('meta[name="theme-color"]'); if (m2 && !document.querySelector(".gd-ov")) m2.setAttribute("content", appBg);
+        var y = window.scrollY; window.scrollTo(0, y + 1); requestAnimationFrame(function () { window.scrollTo(0, y); });
+      } catch (e) {}
+      setTimeout(function () { try { root.style.display = "none"; } catch (e) {} }, 460);
       setTimeout(function () { try { v.pause(); v.removeAttribute("src"); v.load(); } catch (e) {} root.remove(); try { if (actx) setTimeout(function () { actx.close(); }, 9000); } catch (e) {} }, 500);
     }, 380);
   }
