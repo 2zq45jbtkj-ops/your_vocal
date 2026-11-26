@@ -506,6 +506,7 @@
       try {
         var m = d.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute("content", col);
         var pw = d.getElementById("peek-wrap"); if (pw) pw.style.background = col;
+        if (d !== document) { d.documentElement.style.backgroundColor = col; if (d.body) d.body.style.backgroundColor = col; }
       } catch (e) {}
     });
   }

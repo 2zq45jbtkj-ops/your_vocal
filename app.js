@@ -175,7 +175,12 @@ function applyDarkMode() {
   }
   var htg = window.__peekTg || tg;   // в «Пробном режиме» верх красит родитель (настоящий Telegram)
   if (window.__peekFrame && !window.__splashOn && !document.querySelector(".gd-ov")) {
-    try { var pw = window.parent.document.getElementById("peek-wrap"); if (pw) pw.style.background = state.darkMode ? "#232A2E" : "#F1EEE8"; } catch (e) {}
+    try {
+      var pd0 = window.parent.document, pcol = state.darkMode ? "#232A2E" : "#F1EEE8";
+      var pw = pd0.getElementById("peek-wrap"); if (pw) pw.style.background = pcol;
+      // iOS красит полосу под часами по фону страницы-родителя — фон родителя = фон приложения
+      pd0.documentElement.style.backgroundColor = pcol; if (pd0.body) pd0.body.style.backgroundColor = pcol;
+    } catch (e) {}
   }
   if (htg) {
     try {
@@ -3189,12 +3194,20 @@ function peekInset(v) {
   d.remove();
   return Math.max(0, t);
 }
+function peekTop(col) {
+  document.documentElement.style.backgroundColor = col;
+  document.body.style.backgroundColor = col;
+  var m = document.querySelector('meta[name="theme-color"]'); if (m && col) m.setAttribute("content", col);
+}
 function openPeek() {
   if (document.getElementById("peek-wrap")) return;
   var w = document.createElement("div");
   w.id = "peek-wrap";
   // 26.11 (Коля): без оранжевой полосы — значок «Т», как у режима админа (там глазик)
-  w.style.cssText = "position:fixed;inset:0;z-index:9998;background:var(--bg);";
+  w.style.cssText = "position:fixed;inset:0;z-index:9998;background:#2f3f52;";
+  // 26.11 (Коля): полосы под часами быть не должно — фон страницы и theme-color сразу
+  // в цвет заставки пробного режима, дальше их ведёт само окно внутри (splash.js / applyDarkMode).
+  peekTop("#2f3f52");
   // 26.11 (Коля): верх как в основном приложении — без сплошной полосы под статус-баром:
   // окно на весь экран, а отступы сверху передаём внутрь (там их ставит index.html).
   var sat = peekInset("--tg-safe-area-inset-top"), csat = peekInset("--tg-content-safe-area-inset-top");
@@ -3212,7 +3225,7 @@ function openPeek() {
   fab.querySelector(".admin-fab-btn").addEventListener("click", function (e) { e.stopPropagation(); fab.classList.toggle("open"); });
   fab.querySelector(".admin-fab-pop").addEventListener("click", function (e) { e.stopPropagation(); });
   w.addEventListener("click", function () { fab.classList.remove("open"); });
-  document.getElementById("peek-x").onclick = function () { w.remove(); applyDarkMode(); };
+  document.getElementById("peek-x").onclick = function () { w.remove(); peekTop(""); applyDarkMode(); };
 }
 
 /* Текстовые экраны раздела «Ещё»: публичная оферта, политика конфиденциальности
