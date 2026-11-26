@@ -310,7 +310,7 @@
     paintChip();
     // окно тест-драйва «что посмотреть»: при первом входе в Кабинет и в «Домашние задания»
     // за каждое открытие приложения, пока не посмотрены все 7 разделов (Коля, 20.11)
-    if ((sc === "profile" || sc === "cab-hw") && !G.allDone && !G.trkShown[sc] && !document.querySelector(".gd-sheet")) {
+    if (!G.replay && (sc === "profile" || sc === "cab-hw") && !G.allDone && !G.trkShown[sc] && !document.querySelector(".gd-sheet")) {
       G.trkShown[sc] = true;
       var first = !G.store.welcomed;
       if (first) { G.store.welcomed = true; saveStore(); }
@@ -497,6 +497,8 @@
       ov.remove();
     });
     if (had) statusBar(false);
+    // 27.11: в «Пути гостя» окно должно исчезать ровно тогда, когда гость его закрыл
+    if (had) log({ kind: "close", label: "Закрыл окно" });
   }
   // Полоса под часами (значок на экране «Домой» — её красит theme-color) затемняется вместе
   // со шторкой; в «Пробном режиме» она принадлежит родителю — красим и его.
@@ -738,7 +740,7 @@
     return out;
   }
   function replayHtml(evs) {
-    RP.evs = evs.filter(function (e) { return e.kind === "screen" || e.kind === "tap" || e.kind === "trial"; });
+    RP.evs = evs.filter(function (e) { return e.kind === "screen" || e.kind === "tap" || e.kind === "trial" || e.kind === "popup" || e.kind === "close"; });
     RP.i = 0; RP.playing = false; if (RP.t) clearTimeout(RP.t);
     var scr = rpScreens();
     var strip = scr.map(function (x, k) {
@@ -771,11 +773,18 @@
     var sub = document.getElementById("rp-sub"), dot = document.getElementById("rp-dot"), cap = document.getElementById("rp-cap");
     var fr = document.getElementById("rp-frame");
     document.getElementById("rp-bar").style.width = Math.round((RP.i + 1) / RP.evs.length * 100) + "%";
+    if (e.kind === "popup" || e.kind === "close") {
+      rpSend(e.kind === "popup" ? { rp: "sheet", label: e.label } : { rp: "close" });
+      dot.style.opacity = 0;
+      cap.textContent = e.kind === "popup" ? "открылось окно: " + String(e.label).replace(/^Окно\s*/, "") : "закрыл окно";
+      cap.style.opacity = 1;
+      return;
+    }
     if (e.kind === "screen") {
       scr.textContent = rpIcon(e.label) + " " + e.label;
       sub.textContent = "заход " + e.visit + " · пробыл " + fmtDur(Number(e.dur_ms) || 0);
       dot.style.opacity = 0; cap.style.opacity = 0;
-      try { fr.contentWindow.postMessage({ rp: "go", screen: rpScreenKey(e.label) }, location.origin); } catch (x) {}
+      rpSend({ rp: "go", screen: rpScreenKey(e.label) });
       var cur = null;
       Array.prototype.forEach.call(document.querySelectorAll(".rp-st"), function (el) {
         var on = +el.getAttribute("data-rpi") === RP.i;
@@ -792,7 +801,13 @@
       dot.animate([{ transform: "scale(.5)", boxShadow: "0 0 0 0 rgba(245,197,66,.7)" }, { transform: "scale(1)", boxShadow: "0 0 0 16px rgba(245,197,66,0)" }], { duration: 650, easing: "ease-out" });
       cap.textContent = (e.kind === "trial" ? "🔥 " : "нажал «") + e.label + (e.kind === "trial" ? "" : "»") + (has ? "" : " · место не записано");
       cap.style.opacity = 1;
+      // у старых заходов закрытие окна не записано — закрываем по нажатию «Закрыть»/«Начать»/«Позже»
+      if (/^(Закрыть|Начать|Позже|Понятно)$/.test(String(e.label).trim())) setTimeout(function () { rpSend({ rp: "close" }); }, 450 / RP.speed);
     }
+  }
+  function rpSend(msg) {
+    var fr = document.getElementById("rp-frame");
+    try { fr.contentWindow.postMessage(msg, location.origin); } catch (x) {}
   }
   function rpStep() {
     if (!RP.playing || !RP.evs || RP.i >= RP.evs.length) { RP.playing = false; rpBtn(); return; }
@@ -838,6 +853,7 @@
       if (e.kind === "screen") out += '<div class="gd-ev scr"><span class="gd-ev-t">' + t + '</span><b>' + esc(e.label) + '</b><span class="gd-ev-d">' + fmtDur(Number(e.dur_ms) || 0) + "</span></div>";
       else if (e.kind === "tap") out += '<div class="gd-ev"><span class="gd-ev-t">' + t + "</span>нажал «" + esc(e.label) + "»</div>";
       else if (e.kind === "explored") out += '<div class="gd-ev ok"><span class="gd-ev-t">' + t + "</span>✓ посмотрел раздел «" + esc(e.label) + "»</div>";
+      else if (e.kind === "close") out += '<div class="gd-ev"><span class="gd-ev-t">' + t + "</span>закрыл окно</div>";
       else if (e.kind === "trial") out += '<div class="gd-ev hot"><span class="gd-ev-t">' + t + "</span>" + esc(e.label) + "</div>";
       else out += '<div class="gd-ev"><span class="gd-ev-t">' + t + "</span>" + esc(e.label) + "</div>";
     });
@@ -845,8 +861,18 @@
   }
   if (G.replay) {
     window.addEventListener("message", function (ev) {
-      if (ev.origin !== location.origin || !ev.data || ev.data.rp !== "go") return;
-      try { if (window.go) window.go(ev.data.screen); } catch (e) {}
+      if (ev.origin !== location.origin || !ev.data) return;
+      var d = ev.data;
+      try {
+        if (d.rp === "go") { closeSheets(); if (window.go) window.go(d.screen); }
+        else if (d.rp === "close") closeSheets();
+        else if (d.rp === "sheet") {
+          var l = String(d.label || "");
+          if (/Тест-драйв|список разделов/.test(l)) G.openTracker(/при входе/.test(l));
+          else if (/Заявка отправлена/.test(l)) { closeSheets(); sheet('<div class="gd-badge">✅</div><div class="gd-title">Заявка отправлена</div><div class="gd-sub">Ваша заявка отправлена Николаю. В ближайшее время он свяжется с вами в Telegram.</div><button type="button" class="cta terra gd-cta">Понятно</button>'); }
+          else if (/пробный/.test(l)) G.showTrial("replay");
+        }
+      } catch (e) {}
     });
   }
   function rpScreenKey(label) {

@@ -28,7 +28,7 @@ export const config = { runtime: "edge" };
 
 var OWN_NAME = "Nikolai Sept (тест)";
 var DEMO_TTL_MS = 5 * 60 * 1000;
-var KINDS = { screen: 1, tap: 1, open: 1, explored: 1, trial: 1, popup: 1 };
+var KINDS = { screen: 1, tap: 1, open: 1, explored: 1, trial: 1, popup: 1, close: 1 };
 
 async function ensure(sql) {
   await sql`CREATE TABLE IF NOT EXISTS guest_users (
