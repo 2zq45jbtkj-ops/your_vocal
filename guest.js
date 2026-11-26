@@ -65,6 +65,11 @@
   // 26.11: ?td=1&replay=1 — приложение внутри «Пути гостя» у Николая: тест-драйв без записи
   // статистики и без всплывающих окон; экран переключает родитель (postMessage).
   try { G.replay = new URLSearchParams(location.search).get("replay") === "1" && window.parent !== window; } catch (e) { G.replay = false; }
+  // 26.11: ?td=1&peek=1 — «Пробный режим» у Николая (Ещё → Пробный режим): приложение глазами
+  // нового клиента, с окнами тест-драйва как в первый раз, но без записи в «Путь гостя»
+  // и без отправки записи на урок.
+  try { G.peek = new URLSearchParams(location.search).get("peek") === "1" && window.parent !== window; } catch (e) { G.peek = false; }
+  G.quiet = G.replay || G.peek;
 
   var realFetch = window.fetch.bind(window);
 
@@ -73,7 +78,7 @@
     if (!G.store.anon) G.store.anon = "a" + Math.random().toString(36).slice(2) + Date.now().toString(36);
     if (!Array.isArray(G.store.explored)) G.store.explored = [];
   }
-  function saveStore() { if (G.replay) return; try { localStorage.setItem(LS_KEY, JSON.stringify(G.store)); } catch (e) {} }
+  function saveStore() { if (G.quiet) return; try { localStorage.setItem(LS_KEY, JSON.stringify(G.store)); } catch (e) {} }
 
   function startParam() {
     var sp = tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param;
@@ -111,9 +116,11 @@
     // настоящий ученик с кодом доступа открыл ссылку — просто его приложение
     if (state.accessToken && !state.isAdmin && state.accessToken !== GUEST_TOKEN) return false;
     if (G.replay) G.store = { anon: "replay", explored: [], popupAt: 9e15, welcomed: true };
+    else if (G.peek) G.store = { anon: "peek", explored: [], popupAt: 0, welcomed: false };
     else loadStore();
     G.on = true; window.GUEST_ON = true;
     document.documentElement.classList.add("guest-mode");
+    if (G.peek) document.documentElement.classList.add("peek-mode");
     var u = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
     // чистое состояние гостя, только в памяти
     state.isAdmin = false; state._siteAuth = ""; state.adminMode = false;
@@ -183,6 +190,13 @@
         if (ap === "/api/karaoke" && method === "GET" && !abs.search) return demo().then(function (d) { return resp(d.karaoke); });
         if (method === "GET" && (ap === "/api/karaoke-cover" || ap === "/api/version")) return realFetch(input, init);
         if (ap === API) return realFetch(input, init);
+        // запись на пробный — настоящее свободное время Николая (без этого гость получал отказ)
+        if (ap === "/api/bot" && abs.searchParams.get("path") === "app_book") {
+          if (!G.peek) return realFetch(input, init);
+          if (method !== "GET") return resp({ ok: false, e: "Это пробный режим: запись не отправляется. Новый клиент на этом шаге переходит к оплате в боте." });
+          var P = window.parent, ph = { "x-site-auth": (P.state && P.state._siteAuth) || "", "x-tg-init-data": (P.Telegram && P.Telegram.WebApp && P.Telegram.WebApp.initData) || "" };
+          return realFetch("/api/bot?path=app_book&peek=1", { headers: ph });
+        }
         return resp({ ok: false, guest: true, error: "Тест-драйв" }, 403);
       }
       return realFetch(input, init);
@@ -480,7 +494,7 @@
   /* ---------- журнал для «Тестовых клиентов» ---------- */
 
   function log(e) {
-    if (G.replay) return;
+    if (G.quiet) return;
     e.ts = Date.now();
     e.screen = G.cur ? G.cur.label : (SCREEN_NAMES[state.screen] || state.screen || "");
     G.queue.push(e);
@@ -515,14 +529,14 @@
     return b;
   }
   function post(action, extra) {
-    if (G.replay) return Promise.resolve(new Response("{}"));
+    if (G.quiet) return Promise.resolve(new Response("{}"));
     return realFetch(API + "?action=" + action, {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify(payload(extra || {})), keepalive: true
     }).catch(function () {});
   }
   function flush(beacon) {
-    if (G.replay) { G.queue = []; return; }
+    if (G.quiet) { G.queue = []; return; }
     if (!G.queue.length) return;
     var evs = G.queue.splice(0, 80);
     var body = JSON.stringify(payload({ events: evs, explored: G.store.explored }));

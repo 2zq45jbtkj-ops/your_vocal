@@ -103,3 +103,6 @@ html.browser-mode .gd-chip { top: 10px; }
 /* закрытые задания в «Домашних заданиях» гостя */
 .gd-hw-shut .cab-hw-title { color: var(--gray); }
 .gd-hw-lock { flex: none; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; color: var(--terra); }
+
+/* 26.11: «Пробный режим» Николая — справа вверху его значок «Т», чип тест-драйва левее */
+html.peek-mode .gd-chip { right: 58px; }

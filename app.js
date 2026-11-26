@@ -2644,7 +2644,9 @@ function loadBook() {
     .then(function (d) { state._bookBusy = false; state.book = d && d.ok ? d : { ok: false, e: (d && d.e) || "" }; if (state.screen === "book") render(); },
           function () { state._bookBusy = false; state.book = { ok: false }; if (state.screen === "book") render(); });
 }
-function submitBooking() {
+// 26.11: было «submitBooking» — так же называлась старая функция ниже (календарь вопросов),
+// и она перекрывала эту: «Записаться» в приложении ничего не записывал.
+function submitAppBooking() {
   var b = state.book;
   if (!b || state.bookStart == null || state._bookSending) return;
   state._bookSending = true; state.bookErr = ""; render();
@@ -2997,6 +2999,11 @@ function renderMore() {
       icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1.5l5.5 2v4c0 3.6-2.3 6-5.5 7-3.2-1-5.5-3.4-5.5-7v-4L8 1.5z" stroke="var(--gray)" stroke-width="1.4" stroke-linejoin="round"/><path d="M6 8l1.5 1.5L10.5 6" stroke="var(--terra)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
       iconBg: "var(--bgmuted)"
     });
+    items.push({
+      label: "Пробный режим", isLink: true, peekEntry: true,
+      icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3.5 3.5h9M8 3.5v9.5" stroke="var(--terra)" stroke-width="2" stroke-linecap="round"/></svg>',
+      iconBg: "var(--bgmuted)"
+    });
   }
 
   var itemsHtml = items.map(function (item, i) {
@@ -3030,11 +3037,38 @@ function renderMore() {
       if (item.reset) { resetProgress(); return; }
       if (item.doc) { openDoc(item.doc); return; }
       if (item.adminEntry) { if (!state.isAdmin) setAdminOn(true); else go("admin-hub"); return; }
+      if (item.peekEntry) { openPeek(); return; }
       if (item.adminToggle) { setAdminOn(!state.isAdmin); return; }
       if (item.support) { openSupport(); return; }
     });
   });
   wireActs();
+}
+
+/* 26.11 (Коля): «Пробный режим» — приложение глазами нового клиента поверх своего.
+   Внутри — обычный тест-драйв гостя (?td=1&peek=1): окна, точки, запись на пробный со
+   свободным временем, но ничего не уходит в «Путь гостя» и запись не отправляется. */
+var PEEK_FAB_ICO = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 5h14M12 5v15" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>';
+function openPeek() {
+  if (document.getElementById("peek-wrap")) return;
+  var w = document.createElement("div");
+  w.id = "peek-wrap";
+  // 26.11 (Коля): без оранжевой полосы — значок «Т», как у режима админа (там глазик)
+  w.style.cssText = "position:fixed;inset:0;z-index:9998;background:var(--bg);";
+  w.innerHTML = '<iframe src="/?td=1&peek=1&v=' + Date.now() + '" style="position:absolute;left:0;right:0;bottom:0;top:calc(var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));width:100%;height:calc(100% - var(--tg-safe-area-inset-top, 0px) - var(--tg-content-safe-area-inset-top, 0px));border:0;background:var(--bg);"></iframe>' +
+    '<div class="admin-fab" style="z-index:9999;">' +
+      '<button type="button" class="admin-fab-btn" aria-label="Пробный режим">' + PEEK_FAB_ICO + '</button>' +
+      '<div class="admin-fab-pop" role="dialog" aria-label="Пробный режим">' +
+        '<span>Пробный режим:<b>так видит новый клиент</b></span>' +
+        '<button type="button" id="peek-x">Выйти из пробного режима</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(w);
+  var fab = w.querySelector(".admin-fab");
+  fab.querySelector(".admin-fab-btn").addEventListener("click", function (e) { e.stopPropagation(); fab.classList.toggle("open"); });
+  fab.querySelector(".admin-fab-pop").addEventListener("click", function (e) { e.stopPropagation(); });
+  w.addEventListener("click", function () { fab.classList.remove("open"); });
+  document.getElementById("peek-x").onclick = function () { w.remove(); };
 }
 
 /* Текстовые экраны раздела «Ещё»: публичная оферта, политика конфиденциальности
@@ -6436,7 +6470,7 @@ var ACTS = {
   "book-day": function (el) { state.bookDay = el.getAttribute("data-day"); state.bookStart = null; state.bookErr = ""; render(); },
   "book-slot": function (el) { state.bookStart = +el.getAttribute("data-start"); state.bookErr = ""; render(); },
   "book-move": function () { state.bookMove = !state.bookMove; state.bookStart = null; render(); },
-  "book-go": function () { submitBooking(); },
+  "book-go": function () { submitAppBooking(); },
   "book-done": function () { state.bookDone = null; go(window.GUEST_ON ? "courses" : "profile"); },
   "go-courses": function () { go("courses"); },
   "go-questions": function () { go("questions"); },

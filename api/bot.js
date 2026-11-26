@@ -44,6 +44,13 @@ export default async function handler(req) {
       headers: { "X-Tg-Init-Data": await sign({ id: Number(uid), first_name: "Николай" }, token), "content-type": "application/json" }, body: st });
     return new Response(await rr.text(), { status: rr.status, headers: { "content-type": "application/json" } });
   }
+  /* 26.11: «Пробный режим» Николая — запись глазами нового клиента: свободное время как у
+     гостя (пользователь без карточки), отправить запись нельзя. */
+  if (path === "app_book" && url.searchParams.get("peek") === "1") {
+    if (uid !== String(admin) || req.method !== "GET") return json({ ok: false, e: "Только просмотр" }, 403);
+    var pr = await fetch(BOT + "app_book", { headers: { "X-Tg-Init-Data": await sign({ id: 1, first_name: "Новый клиент" }, token) } });
+    return new Response(await pr.text(), { status: pr.status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
+  }
   url.searchParams.delete("path");
   var qs = url.searchParams.toString();
   var init = { method: req.method, headers: { "X-Tg-Init-Data": await sign(user, token), "content-type": "application/json" } };
