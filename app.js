@@ -2705,6 +2705,28 @@ function renderBook() {
     html += '<div class="courses-empty">Свободного времени пока нет. Напиши Николаю — подберём вместе.</div>';
   } else {
     if (!state.bookDay || !days.some(function (d) { return d.day === state.bookDay; })) state.bookDay = days[0].day;
+    // 26.11 (Коля): «Ближайшие окна» — 2–3 самых ранних свободных времени, запись в одно касание
+    // (не больше двух в один день и не впритык друг к другу).
+    var quick = [];
+    days.forEach(function (d) {
+      if (quick.length >= 3) return;
+      var n = 0, last = -1e9;
+      d.starts.forEach(function (m) {
+        if (quick.length >= 3 || n >= 2 || m - last < 90) return;
+        quick.push({ day: d.day, start: m }); n++; last = m;
+      });
+    });
+    if (quick.length) {
+      html += '<div class="lesson-sub" style="margin:2px 2px 0;text-transform:uppercase;letter-spacing:.05em;">Ближайшие окна</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(' + quick.length + ',1fr);gap:9px;">' + quick.map(function (q) {
+          var qd = bkDate(q.day), on = state.bookDay === q.day && state.bookStart === q.start;
+          return '<button data-act="book-quick" data-day="' + q.day + '" data-start="' + q.start + '" style="border:none;border-radius:16px;padding:10px 4px;font:inherit;cursor:pointer;' +
+            (on ? 'background:var(--blue);color:#fff;' : 'background:var(--bg);color:var(--ink);box-shadow:var(--raised-sm);') + '">' +
+            '<div style="font-size:11.5px;' + (on ? '' : 'color:var(--gray);') + '">' + BK_WD[qd.getDay()] + ", " + qd.getDate() + " " + BK_MON[qd.getMonth()].slice(0, 3) + '</div>' +
+            '<div style="font-size:17px;font-weight:700;margin-top:2px;">' + bkHM(bkLocal(q.start, b.teacherOffset)) + '</div></button>';
+        }).join("") + '</div>' +
+        '<div class="lesson-sub" style="margin:6px 2px 0;text-transform:uppercase;letter-spacing:.05em;">Или выбери сам</div>';
+    }
     html += '<div style="display:flex;gap:8px;overflow-x:auto;padding:4px 2px 8px;margin:0 -18px;padding-left:18px;padding-right:18px;scrollbar-width:none;">' +
       days.map(function (d) {
         var dt = bkDate(d.day), on = d.day === state.bookDay;
@@ -3049,13 +3071,24 @@ function renderMore() {
    Внутри — обычный тест-драйв гостя (?td=1&peek=1): окна, точки, запись на пробный со
    свободным временем, но ничего не уходит в «Путь гостя» и запись не отправляется. */
 var PEEK_FAB_ICO = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 5h14M12 5v15" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>';
+function peekInset(v) {
+  var d = document.createElement("div");
+  d.style.cssText = "position:fixed;left:0;width:1px;height:1px;visibility:hidden;top:var(" + v + ", 0px);";
+  document.body.appendChild(d);
+  var t = Math.round(d.getBoundingClientRect().top) || 0;
+  d.remove();
+  return Math.max(0, t);
+}
 function openPeek() {
   if (document.getElementById("peek-wrap")) return;
   var w = document.createElement("div");
   w.id = "peek-wrap";
   // 26.11 (Коля): без оранжевой полосы — значок «Т», как у режима админа (там глазик)
   w.style.cssText = "position:fixed;inset:0;z-index:9998;background:var(--bg);";
-  w.innerHTML = '<iframe src="/?td=1&peek=1&v=' + Date.now() + '" style="position:absolute;left:0;right:0;bottom:0;top:calc(var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));width:100%;height:calc(100% - var(--tg-safe-area-inset-top, 0px) - var(--tg-content-safe-area-inset-top, 0px));border:0;background:var(--bg);"></iframe>' +
+  // 26.11 (Коля): верх как в основном приложении — без сплошной полосы под статус-баром:
+  // окно на весь экран, а отступы сверху передаём внутрь (там их ставит index.html).
+  var sat = peekInset("--tg-safe-area-inset-top"), csat = peekInset("--tg-content-safe-area-inset-top");
+  w.innerHTML = '<iframe src="/?td=1&peek=1&sat=' + sat + '&csat=' + csat + '&v=' + Date.now() + '" style="position:absolute;inset:0;width:100%;height:100%;border:0;background:var(--bg);"></iframe>' +
     '<div class="admin-fab" style="z-index:9999;">' +
       '<button type="button" class="admin-fab-btn" aria-label="Пробный режим">' + PEEK_FAB_ICO + '</button>' +
       '<div class="admin-fab-pop" role="dialog" aria-label="Пробный режим">' +
@@ -6468,6 +6501,7 @@ var ACTS = {
   "cab-renew": function () { openRenew(); },
   "cab-book": function () { openBooking(); },
   "book-day": function (el) { state.bookDay = el.getAttribute("data-day"); state.bookStart = null; state.bookErr = ""; render(); },
+  "book-quick": function (el) { state.bookDay = el.getAttribute("data-day"); state.bookStart = +el.getAttribute("data-start"); state.bookErr = ""; render(); },
   "book-slot": function (el) { state.bookStart = +el.getAttribute("data-start"); state.bookErr = ""; render(); },
   "book-move": function () { state.bookMove = !state.bookMove; state.bookStart = null; render(); },
   "book-go": function () { submitAppBooking(); },

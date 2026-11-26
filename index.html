@@ -4,6 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#2f3f52">
+  <script>
+    /* 26.11 (Коля): «Пробный режим» — приложение во весь экран, как основное: родитель
+       передаёт свои отступы сверху (sat/csat), здесь они ставятся вместо телеграмовских. */
+    (function(){try{var q=new URLSearchParams(location.search);if(q.get("peek")!=="1"||window.parent===window)return;
+      var a=parseFloat(q.get("sat"))||0,b=parseFloat(q.get("csat"))||0,st=document.createElement("style");
+      st.textContent=":root{--tg-safe-area-inset-top:"+a+"px!important;--tg-content-safe-area-inset-top:"+b+"px!important;--sp-top:"+(a+b)+"px}";
+      document.head.appendChild(st);}catch(e){}})();
+  </script>
   <style>
     /* Заставка должна нарисоваться первой — до шрифтов и скрипта Telegram */
     html,body{background:#2f3f52}
@@ -13,7 +21,7 @@
 #splash{position:fixed;inset:0;z-index:100000;overflow:hidden;
   font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
   background:
-    linear-gradient(180deg,#2f3f52 0,rgba(47,63,82,.85) calc(env(safe-area-inset-top,0px) + 10px),rgba(47,63,82,0) calc(env(safe-area-inset-top,0px) + 140px)),
+    linear-gradient(180deg,#2f3f52 0,rgba(47,63,82,.85) calc(var(--sp-top,env(safe-area-inset-top,0px)) + 10px),rgba(47,63,82,0) calc(var(--sp-top,env(safe-area-inset-top,0px)) + 140px)),
     radial-gradient(90% 70% at 100% 100%, rgba(150,78,48,.85) 0%, rgba(150,78,48,0) 70%),
     radial-gradient(80% 60% at 0% 0%, rgba(92,118,142,.55) 0%, rgba(92,118,142,0) 70%),
     linear-gradient(135deg,#2c3d50 0%,#232d3b 50%,#3a2c2c 100%);
@@ -48,7 +56,7 @@
   <link rel="stylesheet" href="breath-anim.css?v=20261121b">
   <link rel="stylesheet" href="effort-anim.css?v=20261121t6">
   <link rel="stylesheet" href="breath-trainer.css?v=20261122e">
-  <link rel="stylesheet" href="guest.css?v=20261126p">
+  <link rel="stylesheet" href="guest.css?v=20261126q">
   <link rel="stylesheet" href="tablet.css?v=20261122a">
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png">
@@ -99,7 +107,7 @@
   <!-- Тексты оферты / политики / «О преподавателе» — только данные, без логики.
        Обязательно до app.js: renderDoc() читает LEGAL_DOCS при первом рендере. -->
   <script defer src="legal.js?v=20261117x"></script>
-  <script defer src="app.js?v=20261126p"></script>
+  <script defer src="app.js?v=20261126q"></script>
   <script defer src="palette-resolver.js?v=20261120b"></script>
   <script defer src="cover-extractor.js?v=20261120b"></script>
   <script defer src="tracks.js?v=20261121t6"></script>
@@ -113,7 +121,7 @@
   <script defer src="effort-anim.js?v=20261121a"></script>
   <script defer src="breath-trainer.js?v=20261122f"></script>
   <script defer src="foil-confetti.js?v=20261125c"></script>
-  <script defer src="guest.js?v=20261126p"></script>
+  <script defer src="guest.js?v=20261126q"></script>
   <script>
     /* Новая версия без ручного перезапуска: значок на экране телефона держит
        страницу в памяти, поэтому при возвращении в приложение сверяем версию
