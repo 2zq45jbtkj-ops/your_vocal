@@ -396,11 +396,12 @@
         '<span class="gd-row-c">›</span></button>';
     }).join("");
     var intro = first
-      ? "Это тест-драйв приложения, в котором ученики Николая делают домашние задания. Загляни в каждый раздел: непросмотренные отмечены оранжевой точкой."
+      ? "Приложение, в котором ученики Николая делают домашние задания. Загляни в каждый раздел — непросмотренные отмечены оранжевой точкой."
       : (n === SECTIONS.length ? "Ты посмотрел все разделы. Следующий шаг — живой урок." : "Осталось посмотреть: " + (SECTIONS.length - n) + ". Нажми на раздел, чтобы перейти.");
     var ov = sheet(
-      '<div class="gd-title">Тест-драйв · ' + n + " из " + SECTIONS.length + "</div>" +
-      '<div class="gd-sub">' + esc(intro) + "</div>" +
+      '<div class="gd-head"><div class="gd-title">Тест-драйв</div><div class="gd-count">' + n + " из " + SECTIONS.length + "</div></div>" +
+      '<div class="gd-prog"><i style="width:' + Math.round(n * 100 / SECTIONS.length) + '%"></i></div>' +
+      '<div class="gd-sub gd-sub-l">' + esc(intro) + "</div>" +
       '<div class="gd-rows">' + rows + "</div>" +
       '<button type="button" class="cta terra gd-cta" data-gd-trial="tracker">Записаться на пробный урок</button>' +
       '<button type="button" class="gd-later" data-gd-close>' + (first ? "Начать" : "Закрыть") + "</button>"
@@ -473,19 +474,39 @@
   function sheet(inner, onClose) {
     var ov = document.createElement("div");
     ov.className = "gd-ov";
-    ov.innerHTML = '<div class="gd-sheet" role="dialog" aria-modal="true">' + inner + "</div>";
+    // 26.11 (Коля): полоска сверху — шторку можно смахнуть вниз, как все шторки приложения
+    ov.innerHTML = '<div class="gd-sheet" role="dialog" aria-modal="true"><div class="gd-grip"></div>' + inner + "</div>";
     document.body.appendChild(ov);
     ov._onClose = onClose;
     requestAnimationFrame(function () { ov.classList.add("on"); });
+    if (window.wireSheetSwipe) window.wireSheetSwipe(ov.querySelector(".gd-sheet"), closeSheets, ov);
+    statusBar(true);
     ov.addEventListener("click", function (e) { if (e.target === ov) closeSheets(); });
     Array.prototype.forEach.call(ov.querySelectorAll("[data-gd-close]"), function (b) { b.addEventListener("click", closeSheets); });
     wireTrial(ov);
     return ov;
   }
   function closeSheets() {
+    var had = false;
     Array.prototype.forEach.call(document.querySelectorAll(".gd-ov"), function (ov) {
+      had = true;
       if (ov._onClose) { try { ov._onClose(); } catch (e) {} }
       ov.remove();
+    });
+    if (had) statusBar(false);
+  }
+  // Полоса под часами (значок на экране «Домой» — её красит theme-color) затемняется вместе
+  // со шторкой; в «Пробном режиме» она принадлежит родителю — красим и его.
+  function statusBar(dim) {
+    var dark = !!(window.state && state.darkMode);
+    var col = dim ? (dark ? "#1C1F20" : "#8E8B86") : (dark ? "#232A2E" : "#F1EEE8");
+    var docs = [document];
+    try { if (window.__peekFrame && window.parent && window.parent.document) docs.push(window.parent.document); } catch (e) {}
+    docs.forEach(function (d) {
+      try {
+        var m = d.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute("content", col);
+        var pw = d.getElementById("peek-wrap"); if (pw) pw.style.background = col;
+      } catch (e) {}
     });
   }
   G.toast = function (text) {

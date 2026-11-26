@@ -168,9 +168,13 @@ function applyDarkMode() {
   document.documentElement.classList.toggle("dark", !!state.darkMode);
   // Цвет верхнего края (часы на iPhone, значок «ДЗ» на экране «Домой») — под тему
   var tcm = document.querySelector('meta[name="theme-color"]');
-  if (tcm && !window.__splashOn) tcm.setAttribute("content", state.darkMode ? "#232A2E" : "#F1EEE8");
+  if (tcm && !window.__splashOn && !document.querySelector(".gd-ov")) {
+    tcm.setAttribute("content", state.darkMode ? "#232A2E" : "#F1EEE8");
+    // «Пробный режим» с экрана «Домой»: полосу под часами красит meta родителя
+    try { if (window.__peekFrame) { var pm = window.parent.document.querySelector('meta[name="theme-color"]'); if (pm) pm.setAttribute("content", state.darkMode ? "#232A2E" : "#F1EEE8"); } } catch (e) {}
+  }
   var htg = window.__peekTg || tg;   // в «Пробном режиме» верх красит родитель (настоящий Telegram)
-  if (window.__peekFrame && !window.__splashOn) {
+  if (window.__peekFrame && !window.__splashOn && !document.querySelector(".gd-ov")) {
     try { var pw = window.parent.document.getElementById("peek-wrap"); if (pw) pw.style.background = state.darkMode ? "#232A2E" : "#F1EEE8"; } catch (e) {}
   }
   if (htg) {

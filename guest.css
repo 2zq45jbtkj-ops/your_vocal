@@ -108,3 +108,19 @@ html.peek-frame .gd-chip { top: calc(var(--tg-safe-area-inset-top, 0px) + var(--
 
 /* 26.11: «Пробный режим» Николая — справа вверху его значок «Т», чип тест-драйва левее */
 html.peek-mode .gd-chip { right: 58px; }
+
+/* 26.11 (Коля): шторка тест-драйва — полоска для свайпа вниз, компактный список */
+.gd-grip { width: 38px; height: 5px; border-radius: 3px; background: color-mix(in oklch, var(--gray) 45%, transparent); margin: -10px auto 14px; }
+.gd-sheet { padding-top: 18px; }
+.gd-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.gd-head .gd-title { text-align: left; margin: 0; font-size: 21px; }
+.gd-count { font: 700 14px 'Inter', sans-serif; color: var(--terra); flex: none; }
+.gd-prog { height: 5px; border-radius: 3px; background: var(--bgmuted); margin: 10px 0 12px; overflow: hidden; }
+.gd-prog i { display: block; height: 100%; border-radius: 3px; background: var(--terra); transition: width .3s; }
+.gd-sub-l { text-align: left; font-size: 13.5px; margin-bottom: 14px; }
+.gd-rows { gap: 7px; margin-bottom: 14px; }
+.gd-row { padding: 10px 12px; border-radius: 15px; }
+.gd-row-t b { font-size: 14.5px; }
+.gd-row-t span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gd-row-m { width: 22px; height: 22px; }
+.gd-later { margin-top: 2px; padding: 10px; }
