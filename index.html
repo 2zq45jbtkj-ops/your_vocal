@@ -14,6 +14,14 @@
       /* цвет верхнего края (часы) красит настоящий Telegram — он у родителя */
       try{window.__peekTg=window.parent.Telegram&&window.parent.Telegram.WebApp;}catch(e){}}catch(e){}})();
   </script>
+  <script>
+    /* 27.11 (Коля): «Путь гостя» — приложение внутри корпуса iPhone получает отступы
+       острова и полоски «Домой» (sat/sab), как на настоящем телефоне. */
+    (function(){try{var q=new URLSearchParams(location.search);if(q.get("replay")!=="1"||q.get("peek")==="1"||window.parent===window)return;
+      var a=parseFloat(q.get("sat"))||0,c=parseFloat(q.get("sab"))||0,st=document.createElement("style");
+      st.textContent=":root{--tg-safe-area-inset-top:"+a+"px!important;--tg-content-safe-area-inset-top:0px!important;--tg-safe-area-inset-bottom:"+c+"px!important;--tg-content-safe-area-inset-bottom:0px!important;--sp-top:"+a+"px}";
+      document.head.appendChild(st);document.documentElement.classList.add("rp-frame");}catch(e){}})();
+  </script>
   <style>
     /* Заставка должна нарисоваться первой — до шрифтов и скрипта Telegram */
     html,body{background:#2f3f52}

@@ -25,6 +25,8 @@
 .gd-chip:active { transform: scale(.95); }
 html.browser-mode .gd-chip { top: 10px; }
 /* 26.11: «Пробный режим» (окно внутри приложения) — отступы как в Telegram, их передаёт родитель */
+/* 27.11: внутри корпуса iPhone в «Пути гостя» — под статус-баром, как у гостя в Telegram */
+html.rp-frame .gd-chip { top: calc(var(--tg-safe-area-inset-top, 0px) + 10px); }
 html.peek-frame .gd-chip { top: calc(var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px) + 10px); }
 /* 27.11 (Коля): пробный режим со значка «Домой» — «Тест-драйв» и «Т» чуть ниже,
    чтобы не попадали в матовую зону iOS под часами */

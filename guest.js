@@ -924,6 +924,8 @@
     RP.evs.forEach(function (e, i) { if (e.kind === "screen") out.push({ i: i, label: e.label, dur: Number(e.dur_ms) || 0 }); });
     return out;
   }
+  // отступы настоящего iPhone (остров + полоска «Домой») — приложение внутри встаёт как на телефоне
+  var RP_Q = "&sat=54&sab=34";
   function replayHtml(evs) {
     RP.evs = evs.filter(function (e) { return e.kind !== "open" && e.kind !== "explored"; });
     RP.i = 0; RP.playing = false; if (RP.t) clearTimeout(RP.t);
@@ -933,13 +935,32 @@
         rpIcon(x.label) + ' ' + esc(String(x.label).split(":")[0].slice(0, 18)) + '</span>' + (k < scr.length - 1 ? '<span style="flex:none;color:var(--gray);opacity:.5;">›</span>' : "");
     }).join("");
     var W = 234, S = W / 390, H = Math.round(844 * S);
+    // 27.11 (Коля): корпус iPhone как в монтаже «Как проходят уроки» — титановый ободок,
+    // чёрная рамка, кнопки по бокам, Dynamic Island и статус-бар (полоски «Домой» нет — по просьбе Коли).
+    var TI = "linear-gradient(145deg,#e4e6e9 0%,#9a9ea4 22%,#5f6368 48%,#b9bcc1 74%,#7c8086 100%)";
+    var PW = W + 20, PH = H + 20;
+    function btn(side, t, b) { return '<i style="position:absolute;' + side + ':-2px;top:' + t + '%;height:' + (b - t) + '%;width:3px;border-radius:2px;background:' + TI + ';"></i>'; }
+    var sbI = '<svg width="11" height="7" viewBox="0 0 17 11" fill="#fff"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>' +
+      '<svg width="10" height="7" viewBox="0 0 16 11" fill="#fff"><path d="M8 2.2c2.2 0 4.2.8 5.7 2.2l1.2-1.3C13.1 1.4 10.7.4 8 .4S2.9 1.4 1.1 3.1l1.2 1.3C3.8 3 5.8 2.2 8 2.2zm0 3.4c1.3 0 2.4.5 3.3 1.3l1.2-1.3C11.3 4.5 9.7 3.8 8 3.8s-3.3.7-4.5 1.8l1.2 1.3C5.6 6.1 6.7 5.6 8 5.6zm0 3.3c.5 0 .9.2 1.2.5L8 10.7 6.8 9.4c.3-.3.7-.5 1.2-.5z"/></svg>' +
+      '<svg width="15" height="7" viewBox="0 0 25 12"><rect x=".5" y=".5" width="21" height="11" rx="3.2" fill="none" stroke="#fff" stroke-opacity=".45"/><rect x="2" y="2" width="15" height="8" rx="2" fill="#fff"/><path d="M23 4v4c.8-.3 1.3-1.1 1.3-2S23.8 4.3 23 4z" fill="#fff" fill-opacity=".45"/></svg>';
     return '<div class="gd-card" style="display:flex;flex-direction:column;gap:14px;align-items:stretch;">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;"><b style="font-size:15px;">Путь по приложению</b><span id="rp-step" class="lesson-sub">' + scr.length + ' экранов</span></div>' +
-      '<div style="align-self:center;position:relative;width:' + (W + 14) + 'px;height:' + (H + 14) + 'px;border-radius:38px;background:#0d0f11;padding:7px;box-shadow:0 10px 30px rgba(0,0,0,.45);">' +
-        '<div style="position:relative;width:' + W + 'px;height:' + H + 'px;border-radius:31px;overflow:hidden;background:var(--bg);">' +
-          '<iframe id="rp-frame" src="/?td=1&replay=1" tabindex="-1" style="width:390px;height:844px;border:0;transform:scale(' + S + ');transform-origin:0 0;pointer-events:none;"></iframe>' +
-          '<div id="rp-dot" style="position:absolute;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;background:rgba(245,197,66,.55);border:2px solid #F5C542;opacity:0;pointer-events:none;transition:left .35s ease,top .35s ease,opacity .2s;"></div>' +
-          '<div id="rp-cap" style="position:absolute;left:10px;right:10px;top:10px;text-align:center;font-size:11px;line-height:1.3;color:#fff;background:rgba(15,17,20,.82);border-radius:10px;padding:6px 8px;opacity:0;transition:opacity .2s;pointer-events:none;"></div>' +
+      '<div style="align-self:center;position:relative;width:' + PW + 'px;height:' + PH + 'px;margin:4px 0;">' +
+        btn("left", 18.5, 23.6) + btn("left", 28, 35) + btn("left", 37.6, 44.9) + btn("right", 29.5, 41.3) +
+        '<div style="position:absolute;inset:0;border-radius:44px;background:' + TI + ';padding:3px;box-shadow:0 18px 40px rgba(0,0,0,.45),0 4px 10px rgba(0,0,0,.25);">' +
+          '<div style="width:100%;height:100%;border-radius:41px;background:#0b0c0e;padding:7px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);">' +
+            '<div style="position:relative;width:' + W + 'px;height:' + H + 'px;border-radius:34px;overflow:hidden;background:var(--bg);">' +
+              '<iframe id="rp-frame" src="/?td=1&replay=1' + RP_Q + '" tabindex="-1" style="width:390px;height:844px;border:0;transform:scale(' + S + ');transform-origin:0 0;pointer-events:none;"></iframe>' +
+              // статус-бар (54 pt у iPhone с островом) и остров
+              '<div style="position:absolute;left:0;right:0;top:0;height:' + Math.round(54 * S) + 'px;display:flex;align-items:center;justify-content:space-between;padding:0 20px 0 26px;pointer-events:none;color:#fff;font:600 10px/1 -apple-system,system-ui,Manrope,sans-serif;">' +
+                '<div style="display:flex;flex-direction:column;gap:1px;align-items:flex-start;"><span id="rp-clock">18:00</span><span style="font-size:6px;font-weight:500;opacity:.9;">◂ Telegram</span></div>' +
+                '<div style="display:flex;gap:3px;align-items:center;">' + sbI + '</div>' +
+              '</div>' +
+              '<div style="position:absolute;left:50%;top:' + Math.round(11 * S) + 'px;width:' + Math.round(124 * S) + 'px;height:' + Math.round(36 * S) + 'px;margin-left:-' + Math.round(62 * S) + 'px;border-radius:20px;background:#000;pointer-events:none;"><i style="position:absolute;right:' + Math.round(13 * S) + 'px;top:50%;width:7px;height:7px;margin-top:-3.5px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#2b3550,#0c0f18 70%);"></i></div>' +
+              '<div id="rp-dot" style="position:absolute;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;background:rgba(245,197,66,.55);border:2px solid #F5C542;opacity:0;pointer-events:none;transition:left .35s ease,top .35s ease,opacity .2s;"></div>' +
+              '<div id="rp-cap" style="position:absolute;left:10px;right:10px;top:' + Math.round(58 * S) + 'px;text-align:center;font-size:11px;line-height:1.3;color:#fff;background:rgba(15,17,20,.82);border-radius:10px;padding:6px 8px;opacity:0;transition:opacity .2s;pointer-events:none;"></div>' +
+            '</div>' +
+          '</div>' +
         '</div>' +
       '</div>' +
       '<div style="text-align:center;"><div id="rp-scr" style="font-weight:700;font-size:15px;">Нажми «Смотреть»</div><div id="rp-sub" class="lesson-sub" style="margin-top:2px;">жёлтый круг — куда нажал гость</div></div>' +
@@ -965,6 +986,7 @@
     var scr = document.getElementById("rp-scr"); if (!scr) { RP.playing = false; return; }
     var sub = document.getElementById("rp-sub"), dot = document.getElementById("rp-dot");
     var W = rpWin();
+    var clk = document.getElementById("rp-clock"); if (clk && e.ts) clk.textContent = fmtClock(e.ts).slice(0, 5);
     document.getElementById("rp-bar").style.width = Math.round((RP.i + 1) / RP.evs.length * 100) + "%";
     if (e.kind === "popup") { if (W) W.rpSheet(e.label); dot.style.opacity = 0; rpCap("открылось окно: " + String(e.label).replace(/^Окно\s*/, "")); return; }
     if (e.kind === "close") { if (W) W.rpClose(e.label); dot.style.opacity = 0; rpCap(/Смахнул/.test(e.label) ? "смахнул окно вниз" : "закрыл окно"); return; }
@@ -1039,7 +1061,7 @@
             if (RP.i === 0 && fr) {
               // с начала — чистое приложение, как у гостя при входе
               fr.onload = function () { fr.onload = null; setTimeout(function () { if (RP.playing) rpStep(); }, 900); };
-              fr.src = "/?td=1&replay=1&t=" + Date.now();
+              fr.src = "/?td=1&replay=1" + RP_Q + "&t=" + Date.now();
             } else rpStep();
           }
           rpBtn(); return;
