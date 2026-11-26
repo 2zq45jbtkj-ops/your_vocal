@@ -934,7 +934,9 @@ function coursesGreetHtml() {
   var line, act = "";
   if (next) {
     var st2 = lessonStatus(next), name = "«" + esc(lessonShortName(next)) + "»";
-    if (st2 === "in-progress") line = "Продолжим урок " + name;
+    // 27.11 (Коля): первая тема — всегда «Начнём изучать», без «продолжим»
+    if (next === 1) line = "Начнём изучать тему " + name;
+    else if (st2 === "in-progress") line = "Продолжим урок " + name;
     else if (!anyDone) line = "Начнём с урока " + name;
     else line = "Продолжим с урока " + name;
     var isOpen = LESSON && next === (LESSON.id || 1);
