@@ -6,6 +6,8 @@
 (function () {
   var root = document.getElementById("splash");
   if (!root) return;
+  // 27.11 (Коля): в «Пути гостя» у Николая заставку не показываем — сразу первый экран гостя
+  try { if (/[?&]replay=1(&|$)/.test(location.search) && window.parent !== window) { root.parentNode.removeChild(root); return; } } catch (e) {}
   window.__splashOn = true;
   var v = root.querySelector("video"), c = root.querySelector("canvas");
   var x = c.getContext("2d", { willReadFrequently: true });

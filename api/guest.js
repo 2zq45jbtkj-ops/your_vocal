@@ -28,7 +28,7 @@ export const config = { runtime: "edge" };
 
 var OWN_NAME = "Nikolai Sept (тест)";
 var DEMO_TTL_MS = 5 * 60 * 1000;
-var KINDS = { screen: 1, tap: 1, open: 1, explored: 1, trial: 1, popup: 1, close: 1 };
+var KINDS = { screen: 1, tap: 1, open: 1, explored: 1, trial: 1, popup: 1, close: 1, swipe: 1, scroll: 1 };
 
 async function ensure(sql) {
   await sql`CREATE TABLE IF NOT EXISTS guest_users (
@@ -62,6 +62,8 @@ async function ensure(sql) {
   // 26.11: где на экране нажал (доли ширины/высоты) — для анимации пути гостя
   await sql`ALTER TABLE guest_events ADD COLUMN IF NOT EXISTS x REAL`;
   await sql`ALTER TABLE guest_events ADD COLUMN IF NOT EXISTS y REAL`;
+  // 27.11: какой элемент нажал / что листал / куда провёл свайп — для полного повтора
+  await sql`ALTER TABLE guest_events ADD COLUMN IF NOT EXISTS sel TEXT`;
   await sql`CREATE TABLE IF NOT EXISTS guest_kv (
     k TEXT PRIMARY KEY,
     v TEXT NOT NULL,
@@ -354,7 +356,7 @@ export default async function handler(req) {
           var users = await sql`SELECT id, tg_id, first_name, last_name, username, verified, is_owner, src,
               first_at, last_at, visits, explored, trial_clicks, trial_at
             FROM guest_users ORDER BY last_at DESC LIMIT 200`;
-          var secs = await sql`SELECT gid, COALESCE(sum(dur_ms), 0)::bigint AS ms, count(*) FILTER (WHERE kind = 'tap')::int AS taps
+          var secs = await sql`SELECT gid, COALESCE(sum(dur_ms) FILTER (WHERE kind = 'screen'), 0)::bigint AS ms, count(*) FILTER (WHERE kind = 'tap')::int AS taps
             FROM guest_events GROUP BY gid`;
           var byG = {};
           secs.forEach(function (r) { byG[r.gid] = { ms: Number(r.ms) || 0, taps: r.taps }; });
@@ -364,7 +366,7 @@ export default async function handler(req) {
           return json({ ok: true, guests: users });
         }
         var gid = cut(url.searchParams.get("gid"), 60);
-        var ev = await sql`SELECT visit, ts, kind, screen, label, dur_ms, x, y FROM guest_events WHERE gid = ${gid} ORDER BY ts ASC, id ASC LIMIT 3000`;
+        var ev = await sql`SELECT visit, ts, kind, screen, label, dur_ms, x, y, sel FROM guest_events WHERE gid = ${gid} ORDER BY ts ASC, id ASC LIMIT 3000`;
         return json({ ok: true, events: ev });
       }
       return json({ ok: false }, 400);
@@ -398,8 +400,8 @@ export default async function handler(req) {
         var dur = Math.max(0, Math.min(6 * 3600 * 1000, Math.round(Number(e.dur) || 0)));
         var px = Number(e.x), py = Number(e.y);
         px = px >= 0 && px <= 1 ? px : null; py = py >= 0 && py <= 1 ? py : null;
-        await sql`INSERT INTO guest_events (gid, visit, ts, kind, screen, label, dur_ms, x, y)
-          VALUES (${g.id}, ${v}, ${new Date(ts).toISOString()}, ${kind}, ${cut(e.screen, 60)}, ${cut(e.label, 120)}, ${dur}, ${px}, ${py})`;
+        await sql`INSERT INTO guest_events (gid, visit, ts, kind, screen, label, dur_ms, x, y, sel)
+          VALUES (${g.id}, ${v}, ${new Date(ts).toISOString()}, ${kind}, ${cut(e.screen, 60)}, ${cut(e.label, 120)}, ${dur}, ${px}, ${py}, ${cut(e.sel, 300)})`;
       }
       if (Array.isArray(body.explored)) {
         var ex = body.explored.map(function (x) { return cut(x, 20); }).filter(Boolean).slice(0, 12);

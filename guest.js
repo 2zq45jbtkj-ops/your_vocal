@@ -147,6 +147,18 @@
     post("hello", { src: src });
     log({ kind: "open", label: "Открыл тест-драйв" });
     document.addEventListener("click", onClickCapture, true);
+    // 27.11 (Коля): полная история — свайпы, прокрутка, закрытие шторок смахиванием
+    G.origSwipe = window.wireSheetSwipe;
+    if (G.origSwipe) window.wireSheetSwipe = function (sh, onClose, shade) {
+      if (sh) sh.__rpClose = onClose;
+      return G.origSwipe(sh, function () { log({ kind: "close", label: "Смахнул окно вниз" }); return onClose.apply(this, arguments); }, shade);
+    };
+    document.addEventListener("touchstart", onTouchStart, { capture: true, passive: true });
+    document.addEventListener("touchmove", function () { G.lastTouch = Date.now(); }, { capture: true, passive: true });
+    document.addEventListener("touchend", onTouchEnd, { capture: true, passive: true });
+    document.addEventListener("wheel", function () { G.lastTouch = Date.now(); }, { capture: true, passive: true });
+    document.addEventListener("scroll", onScroll, true);
+    if (G.replay) replayGuards();
     document.addEventListener("visibilitychange", onVis);
     window.addEventListener("pagehide", function () { closeScreen(); flush(true); });
     setInterval(function () { flush(false); }, 8000);
@@ -177,6 +189,8 @@
   function installFetch() {
     window.fetch = function (input, init) {
       if (!G.on) return realFetch(input, init);
+      // в повторе у Николая ничего не отправляем и не записываем
+      if (G.replay && String((init && init.method) || (input && input.method) || "GET").toUpperCase() !== "GET") return resp({ ok: true, replay: true });
       var url = typeof input === "string" ? input : (input && input.url) || "";
       var method = String((init && init.method) || (input && input.method) || "GET").toUpperCase();
       var abs;
@@ -482,7 +496,8 @@
     document.body.appendChild(ov);
     ov._onClose = onClose;
     requestAnimationFrame(function () { ov.classList.add("on"); });
-    if (window.wireSheetSwipe) window.wireSheetSwipe(ov.querySelector(".gd-sheet"), closeSheets, ov);
+    var sw = G.origSwipe || window.wireSheetSwipe;
+    if (sw) sw(ov.querySelector(".gd-sheet"), closeSheets, ov);
     statusBar(true);
     ov.addEventListener("click", function (e) { if (e.target === ov) closeSheets(); });
     Array.prototype.forEach.call(ov.querySelectorAll("[data-gd-close]"), function (b) { b.addEventListener("click", closeSheets); });
@@ -565,19 +580,189 @@
     if (document.visibilityState === "hidden") { closeScreen(); G.hidden = true; flush(true); }
     else { G.hidden = false; if (G.cur) G.cur.since = Date.now(); }
   }
+  var CLICKABLE = "[data-act],[data-kp],[data-gd-go],[data-gd-trial],[data-gd-close],[data-trk-add],[data-s],button,a,[role=button],input,select,label,.trk-card,.cab-row";
   function onClickCapture(e) {
-    if (!G.on) return;
-    var el = e.target && e.target.closest ? e.target.closest("[data-act],[data-kp],[data-gd-go],[data-gd-trial],button,a,[role=button],.trk-card,.cab-row") : null;
+    if (!G.on || G.replay || !e.isTrusted) return;
+    var el = e.target && e.target.closest ? e.target.closest(CLICKABLE) : null;
+    var plain = !el;
+    if (plain) el = e.target && e.target.nodeType === 1 ? e.target : null;
     if (!el) return;
-    if (el.closest(".gd-chip")) return;
     if (el.matches('[data-kp="settings"]') || el.closest('[data-kp="settings"]')) mark("karset");
-    var lb = el.getAttribute("aria-label") || (el.textContent || "").replace(/\s+/g, " ").trim();
-    if (!lb) lb = el.getAttribute("data-act") || el.getAttribute("data-kp") || "кнопка";
+    var lb = plain ? "" : (el.getAttribute("aria-label") || (el.textContent || "").replace(/\s+/g, " ").trim());
+    if (!lb) lb = plain ? "по экрану" : (el.getAttribute("data-act") || el.getAttribute("data-kp") || "кнопка");
     var vw = window.innerWidth || 1, vh = window.innerHeight || 1;
-    log({ kind: "tap", label: lb.slice(0, 80), screen: G.cur ? G.cur.label : "",
+    log({ kind: "tap", label: lb.slice(0, 80), screen: G.cur ? G.cur.label : "", sel: selOf(el),
           x: Math.round(Math.max(0, Math.min(1, e.clientX / vw)) * 1000) / 1000,
           y: Math.round(Math.max(0, Math.min(1, e.clientY / vh)) * 1000) / 1000 });
   }
+  /* ---------- 27.11: как найти тот же элемент в повторе ---------- */
+  var KEY_ATTRS = ["data-gd-close", "data-act", "data-kp", "data-gd-go", "data-gd-trial", "data-s", "data-trk-add"];
+  function selOf(el) {
+    if (!el || el === document || el === document.documentElement || el === document.body || el === document.scrollingElement) return "doc";
+    try {
+      if (el.id) return "#" + el.id;
+      for (var i = 0; i < KEY_ATTRS.length; i++) {
+        var a = KEY_ATTRS[i];
+        if (el.hasAttribute(a)) {
+          var q = "[" + a + '="' + String(el.getAttribute(a)).replace(/["\\]/g, "\\$&") + '"]';
+          var all = document.querySelectorAll(q);
+          return "q:" + q + "|" + Array.prototype.indexOf.call(all, el);
+        }
+      }
+      var parts = [], n = el;
+      while (n && n.nodeType === 1 && n !== document.body) {
+        if (n.id) { parts.unshift("#" + n.id); break; }
+        var k = 1, sib = n;
+        while ((sib = sib.previousElementSibling)) k++;
+        parts.unshift(n.tagName.toLowerCase() + ":nth-child(" + k + ")");
+        n = n.parentElement;
+      }
+      if (n === document.body) parts.unshift("body");
+      return "p:" + parts.join(">");
+    } catch (x) { return ""; }
+  }
+  function findSel(sel) {
+    if (!sel) return null;
+    try {
+      if (sel === "doc") return document.scrollingElement || document.documentElement;
+      if (sel.charAt(0) === "#") return document.getElementById(sel.slice(1));
+      if (sel.indexOf("q:") === 0) { var b = sel.lastIndexOf("|"); return document.querySelectorAll(sel.slice(2, b))[+sel.slice(b + 1)] || document.querySelector(sel.slice(2, b)); }
+      if (sel.indexOf("p:") === 0) return document.querySelector(sel.slice(2));
+    } catch (x) {}
+    return null;
+  }
+  // свайпы: откуда и куда провёл пальцем
+  function onTouchStart(e) {
+    if (!G.on || G.replay || e.touches.length !== 1) { G.sw = null; return; }
+    var t = e.touches[0]; G.sw = { x: t.clientX, y: t.clientY, t: Date.now() };
+  }
+  function onTouchEnd(e) {
+    var s = G.sw; G.sw = null;
+    if (!s || !G.on || G.replay || !e.changedTouches || !e.changedTouches.length) return;
+    var t = e.changedTouches[0], dx = t.clientX - s.x, dy = t.clientY - s.y;
+    if (Math.abs(dx) < 30 && Math.abs(dy) < 30) return;
+    var vw = window.innerWidth || 1, vh = window.innerHeight || 1, f = function (v) { return Math.round(Math.max(0, Math.min(1, v)) * 1000) / 1000; };
+    var dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "вправо" : "влево") : (dy > 0 ? "вниз" : "вверх");
+    log({ kind: "swipe", label: "Свайп " + dir, x: f(s.x / vw), y: f(s.y / vh), sel: f(t.clientX / vw) + "," + f(t.clientY / vh), dur: Date.now() - s.t, nodur: 1 });
+  }
+  // прокрутка пальцем (не автопрокрутка текста в караоке)
+  var scrollT = {};
+  function onScroll(e) {
+    if (!G.on || G.replay || Date.now() - (G.lastTouch || 0) > 1200) return;
+    var el = e.target === document ? (document.scrollingElement || document.documentElement) : e.target;
+    if (!el || el.nodeType !== 1) return;
+    var key = selOf(el);
+    clearTimeout(scrollT[key]);
+    scrollT[key] = setTimeout(function () {
+      log({ kind: "scroll", label: "Листает экран", sel: key + "@" + Math.round(el.scrollTop) + "," + Math.round(el.scrollLeft) });
+    }, 350);
+  }
+
+  /* ---------- 27.11: повтор у Николая — то же приложение, те же нажатия ---------- */
+  function replayGuards() {
+    try { window.open = function () { return null; }; } catch (x) {}
+    try { if (navigator.mediaDevices) navigator.mediaDevices.getUserMedia = function () { return Promise.reject(new Error("replay")); }; } catch (x) {}
+    try {
+      var W = window.Telegram && window.Telegram.WebApp;
+      if (W) ["openLink", "openTelegramLink", "openInvoice", "close", "sendData", "requestContact", "requestWriteAccess", "shareToStory", "switchInlineQuery"].forEach(function (k) { if (typeof W[k] === "function") W[k] = function () {}; });
+    } catch (x) {}
+    // звук в повторе выключен (WebAudio: всё идёт через тихий узел)
+    try {
+      var BAC = window.BaseAudioContext || window.AudioContext, dd = BAC && Object.getOwnPropertyDescriptor(BAC.prototype, "destination");
+      if (dd && dd.get) Object.defineProperty(BAC.prototype, "destination", { configurable: true, get: function () {
+        if (!this.__rpMute) { var real = dd.get.call(this), g = this.createGain(); g.gain.value = 0; g.connect(real); this.__rpMute = g; }
+        return this.__rpMute;
+      } });
+    } catch (x) {}
+    try { var pl = HTMLMediaElement.prototype.play; HTMLMediaElement.prototype.play = function () { this.muted = true; return pl.apply(this, arguments); }; } catch (x) {}
+    // ссылки наружу в повторе не открываем
+    document.addEventListener("click", function (e) {
+      var a = e.target && e.target.closest && e.target.closest("a[href]");
+      if (a && !/^#/.test(a.getAttribute("href") || "")) e.preventDefault();
+    }, true);
+  }
+  function clickableByLabel(label, fx, fy) {
+    label = String(label || "").trim(); if (!label) return null;
+    var best = null, bd = 1e9, vw = window.innerWidth, vh = window.innerHeight;
+    Array.prototype.forEach.call(document.querySelectorAll(CLICKABLE), function (el) {
+      var lb = (el.getAttribute("aria-label") || (el.textContent || "").replace(/\s+/g, " ").trim()).slice(0, 80);
+      if (lb !== label) return;
+      var r = el.getBoundingClientRect(); if (!r.width || !r.height) return;
+      var d = fx == null ? 0 : Math.hypot(r.left + r.width / 2 - fx * vw, r.top + r.height / 2 - fy * vh);
+      if (d < bd) { bd = d; best = el; }
+    });
+    return best;
+  }
+  function fracOf(el) {
+    var r = el.getBoundingClientRect();
+    if (!r.width && !r.height) return null;
+    return { x: (r.left + r.width / 2) / (window.innerWidth || 1), y: (r.top + r.height / 2) / (window.innerHeight || 1), el: el };
+  }
+  function fireClick(el) {
+    var r = el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    var o = { bubbles: true, cancelable: true, view: window, clientX: cx, clientY: cy };
+    try { el.dispatchEvent(new PointerEvent("pointerdown", o)); } catch (x) {}
+    try { el.dispatchEvent(new PointerEvent("pointerup", o)); } catch (x) {}
+    el.dispatchEvent(new MouseEvent("click", o));
+  }
+  // нажатие: где элемент сейчас (для жёлтого круга) и само нажатие чуть позже
+  G.rpTap = function (e, delay) {
+    var el = findSel(e.sel);
+    if (!el) el = clickableByLabel(e.label, e.x, e.y);
+    if (!el && e.x != null && e.label !== "по экрану") {
+      var p = document.elementFromPoint(e.x * window.innerWidth, e.y * window.innerHeight);
+      var c = p && p.closest && p.closest(CLICKABLE);
+      var lb = c ? (c.getAttribute("aria-label") || (c.textContent || "").replace(/\s+/g, " ").trim()).slice(0, 80) : "";
+      if (c && lb === String(e.label).trim()) el = c;
+    }
+    if (!el) return null;
+    var f = fracOf(el) || { x: e.x, y: e.y };
+    if (el.scrollIntoView && f.y != null && (f.y < 0 || f.y > 1)) { el.scrollIntoView({ block: "center" }); f = fracOf(el) || f; }
+    setTimeout(function () { if (el.isConnected) fireClick(el); }, delay || 300);
+    return { x: f.x, y: f.y };
+  };
+  G.rpScroll = function (e) {
+    var s = String(e.sel || ""), at = s.lastIndexOf("@");
+    if (at < 0) return false;
+    var el = findSel(s.slice(0, at)); if (!el) return false;
+    var v = s.slice(at + 1).split(",");
+    try { el.scrollTo({ top: +v[0] || 0, left: +v[1] || 0, behavior: "smooth" }); } catch (x) { el.scrollTop = +v[0] || 0; }
+    return true;
+  };
+  G.rpClose = function (label) {
+    if (document.querySelector(".gd-ov")) { closeSheets(); return; }
+    if (!/Смахнул/.test(label || "")) return;
+    var list = Array.prototype.filter.call(document.querySelectorAll("*"), function (n) { return n.__rpClose && n.isConnected; });
+    var last = list[list.length - 1];
+    if (last) { try { last.__rpClose(); } catch (x) {} }
+  };
+  G.rpSheet = function (l) {
+    l = String(l || "");
+    if (document.querySelector(".gd-ov")) return;
+    if (/Тест-драйв|список разделов/.test(l)) G.openTracker(/при входе/.test(l));
+    else if (/Заявка отправлена/.test(l)) sheet('<div class="gd-badge">✅</div><div class="gd-title">Заявка отправлена</div><div class="gd-sub">Ваша заявка отправлена Николаю. В ближайшее время он свяжется с вами в Telegram.</div><button type="button" class="cta terra gd-cta" data-gd-close>Понятно</button>');
+    else if (/пробный/.test(l)) G.showTrial("replay");
+  };
+  G.rpScreen = function (label) {
+    label = String(label || "");
+    if (G.cur && G.cur.label === label) return;
+    var m = /^Караоке: песня: (.+)$/.exec(label);
+    if (m) {
+      var t = m[1].trim();
+      if (state.screen !== "karaoke") { closeSheets(); go("karaoke"); }
+      var tries = 0;
+      (function open() {
+        if (G.cur && G.cur.label === label) return;
+        var card = Array.prototype.filter.call(document.querySelectorAll(".trk-card"), function (c) { return (c.getAttribute("aria-label") || c.textContent || "").indexOf(t) !== -1; })[0];
+        if (card) { fireClick(card); return; }
+        if (++tries < 12) setTimeout(open, 250);
+      })();
+      return;
+    }
+    closeSheets();
+    go(rpScreenKey(label));
+  };
+
   function payload(extra) {
     var b = { initData: tg ? tg.initData : "", anon: G.store.anon };
     for (var k in extra) b[k] = extra[k];
@@ -740,7 +925,7 @@
     return out;
   }
   function replayHtml(evs) {
-    RP.evs = evs.filter(function (e) { return e.kind === "screen" || e.kind === "tap" || e.kind === "trial" || e.kind === "popup" || e.kind === "close"; });
+    RP.evs = evs.filter(function (e) { return e.kind !== "open" && e.kind !== "explored"; });
     RP.i = 0; RP.playing = false; if (RP.t) clearTimeout(RP.t);
     var scr = rpScreens();
     var strip = scr.map(function (x, k) {
@@ -768,23 +953,41 @@
       '</div>' +
     '</div>';
   }
+  function rpWin() { var fr = document.getElementById("rp-frame"); try { return fr && fr.contentWindow && fr.contentWindow.GUEST ? fr.contentWindow.GUEST : null; } catch (x) { return null; } }
+  function rpDot(x, y, opts) {
+    var dot = document.getElementById("rp-dot"); if (!dot) return;
+    dot.style.transition = "opacity .2s";
+    dot.style.left = x * 100 + "%"; dot.style.top = y * 100 + "%"; dot.style.opacity = 1;
+    if (!opts) dot.animate([{ transform: "scale(.5)", boxShadow: "0 0 0 0 rgba(245,197,66,.7)" }, { transform: "scale(1)", boxShadow: "0 0 0 16px rgba(245,197,66,0)" }], { duration: 650, easing: "ease-out" });
+  }
+  function rpCap(t) { var cap = document.getElementById("rp-cap"); if (cap) { cap.textContent = t; cap.style.opacity = t ? 1 : 0; } }
   function rpShow(e) {
     var scr = document.getElementById("rp-scr"); if (!scr) { RP.playing = false; return; }
-    var sub = document.getElementById("rp-sub"), dot = document.getElementById("rp-dot"), cap = document.getElementById("rp-cap");
-    var fr = document.getElementById("rp-frame");
+    var sub = document.getElementById("rp-sub"), dot = document.getElementById("rp-dot");
+    var W = rpWin();
     document.getElementById("rp-bar").style.width = Math.round((RP.i + 1) / RP.evs.length * 100) + "%";
-    if (e.kind === "popup" || e.kind === "close") {
-      rpSend(e.kind === "popup" ? { rp: "sheet", label: e.label } : { rp: "close" });
-      dot.style.opacity = 0;
-      cap.textContent = e.kind === "popup" ? "открылось окно: " + String(e.label).replace(/^Окно\s*/, "") : "закрыл окно";
-      cap.style.opacity = 1;
+    if (e.kind === "popup") { if (W) W.rpSheet(e.label); dot.style.opacity = 0; rpCap("открылось окно: " + String(e.label).replace(/^Окно\s*/, "")); return; }
+    if (e.kind === "close") { if (W) W.rpClose(e.label); dot.style.opacity = 0; rpCap(/Смахнул/.test(e.label) ? "смахнул окно вниз" : "закрыл окно"); return; }
+    if (e.kind === "scroll") { if (W) W.rpScroll(e); dot.style.opacity = 0; rpCap("листает экран"); return; }
+    if (e.kind === "swipe") {
+      var to = String(e.sel || "").split(",");
+      var x1 = e.x != null ? e.x : .5, y1 = e.y != null ? e.y : .5, x2 = +to[0], y2 = +to[1];
+      if (isNaN(x2)) { x2 = x1; y2 = y1; }
+      rpCap(String(e.label).toLowerCase());
+      dot.style.transition = "none"; dot.style.left = x1 * 100 + "%"; dot.style.top = y1 * 100 + "%"; dot.style.opacity = 1;
+      var ms = Math.max(250, Math.min(900, Number(e.dur_ms) || 400)) / RP.speed;
+      requestAnimationFrame(function () { requestAnimationFrame(function () {
+        dot.style.transition = "left " + ms + "ms ease-out, top " + ms + "ms ease-out, opacity .2s";
+        dot.style.left = x2 * 100 + "%"; dot.style.top = y2 * 100 + "%";
+        setTimeout(function () { dot.style.opacity = 0; }, ms + 150);
+      }); });
       return;
     }
     if (e.kind === "screen") {
       scr.textContent = rpIcon(e.label) + " " + e.label;
       sub.textContent = "заход " + e.visit + " · пробыл " + fmtDur(Number(e.dur_ms) || 0);
-      dot.style.opacity = 0; cap.style.opacity = 0;
-      rpSend({ rp: "go", screen: rpScreenKey(e.label) });
+      dot.style.opacity = 0; rpCap("");
+      if (W) W.rpScreen(e.label);
       var cur = null;
       Array.prototype.forEach.call(document.querySelectorAll(".rp-st"), function (el) {
         var on = +el.getAttribute("data-rpi") === RP.i;
@@ -795,14 +998,13 @@
       var st = document.getElementById("rp-step"); var n = rpScreens().filter(function (x) { return x.i <= RP.i; }).length;
       if (st) st.textContent = "экран " + n + " из " + rpScreens().length;
     } else {
-      var has = e.x != null && e.y != null;
-      dot.style.left = (has ? e.x * 100 : 50) + "%"; dot.style.top = (has ? e.y * 100 : 85) + "%";
-      dot.style.opacity = 1;
-      dot.animate([{ transform: "scale(.5)", boxShadow: "0 0 0 0 rgba(245,197,66,.7)" }, { transform: "scale(1)", boxShadow: "0 0 0 16px rgba(245,197,66,0)" }], { duration: 650, easing: "ease-out" });
-      cap.textContent = (e.kind === "trial" ? "🔥 " : "нажал «") + e.label + (e.kind === "trial" ? "" : "»") + (has ? "" : " · место не записано");
-      cap.style.opacity = 1;
+      var pos = W && e.kind === "tap" ? W.rpTap(e, 350 / RP.speed) : null;
+      var has = !!pos || (e.x != null && e.y != null);
+      if (!pos) pos = { x: e.x != null ? e.x : .5, y: e.y != null ? e.y : .85 };
+      rpDot(pos.x, pos.y);
+      rpCap(e.kind === "trial" ? "🔥 " + e.label : (e.label === "по экрану" ? "нажал по экрану" : "нажал «" + e.label + "»") + (has ? "" : " · место не записано"));
       // у старых заходов закрытие окна не записано — закрываем по нажатию «Закрыть»/«Начать»/«Позже»
-      if (/^(Закрыть|Начать|Позже|Понятно)$/.test(String(e.label).trim())) setTimeout(function () { rpSend({ rp: "close" }); }, 450 / RP.speed);
+      if (!W && /^(Закрыть|Начать|Позже|Понятно)$/.test(String(e.label).trim())) setTimeout(function () { rpSend({ rp: "close" }); }, 450 / RP.speed);
     }
   }
   function rpSend(msg) {
@@ -830,7 +1032,16 @@
         var k = b.getAttribute("data-rp");
         if (k === "play") {
           if (RP.playing) { RP.playing = false; clearTimeout(RP.t); }
-          else { if (RP.i >= RP.evs.length) RP.i = 0; RP.playing = true; rpStep(); }
+          else {
+            if (RP.i >= RP.evs.length) RP.i = 0;
+            RP.playing = true;
+            var fr = document.getElementById("rp-frame");
+            if (RP.i === 0 && fr) {
+              // с начала — чистое приложение, как у гостя при входе
+              fr.onload = function () { fr.onload = null; setTimeout(function () { if (RP.playing) rpStep(); }, 900); };
+              fr.src = "/?td=1&replay=1&t=" + Date.now();
+            } else rpStep();
+          }
           rpBtn(); return;
         }
         RP.speed = +k.slice(1);
@@ -853,7 +1064,9 @@
       if (e.kind === "screen") out += '<div class="gd-ev scr"><span class="gd-ev-t">' + t + '</span><b>' + esc(e.label) + '</b><span class="gd-ev-d">' + fmtDur(Number(e.dur_ms) || 0) + "</span></div>";
       else if (e.kind === "tap") out += '<div class="gd-ev"><span class="gd-ev-t">' + t + "</span>нажал «" + esc(e.label) + "»</div>";
       else if (e.kind === "explored") out += '<div class="gd-ev ok"><span class="gd-ev-t">' + t + "</span>✓ посмотрел раздел «" + esc(e.label) + "»</div>";
-      else if (e.kind === "close") out += '<div class="gd-ev"><span class="gd-ev-t">' + t + "</span>закрыл окно</div>";
+      else if (e.kind === "close") out += '<div class="gd-ev"><span class="gd-ev-t">' + t + "</span>" + (/Смахнул/.test(e.label) ? "смахнул окно вниз" : "закрыл окно") + "</div>";
+      else if (e.kind === "swipe") out += '<div class="gd-ev"><span class="gd-ev-t">' + t + "</span>" + esc(String(e.label).toLowerCase()) + "</div>";
+      else if (e.kind === "scroll") out += '<div class="gd-ev"><span class="gd-ev-t">' + t + "</span>листает экран</div>";
       else if (e.kind === "trial") out += '<div class="gd-ev hot"><span class="gd-ev-t">' + t + "</span>" + esc(e.label) + "</div>";
       else out += '<div class="gd-ev"><span class="gd-ev-t">' + t + "</span>" + esc(e.label) + "</div>";
     });
@@ -866,12 +1079,7 @@
       try {
         if (d.rp === "go") { closeSheets(); if (window.go) window.go(d.screen); }
         else if (d.rp === "close") closeSheets();
-        else if (d.rp === "sheet") {
-          var l = String(d.label || "");
-          if (/Тест-драйв|список разделов/.test(l)) G.openTracker(/при входе/.test(l));
-          else if (/Заявка отправлена/.test(l)) { closeSheets(); sheet('<div class="gd-badge">✅</div><div class="gd-title">Заявка отправлена</div><div class="gd-sub">Ваша заявка отправлена Николаю. В ближайшее время он свяжется с вами в Telegram.</div><button type="button" class="cta terra gd-cta">Понятно</button>'); }
-          else if (/пробный/.test(l)) G.showTrial("replay");
-        }
+        else if (d.rp === "sheet") G.rpSheet(d.label);
       } catch (e) {}
     });
   }
