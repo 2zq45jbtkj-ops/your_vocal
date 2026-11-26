@@ -2783,7 +2783,7 @@ function renderBook() {
       '</div>';
   }
   // 26.11 (Коля): экран записи — вариант «А», доработанный. Сверху крупная карточка ближайшего
-  // свободного времени + ещё два окна, ниже «Другой день». Выбор — только синей обводкой,
+  // свободного времени + ещё два окна, ниже «Другой день». Выбор — синей обводкой (у большой карточки — только галочкой, без рамки),
   // кнопка «Записаться» закреплена над Dock.
   var ring = "box-shadow:var(--inset-sm);outline:2px solid var(--blue);outline-offset:-2px;";
   var rel = function (day) {
@@ -2810,7 +2810,7 @@ function renderBook() {
     if (!state.bookDay || !days.some(function (d) { return d.day === state.bookDay; })) state.bookDay = days[0].day;
     var isOn = function (q) { return state.bookDay === q.day && state.bookStart === q.start; };
     var q0 = quick[0], on0 = isOn(q0);
-    html += '<div data-act="book-quick" data-day="' + q0.day + '" data-start="' + q0.start + '" style="cursor:pointer;background:var(--bg);border-radius:24px;padding:18px 18px 16px;' + (on0 ? ring : "box-shadow:var(--raised);") + '">' +
+    html += '<div data-act="book-quick" data-day="' + q0.day + '" data-start="' + q0.start + '" style="cursor:pointer;background:var(--bg);border-radius:24px;padding:18px 18px 16px;box-shadow:var(--raised);">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;"><div class="lesson-sub" style="font-size:13px;">Ближайшее свободное время</div>' +
         '<div style="font-size:12px;font-weight:600;color:var(--blue);background:color-mix(in oklch, var(--blue) 14%, transparent);border-radius:999px;padding:3px 10px;">' + rel(q0.day) + '</div></div>' +
       '<div style="display:flex;align-items:flex-end;justify-content:space-between;margin-top:6px;">' +
