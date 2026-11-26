@@ -143,7 +143,11 @@
       // сразу в цвет приложения, а iOS просим перерисовать верх (лёгкий сдвиг прокрутки).
       try {
         var appBg = getComputedStyle(document.body).backgroundColor;
-        root.style.background = appBg;
+        var st = "var(--sp-top,env(safe-area-inset-top,0px))";
+        root.style.background = "linear-gradient(180deg," + appBg + " 0," + appBg + " calc(" + st + " + 10px),rgba(0,0,0,0) calc(" + st + " + 90px))," +
+          "radial-gradient(90% 70% at 100% 100%, rgba(150,78,48,.85) 0%, rgba(150,78,48,0) 70%)," +
+          "radial-gradient(80% 60% at 0% 0%, rgba(92,118,142,.55) 0%, rgba(92,118,142,0) 70%)," +
+          "linear-gradient(135deg,#2c3d50 0%,#232d3b 50%,#3a2c2c 100%)";
         var m2 = document.querySelector('meta[name="theme-color"]'); if (m2 && !document.querySelector(".gd-ov")) m2.setAttribute("content", appBg);
         var y = window.scrollY; window.scrollTo(0, y + 1); requestAnimationFrame(function () { window.scrollTo(0, y); });
       } catch (e) {}
