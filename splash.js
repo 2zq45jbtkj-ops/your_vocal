@@ -21,7 +21,7 @@
   function tgColor(col) {
     try { var tg = getTg(); if (tg) { tg.setHeaderColor(col); tg.setBackgroundColor(col); } } catch (e) {}
     // «Пробный режим»: полоса под часами принадлежит родителю — красим и её
-    try { if (window.__peekTg) { var pw = window.parent.document.getElementById("peek-wrap"); if (pw) pw.style.background = col; } } catch (e) {}
+    try { if (window.__peekFrame) { var pw = window.parent.document.getElementById("peek-wrap"); if (pw) pw.style.background = col; } } catch (e) {}
   }
   tgColor(DARK);
   // app.js при запуске красит шапку Telegram в светлый — держим тёмный, пока видна заставка
