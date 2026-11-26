@@ -169,10 +169,11 @@ function applyDarkMode() {
   // Цвет верхнего края (часы на iPhone, значок «ДЗ» на экране «Домой») — под тему
   var tcm = document.querySelector('meta[name="theme-color"]');
   if (tcm && !window.__splashOn) tcm.setAttribute("content", state.darkMode ? "#232A2E" : "#F1EEE8");
-  if (tg) {
+  var htg = window.__peekTg || tg;   // в «Пробном режиме» верх красит родитель (настоящий Telegram)
+  if (htg) {
     try {
-      tg.setHeaderColor(state.darkMode ? "#232A2E" : "#F1EEE8");
-      tg.setBackgroundColor(state.darkMode ? "#232A2E" : "#F1EEE8");
+      htg.setHeaderColor(state.darkMode ? "#232A2E" : "#F1EEE8");
+      htg.setBackgroundColor(state.darkMode ? "#232A2E" : "#F1EEE8");
     } catch (e) {}
   }
 }
@@ -2655,10 +2656,90 @@ function submitAppBooking() {
     .then(function (r) { return r.json(); })
     .then(function (d) {
       state._bookSending = false;
-      if (d && d.ok) { state.bookDone = { kind: d.kind, day: state.bookDay, start: state.bookStart }; state.book = null; }
+      if (d && d.ok && d.kind === "trial") {
+        // 26.11 (Коля): после записи на пробный — сразу экран оплаты в приложении (не в боте)
+        if (d.peekPending) state.peekPending = d.peekPending;
+        state.bookStart = null; state.book = null;
+      }
+      else if (d && d.ok) { state.bookDone = { kind: d.kind, day: state.bookDay, start: state.bookStart }; state.book = null; }
       else { state.bookErr = (d && d.e) || "Не получилось, нажми ещё раз"; state.book = null; }
       render();
     }, function () { state._bookSending = false; state.bookErr = "Нет связи, нажми ещё раз"; render(); });
+}
+/* 26.11 (Коля): оплата пробного прямо в приложении — реквизиты, срок брони и чек.
+   Чек уходит ученику и Николаю в чат с ботом (vocal-bot /api/app_book, action receipt). */
+function bkWhen(p, b) {
+  var dd = bkDate(p.day);
+  return BK_WDF[dd.getDay()].replace(/у$/, "а") + ", " + dd.getDate() + " " + BK_MON[dd.getMonth()] + ", " + bkHM(bkLocal(p.start, (b && b.teacherOffset) || 5));
+}
+function bkPayHtml(p, b) {
+  var pay = p.pay || (b && b.pay) || {};
+  var when = '<div class="lesson-sub" style="margin-top:6px;font-size:14px;">' + bkWhen(p, b) + ' · 45 минут, онлайн</div>';
+  if (p.status === "receipt_sent") {
+    return '<div class="cab-card" style="text-align:center;padding:28px 18px;margin:0;">' +
+      '<div style="width:72px;height:72px;border-radius:50%;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;font-size:32px;color:oklch(72% 0.13 150);background:oklch(72% 0.13 150 / .14);">✓</div>' +
+      '<div style="font-size:20px;font-weight:700;">Чек у Николая</div>' + when +
+      '<div class="lesson-sub" style="margin-top:12px;line-height:1.45;">Он проверит перевод и напишет тебе в бот. Копия чека уже в чате с ботом.</div></div>' +
+      '<button class="cta terra" data-act="book-done">Готово</button>';
+  }
+  var dl = p.deadline ? new Date(p.deadline) : null;
+  var dlTxt = dl && !isNaN(dl) ? ("0" + dl.getHours()).slice(-2) + ":" + ("0" + dl.getMinutes()).slice(-2) : "";
+  var row = function (k, v, copy) {
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid color-mix(in oklch, var(--gray) 18%, transparent);">' +
+      '<div><div class="lesson-sub" style="font-size:12px;">' + k + '</div><div style="font-size:16px;font-weight:600;margin-top:2px;">' + esc(v || "") + '</div></div>' +
+      (copy ? '<button class="filter-btn" data-act="book-copy" data-v="' + esc(copy) + '" style="height:36px;padding:0 14px;flex:none;">Скопировать</button>' : '') + '</div>';
+  };
+  return '<div class="cab-card" style="margin:0;">' +
+      '<div style="display:flex;align-items:center;gap:10px;"><div style="width:34px;height:34px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;color:oklch(72% 0.13 150);background:oklch(72% 0.13 150 / .14);font-size:17px;">✓</div>' +
+      '<div><div style="font-size:16px;font-weight:700;">Время закреплено за тобой</div><div class="lesson-sub" style="font-size:13px;margin-top:2px;">' + bkWhen(p, b) + '</div></div></div></div>' +
+    '<div class="cab-card" style="margin:0;">' +
+      '<div class="lesson-sub">Оплата пробного урока</div>' +
+      '<div style="font-size:30px;font-weight:800;margin:4px 0 8px;color:var(--terra);">' + esc(pay.amount || "1 500 ₽") + '</div>' +
+      row("Перевод по номеру телефона", pay.phone, (pay.phone || "").replace(/\s/g, "")) +
+      row("Банк", pay.bank) + row("Получатель", pay.to) +
+      (pay.note ? '<div class="lesson-sub" style="margin-top:8px;line-height:1.45;">' + esc(pay.note) + '</div>' : '') +
+    '</div>' +
+    (dlTxt ? '<div class="lesson-sub" style="margin:0 2px;line-height:1.45;">⏰ Время держу за тобой 1 час: до ' + dlTxt + '. Не успеешь — время освободится, и запись можно будет сделать заново.</div>' : '') +
+    (state.bookErr ? '<div class="lesson-sub" style="color:oklch(65% 0.17 25);">' + esc(state.bookErr) + '</div>' : '') +
+    '<label class="cta terra" style="margin-top:4px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;' + (state._bookSending ? 'opacity:.6;pointer-events:none;' : '') + '">' +
+      (state._bookSending ? "Отправляю чек…" : "Прикрепить чек") +
+      '<input type="file" id="bk-receipt" accept="image/*,application/pdf" style="display:none;"></label>' +
+    '<div class="lesson-sub" style="text-align:center;margin-top:-4px;">Фото, скриншот или PDF чека. Копия придёт тебе в чат с ботом.</div>';
+}
+function bkReadReceipt(file) {
+  return new Promise(function (ok, bad) {
+    if (/pdf$/i.test(file.type || "") || /\.pdf$/i.test(file.name || "")) {
+      if (file.size > 3.5 * 1024 * 1024) { bad("Файл больше 3,5 МБ. Пришли скриншот чека."); return; }
+      var fr = new FileReader(); fr.onload = function () { ok({ data: fr.result, mime: "application/pdf" }); }; fr.onerror = function () { bad(""); }; fr.readAsDataURL(file); return;
+    }
+    var url = URL.createObjectURL(file), img = new Image();
+    img.onload = function () {
+      var k = Math.min(1, 1600 / Math.max(img.width, img.height)), c = document.createElement("canvas");
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      ok({ data: c.toDataURL("image/jpeg", 0.85), mime: "image/jpeg" });
+    };
+    img.onerror = function () { URL.revokeObjectURL(url); bad("Не получилось открыть файл. Пришли фото или скриншот чека."); };
+    img.src = url;
+  });
+}
+function bkWirePay(p) {
+  var inp = document.getElementById("bk-receipt");
+  if (!inp) return;
+  inp.addEventListener("change", function () {
+    var f = inp.files && inp.files[0];
+    if (!f || state._bookSending) return;
+    state._bookSending = true; state.bookErr = ""; render();
+    bkReadReceipt(f).then(function (r) {
+      return fetch(BOOK_API, { method: "POST", headers: { "content-type": "application/json", "x-tg-init-data": (tg && tg.initData) || "" },
+        body: JSON.stringify({ action: "receipt", id: p.id, file: r.data, mime: r.mime }) }).then(function (x) { return x.json(); });
+    }).then(function (d) {
+      state._bookSending = false;
+      if (d && d.ok) { if (state.peekPending) state.peekPending.status = "receipt_sent"; state.book = null; }
+      else state.bookErr = (d && d.e) || "Не получилось, нажми ещё раз";
+      render();
+    }, function (e) { state._bookSending = false; state.bookErr = (typeof e === "string" && e) || "Нет связи, нажми ещё раз"; render(); });
+  });
 }
 function renderBook() {
   var top = function (title, sub) {
@@ -2668,7 +2749,7 @@ function renderBook() {
   if (state.bookDone) {
     var dn = state.bookDone, dd = bkDate(dn.day), t = bkHM(bkLocal(dn.start, 5));
     var msg = dn.kind === "trial"
-      ? "Время держу за тобой час. Реквизиты для оплаты и куда прислать чек — уже в чате с ботом."
+      ? "Время держу за тобой час. Оплата и чек — здесь, в приложении."
       : dn.kind === "move" ? "Урок перенесён. Напоминание придёт в бот." : "Урок записан. Напоминание придёт в бот.";
     app.innerHTML = top(dn.kind === "trial" ? "Пробный урок" : "Запись", "") + wrap(
       '<div class="cab-card" style="text-align:center;padding:28px 18px;margin:0;">' +
@@ -2684,6 +2765,8 @@ function renderBook() {
   if (!b) { app.innerHTML = top("Запись", "") + wrap('<div class="courses-empty">Смотрю свободное время…</div>'); wireActs(); return; }
   if (!b.ok) { app.innerHTML = top("Запись", "") + wrap('<div class="courses-empty">' + esc(b.e || "Не получилось загрузить время. Закрой экран и открой ещё раз.") + '</div>'); wireActs(); return; }
   var title = b.mode === "trial" ? "Пробный урок" : "Запись на урок";
+  var pend = b.mode === "trial" ? (b.pending || state.peekPending) : null;
+  if (pend) { app.innerHTML = top("Пробный урок", pend.status === "receipt_sent" ? "Чек на проверке" : "Осталось оплатить") + wrap(bkPayHtml(pend, b)); wireActs(); bkWirePay(pend); return; }
   if (b.mode === "nosub") {
     app.innerHTML = top(title, "") + wrap('<div class="cab-card" style="margin:0;"><div style="font-size:17px;font-weight:700;">Уроки в абонементе закончились</div><div class="lesson-sub" style="margin-top:6px;">Пополни уроки — и сразу выберешь время.</div></div>' +
       '<button class="cta terra" data-act="cab-renew">Пополнить уроки</button>');
@@ -3088,7 +3171,8 @@ function openPeek() {
   // 26.11 (Коля): верх как в основном приложении — без сплошной полосы под статус-баром:
   // окно на весь экран, а отступы сверху передаём внутрь (там их ставит index.html).
   var sat = peekInset("--tg-safe-area-inset-top"), csat = peekInset("--tg-content-safe-area-inset-top");
-  w.innerHTML = '<iframe src="/?td=1&peek=1&sat=' + sat + '&csat=' + csat + '&v=' + Date.now() + '" style="position:absolute;inset:0;width:100%;height:100%;border:0;background:var(--bg);"></iframe>' +
+  var sab = peekInset("--tg-safe-area-inset-bottom"), csab = peekInset("--tg-content-safe-area-inset-bottom");
+  w.innerHTML = '<iframe src="/?td=1&peek=1&sat=' + sat + '&csat=' + csat + '&sab=' + sab + '&csab=' + csab + '&v=' + Date.now() + '" style="position:absolute;inset:0;width:100%;height:100%;border:0;background:var(--bg);"></iframe>' +
     '<div class="admin-fab" style="z-index:9999;">' +
       '<button type="button" class="admin-fab-btn" aria-label="Пробный режим">' + PEEK_FAB_ICO + '</button>' +
       '<div class="admin-fab-pop" role="dialog" aria-label="Пробный режим">' +
@@ -3101,7 +3185,7 @@ function openPeek() {
   fab.querySelector(".admin-fab-btn").addEventListener("click", function (e) { e.stopPropagation(); fab.classList.toggle("open"); });
   fab.querySelector(".admin-fab-pop").addEventListener("click", function (e) { e.stopPropagation(); });
   w.addEventListener("click", function () { fab.classList.remove("open"); });
-  document.getElementById("peek-x").onclick = function () { w.remove(); };
+  document.getElementById("peek-x").onclick = function () { w.remove(); applyDarkMode(); };
 }
 
 /* Текстовые экраны раздела «Ещё»: публичная оферта, политика конфиденциальности
@@ -6505,7 +6589,12 @@ var ACTS = {
   "book-slot": function (el) { state.bookStart = +el.getAttribute("data-start"); state.bookErr = ""; render(); },
   "book-move": function () { state.bookMove = !state.bookMove; state.bookStart = null; render(); },
   "book-go": function () { submitAppBooking(); },
-  "book-done": function () { state.bookDone = null; go(window.GUEST_ON ? "courses" : "profile"); },
+  "book-copy": function (el) {
+    var v = el.getAttribute("data-v") || "";
+    try { navigator.clipboard.writeText(v); } catch (e) {}
+    el.textContent = "Скопировано ✓"; setTimeout(function () { el.textContent = "Скопировать"; }, 1600);
+  },
+  "book-done": function () { state.bookDone = null; state.peekPending = null; go(window.GUEST_ON ? "courses" : "profile"); },
   "go-courses": function () { go("courses"); },
   "go-questions": function () { go("questions"); },
   "go-more": function () { go("more"); },

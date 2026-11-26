@@ -11,7 +11,7 @@
   var x = c.getContext("2d", { willReadFrequently: true });
   var pill = root.querySelector(".sp-pill"), bar = root.querySelector(".sp-bar"), fill = bar.querySelector("i");
   var SPLASH_TOP = "#2f3f52";
-  function getTg() { return window.Telegram && window.Telegram.WebApp; }
+  function getTg() { return window.__peekTg || (window.Telegram && window.Telegram.WebApp); }
   var meta = document.querySelector('meta[name="theme-color"]');
   // Верх экрана (часы, размытие iOS) — в цвет заставки, без светлой плашки
   document.documentElement.style.backgroundColor = SPLASH_TOP;

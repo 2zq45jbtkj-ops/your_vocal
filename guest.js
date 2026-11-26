@@ -193,7 +193,15 @@
         // запись на пробный — настоящее свободное время Николая (без этого гость получал отказ)
         if (ap === "/api/bot" && abs.searchParams.get("path") === "app_book") {
           if (!G.peek) return realFetch(input, init);
-          if (method !== "GET") return resp({ ok: false, e: "Это пробный режим: запись не отправляется. Новый клиент на этом шаге переходит к оплате в боте." });
+          // 26.11 (Коля): оплата пробного — в приложении. Здесь показываем тот же экран оплаты,
+          // но ничего не записываем и чек не отправляем.
+          if (method !== "GET") {
+            var pb = {}; try { pb = JSON.parse((init && init.body) || "{}"); } catch (e) {}
+            if (pb.action === "receipt") return resp({ ok: false, e: "Это пробный режим: чек не отправляется. Новый клиент на этом шаге прикрепляет чек, и он уходит тебе в бот." });
+            return resp({ ok: true, kind: "trial", peekPending: { id: 0, day: pb.day, start: pb.start, status: "pending_payment",
+              deadline: new Date(Date.now() + 3600e3).toISOString(),
+              pay: { amount: "1 500 ₽", phone: "+7 904 474 87 13", bank: "Сбербанк", to: "Николай С.", note: "Эту сумму я вычту из абонемента, если оформить его в течение 3 дней после урока." } } });
+          }
           var P = window.parent, ph = { "x-site-auth": (P.state && P.state._siteAuth) || "", "x-tg-init-data": (P.Telegram && P.Telegram.WebApp && P.Telegram.WebApp.initData) || "" };
           return realFetch("/api/bot?path=app_book&peek=1", { headers: ph });
         }
