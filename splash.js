@@ -18,7 +18,11 @@
   if (meta) meta.setAttribute("content", SPLASH_TOP);
   var DARK = SPLASH_TOP, animDone = false, gone = false, t0 = Date.now();
 
-  function tgColor(col) { try { var tg = getTg(); if (tg) { tg.setHeaderColor(col); tg.setBackgroundColor(col); } } catch (e) {} }
+  function tgColor(col) {
+    try { var tg = getTg(); if (tg) { tg.setHeaderColor(col); tg.setBackgroundColor(col); } } catch (e) {}
+    // «Пробный режим»: полоса под часами принадлежит родителю — красим и её
+    try { if (window.__peekTg) { var pw = window.parent.document.getElementById("peek-wrap"); if (pw) pw.style.background = col; } } catch (e) {}
+  }
   tgColor(DARK);
   // app.js при запуске красит шапку Telegram в светлый — держим тёмный, пока видна заставка
   var keep = setInterval(function () { if (gone) clearInterval(keep); else tgColor(DARK); }, 250);

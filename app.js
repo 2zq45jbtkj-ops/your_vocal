@@ -170,6 +170,9 @@ function applyDarkMode() {
   var tcm = document.querySelector('meta[name="theme-color"]');
   if (tcm && !window.__splashOn) tcm.setAttribute("content", state.darkMode ? "#232A2E" : "#F1EEE8");
   var htg = window.__peekTg || tg;   // в «Пробном режиме» верх красит родитель (настоящий Telegram)
+  if (window.__peekTg && !window.__splashOn) {
+    try { var pw = window.parent.document.getElementById("peek-wrap"); if (pw) pw.style.background = state.darkMode ? "#232A2E" : "#F1EEE8"; } catch (e) {}
+  }
   if (htg) {
     try {
       htg.setHeaderColor(state.darkMode ? "#232A2E" : "#F1EEE8");
