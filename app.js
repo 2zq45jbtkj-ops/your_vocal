@@ -917,6 +917,46 @@ function roadmapCollapsed() {
   try { return localStorage.getItem("vocalAppRoadmapCollapsed") === "1"; } catch (e) { return false; }
 }
 
+/* 27.11 (Коля): шапка «Уроков» — приветствие по имени и куда идти дальше
+   (вместо «Курс / Курс вокала / 30 уроков»). Строка-подсказка нажимается и открывает урок. */
+function coursesGreetHtml() {
+  var nm = String(state.firstName || "").trim();
+  if (/^гость$/i.test(nm)) nm = "";
+  var title = nm ? "Привет, " + esc(nm) + " 👋" : "Привет 👋";
+  var next = 0, anyDone = false, allUnlockedDone = true;
+  for (var n = 1; n <= TOTAL_LESSONS; n++) {
+    if (!lessonUnlocked(n)) continue;
+    var st = lessonStatus(n);
+    if (st === "completed") { anyDone = true; continue; }
+    allUnlockedDone = false;
+    if (!next) next = n;
+  }
+  var line, act = "";
+  if (next) {
+    var st2 = lessonStatus(next), name = "«" + esc(lessonShortName(next)) + "»";
+    if (st2 === "in-progress") line = "Продолжим урок " + name;
+    else if (!anyDone) line = "Начнём с урока " + name;
+    else line = "Продолжим с урока " + name;
+    var isOpen = LESSON && next === (LESSON.id || 1);
+    act = isOpen ? ' data-act="open-lesson"' : ' data-act="open-lesson-num" data-lesson-num="' + next + '"';
+  } else if (anyDone && allUnlockedDone) {
+    var lastOpen = 0; for (var k = 1; k <= TOTAL_LESSONS; k++) if (lessonUnlocked(k)) lastOpen = k;
+    line = lastOpen >= TOTAL_LESSONS ? "Все уроки пройдены 🎉" : "Новый урок откроется после занятия";
+  } else {
+    line = "Уроки откроются после первого занятия";
+  }
+  // Гость (тест-драйв): свой текст — куда нажать первым делом
+  if (window.GUEST_ON && next) {
+    title = "Загляни в уроки";
+    line = "Начни с урока «" + esc(lessonShortName(next)) + "» — он открыт";
+  }
+  var arrow = act ? '<svg class="cg-arr" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>' : "";
+  return '<div class="courses-title">' + title + "</div>" +
+    (act ? '<button type="button" class="cg-next"' + act + ">" : '<div class="cg-next cg-static">') +
+      "<span>" + line + "</span>" + arrow +
+    (act ? "</button>" : "</div>");
+}
+
 function renderCourses() {
   loadStudentPublicData(); // подтягивает unlockedLessons/progressByLesson для разблокировки
   loadLessonPlans();       // уроки 2+ живут в планах, нужны не только на админ-экранах
@@ -937,9 +977,7 @@ function renderCourses() {
 
   app.innerHTML =
     '<div class="courses-head">' +
-      '<div class="section-label" style="margin-top:0;">Курс</div>' +
-      '<div class="courses-title">Курс вокала</div>' +
-      '<div class="courses-sub">30 уроков · ' + esc(state.lastName) + " " + esc(state.firstName) + "</div>" +
+      coursesGreetHtml() +
       '<button class="fav-warmups-btn" data-act="go-favorites">' +
         SVG.star(true) +
         '<span>Избранные распевки</span>' +
