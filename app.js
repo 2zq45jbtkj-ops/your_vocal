@@ -3201,6 +3201,14 @@ function peekTop(col) {
 }
 function openPeek() {
   if (document.getElementById("peek-wrap")) return;
+  // 26.11 (Коля): вне Telegram (значок «ДЗ» на экране «Домой») — пробный режим открываем
+  // на весь экран, а не в окне-рамке: иначе iOS рисует под часами сплошную полосу
+  // вместо размытия, как в основном приложении. Выход — кнопка «Т» → возврат сюда.
+  if (BROWSER_MODE) {
+    try { sessionStorage.setItem("peekBack", location.pathname + location.search); localStorage.setItem("peekBack", location.pathname + location.search); } catch (e) {}
+    location.href = "/?td=1&peek=1&ptop=1&v=" + Date.now();
+    return;
+  }
   var w = document.createElement("div");
   w.id = "peek-wrap";
   // 26.11 (Коля): без оранжевой полосы — значок «Т», как у режима админа (там глазик)

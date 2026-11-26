@@ -68,7 +68,9 @@
   // 26.11: ?td=1&peek=1 — «Пробный режим» у Николая (Ещё → Пробный режим): приложение глазами
   // нового клиента, с окнами тест-драйва как в первый раз, но без записи в «Путь гостя»
   // и без отправки записи на урок.
-  try { G.peek = new URLSearchParams(location.search).get("peek") === "1" && window.parent !== window; } catch (e) { G.peek = false; }
+  // ptop=1 — тот же режим, но на весь экран без окна-рамки (значок «ДЗ» на экране «Домой»):
+  // так iOS размывает содержимое под часами, как в основном приложении, без сплошной полосы.
+  try { var pq = new URLSearchParams(location.search); G.peekTop = pq.get("peek") === "1" && pq.get("ptop") === "1"; G.peek = pq.get("peek") === "1" && (window.parent !== window || G.peekTop); } catch (e) { G.peek = false; G.peekTop = false; }
   G.quiet = G.replay || G.peek;
 
   var realFetch = window.fetch.bind(window);
@@ -121,6 +123,7 @@
     G.on = true; window.GUEST_ON = true;
     document.documentElement.classList.add("guest-mode");
     if (G.peek) document.documentElement.classList.add("peek-mode");
+    if (G.peekTop) peekTopFab();
     var u = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
     // чистое состояние гостя, только в памяти
     state.isAdmin = false; state._siteAuth = ""; state.adminMode = false;
@@ -508,6 +511,26 @@
         var pw = d.getElementById("peek-wrap"); if (pw) pw.style.background = col;
         if (d !== document) { d.documentElement.style.backgroundColor = col; if (d.body) d.body.style.backgroundColor = col; }
       } catch (e) {}
+    });
+  }
+  // Кнопка «Т» (выйти из пробного режима) — когда пробный режим открыт на весь экран
+  function peekTopFab() {
+    if (document.getElementById("peek-top-fab")) return;
+    var ico = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 5h14M12 5v15" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>';
+    var f = document.createElement("div");
+    f.id = "peek-top-fab"; f.className = "admin-fab"; f.style.zIndex = "9999";
+    f.innerHTML = '<button type="button" class="admin-fab-btn" aria-label="Пробный режим">' + ico + '</button>' +
+      '<div class="admin-fab-pop" role="dialog" aria-label="Пробный режим">' +
+      '<span>Пробный режим:<b>так видит новый клиент</b></span>' +
+      '<button type="button" data-peek-exit>Выйти из пробного режима</button></div>';
+    document.body.appendChild(f);
+    f.querySelector(".admin-fab-btn").addEventListener("click", function (e) { e.stopPropagation(); f.classList.toggle("open"); });
+    f.querySelector(".admin-fab-pop").addEventListener("click", function (e) { e.stopPropagation(); });
+    document.addEventListener("click", function () { f.classList.remove("open"); });
+    f.querySelector("[data-peek-exit]").addEventListener("click", function () {
+      var back = "/";
+      try { back = sessionStorage.getItem("peekBack") || localStorage.getItem("peekBack") || "/"; } catch (e) {}
+      location.replace(back);
     });
   }
   G.toast = function (text) {
