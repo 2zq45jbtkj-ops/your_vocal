@@ -922,7 +922,7 @@ function roadmapCollapsed() {
 function coursesGreetHtml() {
   var nm = String(state.firstName || "").trim();
   if (/^гость$/i.test(nm)) nm = "";
-  var title = nm ? "Привет, " + esc(nm) + " 👋" : "Привет 👋";
+  var title = nm ? "Привет, " + esc(nm) + "&nbsp;👋" : "Привет&nbsp;👋";
   var next = 0, anyDone = false, allUnlockedDone = true;
   for (var n = 1; n <= TOTAL_LESSONS; n++) {
     if (!lessonUnlocked(n)) continue;
