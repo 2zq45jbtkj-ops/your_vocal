@@ -2633,7 +2633,7 @@ function bkLocal(m, teacherOff) { return m + Math.round((bkOffsetH() - (teacherO
 function bkHM(m) { m = ((m % 1440) + 1440) % 1440; return ("0" + Math.floor(m / 60)).slice(-2) + ":" + ("0" + (m % 60)).slice(-2); }
 function bkDate(iso) { var p = iso.split("-"); return new Date(+p[0], +p[1] - 1, +p[2]); }
 function openBooking() {
-  state.book = null; state.bookDay = null; state.bookStart = null; state.bookErr = ""; state.bookMove = false; state.bookDone = null;
+  state.book = null; state.bookDay = null; state.bookStart = null; state.bookErr = ""; state.bookMove = false; state.bookDone = null; state._bookPicked = false;
   go("book");
 }
 window.openBooking = openBooking;
@@ -2745,7 +2745,7 @@ function renderBook() {
   var top = function (title, sub) {
     return '<div class="top pb8">' + backBtn("back") + '<div><div class="top-title lg">' + title + '</div>' + (sub ? '<div class="top-sub">' + sub + '</div>' : '') + '</div></div>';
   };
-  var wrap = function (html) { return '<div style="padding:8px 18px 140px;display:flex;flex-direction:column;gap:12px;">' + html + '</div>'; };
+  var wrap = function (html) { return '<div style="padding:8px 18px 210px;display:flex;flex-direction:column;gap:12px;">' + html + '</div>'; };
   if (state.bookDone) {
     var dn = state.bookDone, dd = bkDate(dn.day), t = bkHM(bkLocal(dn.start, 5));
     var msg = dn.kind === "trial"
@@ -2782,14 +2782,21 @@ function renderBook() {
         : '<div class="lesson-sub">Перенести уже нельзя: до урока меньше 24 часов.</div>') +
       '</div>';
   }
-  html += '<div class="lesson-sub" style="margin:4px 2px 0;">' + (b.mode === "trial" ? "45 минут, онлайн. " : "") + 'Время по твоему телефону. Записаться можно минимум за 24 часа.</div>';
+  // 26.11 (Коля): экран записи — вариант «А», доработанный. Сверху крупная карточка ближайшего
+  // свободного времени + ещё два окна, ниже «Другой день». Выбор — только синей обводкой,
+  // кнопка «Записаться» закреплена над Dock.
+  var ring = "box-shadow:var(--inset-sm);outline:2px solid var(--blue);outline-offset:-2px;";
+  var rel = function (day) {
+    var t = new Date(); t.setHours(0, 0, 0, 0);
+    var n = Math.round((bkDate(day) - t) / 864e5);
+    return n === 0 ? "сегодня" : n === 1 ? "завтра" : n === 2 ? "послезавтра" : "через " + n + " " + plural(n, "день", "дня", "дней");
+  };
+  var dayFull = function (day) { var x = bkDate(day); var w = BK_WDF[x.getDay()].replace(/у$/, "а"); return w.charAt(0).toUpperCase() + w.slice(1) + ", " + x.getDate() + " " + BK_MON[x.getMonth()]; };
   var days = (b.days || []).filter(function (d) { return d.starts.length; });
   if (!days.length) {
     html += '<div class="courses-empty">Свободного времени пока нет. Напиши Николаю — подберём вместе.</div>';
   } else {
-    if (!state.bookDay || !days.some(function (d) { return d.day === state.bookDay; })) state.bookDay = days[0].day;
-    // 26.11 (Коля): «Ближайшие окна» — 2–3 самых ранних свободных времени, запись в одно касание
-    // (не больше двух в один день и не впритык друг к другу).
+    // ближайшие окна: не больше двух в один день и не впритык друг к другу
     var quick = [];
     days.forEach(function (d) {
       if (quick.length >= 3) return;
@@ -2799,39 +2806,52 @@ function renderBook() {
         quick.push({ day: d.day, start: m }); n++; last = m;
       });
     });
-    if (quick.length) {
-      html += '<div class="lesson-sub" style="margin:2px 2px 0;text-transform:uppercase;letter-spacing:.05em;">Ближайшие окна</div>' +
-        '<div style="display:grid;grid-template-columns:repeat(' + quick.length + ',1fr);gap:9px;">' + quick.map(function (q) {
-          var qd = bkDate(q.day), on = state.bookDay === q.day && state.bookStart === q.start;
-          return '<button data-act="book-quick" data-day="' + q.day + '" data-start="' + q.start + '" style="border:none;border-radius:16px;padding:10px 4px;font:inherit;cursor:pointer;' +
-            (on ? 'background:var(--blue);color:#fff;' : 'background:var(--bg);color:var(--ink);box-shadow:var(--raised-sm);') + '">' +
-            '<div style="font-size:11.5px;' + (on ? '' : 'color:var(--gray);') + '">' + BK_WD[qd.getDay()] + ", " + qd.getDate() + " " + BK_MON[qd.getMonth()].slice(0, 3) + '</div>' +
-            '<div style="font-size:17px;font-weight:700;margin-top:2px;">' + bkHM(bkLocal(q.start, b.teacherOffset)) + '</div></button>';
-        }).join("") + '</div>' +
-        '<div class="lesson-sub" style="margin:6px 2px 0;text-transform:uppercase;letter-spacing:.05em;">Или выбери сам</div>';
+    if (state.bookStart == null && !state._bookPicked) { state.bookDay = quick[0].day; state.bookStart = quick[0].start; }
+    if (!state.bookDay || !days.some(function (d) { return d.day === state.bookDay; })) state.bookDay = days[0].day;
+    var isOn = function (q) { return state.bookDay === q.day && state.bookStart === q.start; };
+    var q0 = quick[0], on0 = isOn(q0);
+    html += '<div data-act="book-quick" data-day="' + q0.day + '" data-start="' + q0.start + '" style="cursor:pointer;background:var(--bg);border-radius:24px;padding:18px 18px 16px;' + (on0 ? ring : "box-shadow:var(--raised);") + '">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;"><div class="lesson-sub" style="font-size:13px;">Ближайшее свободное время</div>' +
+        '<div style="font-size:12px;font-weight:600;color:var(--blue);background:color-mix(in oklch, var(--blue) 14%, transparent);border-radius:999px;padding:3px 10px;">' + rel(q0.day) + '</div></div>' +
+      '<div style="display:flex;align-items:flex-end;justify-content:space-between;margin-top:6px;">' +
+        '<div><div style="font:800 36px Manrope,Inter,sans-serif;line-height:1;letter-spacing:-.01em;">' + bkHM(bkLocal(q0.start, b.teacherOffset)) + '</div>' +
+        '<div style="margin-top:7px;font-size:15px;font-weight:600;">' + dayFull(q0.day) + '</div></div>' +
+        '<div style="width:30px;height:30px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;' + (on0 ? 'background:var(--blue);color:#fff;' : 'box-shadow:var(--inset-sm);color:transparent;') + 'font-size:15px;font-weight:800;">✓</div></div>';
+    if (quick.length > 1) {
+      html += '<div style="display:grid;grid-template-columns:repeat(' + (quick.length - 1) + ',1fr);gap:10px;margin-top:16px;">' + quick.slice(1).map(function (q) {
+        var qd = bkDate(q.day), on = isOn(q);
+        return '<button data-act="book-quick" data-day="' + q.day + '" data-start="' + q.start + '" style="border:none;border-radius:16px;padding:9px 4px;font:inherit;cursor:pointer;background:var(--bg);color:var(--ink);' + (on ? ring : 'box-shadow:var(--raised-sm);') + '">' +
+          '<div style="font-size:12px;color:' + (on ? 'var(--blue)' : 'var(--gray)') + ';">' + BK_WD[qd.getDay()] + ", " + qd.getDate() + " " + BK_MON[qd.getMonth()].slice(0, 3) + '</div>' +
+          '<div style="font:700 18px Manrope,Inter,sans-serif;margin-top:2px;' + (on ? 'color:var(--blue);' : '') + '">' + bkHM(bkLocal(q.start, b.teacherOffset)) + '</div></button>';
+      }).join("") + '</div>';
     }
-    html += '<div style="display:flex;gap:8px;overflow-x:auto;padding:4px 2px 8px;margin:0 -18px;padding-left:18px;padding-right:18px;scrollbar-width:none;">' +
+    html += '</div>';
+    // «Другой день»
+    var anyBest = days.some(function (d) { return (d.best || []).length; });
+    html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin:10px 2px 0;"><div class="lesson-sub" style="text-transform:uppercase;letter-spacing:.06em;font-size:12px;font-weight:600;">Другой день</div>' +
+      (anyBest ? '<div class="lesson-sub" style="font-size:11.5px;"><span style="color:oklch(78% 0.12 80);">★</span> свободное утро</div>' : '') + '</div>';
+    html += '<div style="display:flex;gap:9px;overflow-x:auto;padding:6px 18px 10px;margin:0 -18px;scrollbar-width:none;">' +
       days.map(function (d) {
-        var dt = bkDate(d.day), on = d.day === state.bookDay;
-        return '<button data-act="book-day" data-day="' + d.day + '" style="flex:none;width:56px;border:none;border-radius:16px;padding:8px 0;font:inherit;cursor:pointer;' +
-          (on ? 'background:var(--blue);color:#fff;' : 'background:var(--bg);color:var(--gray);box-shadow:var(--raised-sm);') + '">' +
-          '<div style="font-size:11px;">' + BK_WD[dt.getDay()] + '</div><div style="font-size:18px;font-weight:700;' + (on ? '' : 'color:var(--ink);') + '">' + dt.getDate() + '</div>' +
-          '<div style="font-size:9.5px;opacity:.8;">' + ((d.best || []).length ? "★ утро" : BK_MON[dt.getMonth()].slice(0, 3)) + '</div></button>';
+        var dt = bkDate(d.day), on = d.day === state.bookDay, best = (d.best || []).length;
+        return '<button data-act="book-day" data-day="' + d.day + '" style="flex:none;width:58px;border:none;border-radius:16px;padding:8px 0 7px;font:inherit;cursor:pointer;background:var(--bg);' + (on ? ring : 'box-shadow:var(--raised-sm);') + '">' +
+          '<div style="font-size:11.5px;color:' + (on ? 'var(--blue)' : 'var(--gray)') + ';">' + BK_WD[dt.getDay()] + '</div>' +
+          '<div style="font:800 19px Manrope,Inter,sans-serif;margin-top:1px;color:' + (on ? 'var(--blue)' : 'var(--ink)') + ';">' + dt.getDate() + '</div>' +
+          '<div style="font-size:10px;height:13px;line-height:13px;color:' + (best ? 'oklch(78% 0.12 80)' : 'var(--gray)') + ';">' + (best ? "★" : BK_MON[dt.getMonth()].slice(0, 3)) + '</div></button>';
       }).join("") + '</div>';
     var cur = days.filter(function (d) { return d.day === state.bookDay; })[0];
-    var cd = bkDate(cur.day);
-    html += '<div class="lesson-sub" style="margin:0 2px;text-transform:uppercase;letter-spacing:.05em;">' + BK_WDF[cd.getDay()].replace(/у$/, "а") + ", " + cd.getDate() + " " + BK_MON[cd.getMonth()] + '</div>';
-    html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:9px;">' + cur.starts.map(function (m) {
+    html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">' + cur.starts.map(function (m) {
       var on = state.bookStart === m, best = (cur.best || []).indexOf(m) !== -1;
-      return '<button data-act="book-slot" data-start="' + m + '" style="border:none;border-radius:13px;padding:11px 0;font:600 14.5px inherit;font-family:inherit;cursor:pointer;' +
-        (on ? 'background:var(--blue);color:#fff;' : 'background:var(--bg);color:var(--ink);box-shadow:var(--raised-sm);' + (best ? 'outline:1.5px solid oklch(78% 0.12 80 / .8);' : '')) + '">' + bkHM(bkLocal(m, b.teacherOffset)) + '</button>';
+      return '<button data-act="book-slot" data-start="' + m + '" style="border:none;border-radius:14px;padding:12px 0;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;background:var(--bg);color:' + (on ? 'var(--blue)' : 'var(--ink)') + ';' + (on ? ring : 'box-shadow:var(--raised-sm);') + '">' +
+        (best ? '<span style="color:oklch(78% 0.12 80);font-size:10px;vertical-align:2px;margin-right:3px;">★</span>' : '') + bkHM(bkLocal(m, b.teacherOffset)) + '</button>';
     }).join("") + '</div>';
+    html += '<div class="lesson-sub" style="font-size:12.5px;margin:4px 2px 0;line-height:1.45;">Записаться можно минимум за 24 часа' + (b.mode === "trial" ? ". После записи время держится за тобой 1 час — оплата сразу здесь." : ".") + '</div>';
   }
   if (state.bookErr) html += '<div class="lesson-sub" style="color:oklch(65% 0.17 25);">' + esc(state.bookErr) + '</div>';
   var label = state._bookSending ? "Записываю…" : state.bookStart == null ? "Выбери время"
-    : (state.bookMove ? "Перенести на " : "Записаться на ") + BK_WDF[bkDate(state.bookDay).getDay()] + ", " + bkHM(bkLocal(state.bookStart, b.teacherOffset));
-  html += '<button class="cta terra" data-act="book-go"' + (state.bookStart == null || state._bookSending ? " disabled" : "") + ' style="margin-top:6px;">' + label + '</button>';
-  app.innerHTML = top(title, b.mode === "trial" ? "Выбери день и время" : (b.left ? "Осталось " + b.left + " " + plural(b.left, "урок", "урока", "уроков") : "")) + wrap(html);
+    : (state.bookMove ? "Перенести · " : "Записаться · ") + BK_WD[bkDate(state.bookDay).getDay()] + ", " + bkDate(state.bookDay).getDate() + " " + BK_MON[bkDate(state.bookDay).getMonth()] + ", " + bkHM(bkLocal(state.bookStart, b.teacherOffset));
+  html += '<button class="cta terra qr-cta" data-act="book-go"' + (state.bookStart == null || state._bookSending ? " disabled" : "") + ' style="position:fixed;z-index:50;">' + label + '</button>';
+  var sub = (b.mode === "trial" ? "45 минут · онлайн · " : (b.left ? "Осталось " + b.left + " " + plural(b.left, "урок", "урока", "уроков") + " · " : "")) + "время по твоему телефону";
+  app.innerHTML = top(title, sub) + wrap(html);
   wireActs();
 }
 
@@ -6584,9 +6604,9 @@ var ACTS = {
   "cab-wheel": function () { state._wheelZone = null; go("cab-wheel"); },
   "cab-renew": function () { openRenew(); },
   "cab-book": function () { openBooking(); },
-  "book-day": function (el) { state.bookDay = el.getAttribute("data-day"); state.bookStart = null; state.bookErr = ""; render(); },
-  "book-quick": function (el) { state.bookDay = el.getAttribute("data-day"); state.bookStart = +el.getAttribute("data-start"); state.bookErr = ""; render(); },
-  "book-slot": function (el) { state.bookStart = +el.getAttribute("data-start"); state.bookErr = ""; render(); },
+  "book-day": function (el) { state._bookPicked = true; state.bookDay = el.getAttribute("data-day"); state.bookStart = null; state.bookErr = ""; render(); },
+  "book-quick": function (el) { state._bookPicked = true; state.bookDay = el.getAttribute("data-day"); state.bookStart = +el.getAttribute("data-start"); state.bookErr = ""; render(); },
+  "book-slot": function (el) { state._bookPicked = true; state.bookStart = +el.getAttribute("data-start"); state.bookErr = ""; render(); },
   "book-move": function () { state.bookMove = !state.bookMove; state.bookStart = null; render(); },
   "book-go": function () { submitAppBooking(); },
   "book-copy": function (el) {
