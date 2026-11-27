@@ -511,6 +511,7 @@ function backTarget() {
     case "admin-karaoke-songs": return (window.KAR && KAR.adm && KAR.adm.fromKar) ? "karaoke" : "admin-karaoke";
     case "admin-karaoke-edit": return "admin-karaoke-songs";
     case "lecture": case "warmups": case "song": case "quiz-result": return "lesson-home";
+    case "meter": return "warmups";
     case "step-done": case "lesson-master": return state._preview ? "admin-screens" : "lesson-home";
     case "feedback": return "song";
     case "quiz": return null; // отдельная логика
@@ -521,6 +522,7 @@ function backTarget() {
 function handleBack() {
   // открыт слой «Газообмен» — «Назад» закрывает только его
   if (window.BreathAnim && BreathAnim.closeOverlay()) return;
+  if (window.EffortAnim && EffortAnim.closeOverlay && EffortAnim.closeOverlay()) return;
   if (state.screen === "quiz") {
     if (state.quizIndex > 0) { state.quizIndex--; render(); }
     else go("lesson-home");
@@ -1546,6 +1548,7 @@ function planToLesson(plan, n) {
     stepSubtitles: plan.stepSubtitles || { lecture: "", quiz: "", warmups: "", song: "" },
     lecture: plan.lecture,
     quiz: plan.quiz,
+    quizNew: plan.quizNew,
     warmups: plan.warmups,
     song: plan.song || {}
   };
@@ -1571,7 +1574,7 @@ function switchToLesson(n, plan) {
   state.songDone = !!pr.song;
   state.quizIndex = 0;
   state.quizScore = 0;
-  state.quizAnswers = new Array((LESSON.quiz && LESSON.quiz.questions || []).length).fill(null);
+  state.quizAnswers = new Array(quizQuestions().length).fill(null);
   go("lesson-home");
 }
 
@@ -4410,6 +4413,7 @@ function lecturePanelsHtml(blk) {
 function effortBlockHtml(blk) {
   if (blk.type === "effort-scale") return '<div class="ef-scale-mount"></div>';
   if (blk.type === "effort-anatomy") return '<div class="ef-anatomy-mount"></div>';
+  if (blk.type === "effort-section") return '<div class="ef-section-mount"></div>'; // кнопка → «Складка в разрезе»
   return '<div class="ef-warn"><div class="ef-warn-t">' + icoWarn(20) + esc(blk.title || "") + '</div><div class="ef-warn-p">' + esc(blk.text || "") + "</div></div>";
 }
 
@@ -4432,7 +4436,7 @@ function planLectureHtml(lecture) {
       html += '<p class="lecture-para">' + esc(blk.text) + "</p>";
     } else if (blk.type === "scale") {
       html += lectureScaleHtml(blk);
-    } else if (blk.type === "effort-scale" || blk.type === "effort-anatomy" || blk.type === "warning") {
+    } else if (blk.type === "effort-scale" || blk.type === "effort-anatomy" || blk.type === "effort-section" || blk.type === "warning") {
       html += effortBlockHtml(blk); // effort-anim.js монтирует шкалу и связки сам
     } else if (blk.type === "table") {
       html += lectureTableHtml(blk);
@@ -4595,7 +4599,7 @@ var MAIN_TAB_SCREENS = ["courses", "profile", "questions", "more"];
    и на них, даже если открыт конкретный шаг урока, а не список уроков. */
 var LESSON_SUB_SCREENS = ["lesson-home", "lecture", "quiz", "quiz-result", "warmups", "song", "feedback", "favorites", "lesson-soon", "step-done", "lesson-master"];
 /* Дока нет ТОЛЬКО на экранах входа — на всех остальных она закреплена всегда. */
-var NO_DOCK_SCREENS = ["tg", "name", "token-entry", "blocked", "karaoke-play", "admin-karaoke-edit", "pitch-sing", "pitch-score"];
+var NO_DOCK_SCREENS = ["tg", "name", "token-entry", "blocked", "karaoke-play", "admin-karaoke-edit", "pitch-sing", "pitch-score", "meter"];
 
 function activeDockTab() {
   if (MAIN_TAB_SCREENS.indexOf(state.screen) !== -1) return state.screen;
@@ -4878,7 +4882,7 @@ function renderLecture() {
       html += '<p class="lecture-para">' + esc(blk.text) + "</p>";
     } else if (blk.type === "scale") {
       html += lectureScaleHtml(blk);
-    } else if (blk.type === "effort-scale" || blk.type === "effort-anatomy" || blk.type === "warning") {
+    } else if (blk.type === "effort-scale" || blk.type === "effort-anatomy" || blk.type === "effort-section" || blk.type === "warning") {
       html += effortBlockHtml(blk); // effort-anim.js монтирует шкалу и связки сам
     } else if (blk.type === "table") {
       html += lectureTableHtml(blk);
@@ -4955,6 +4959,7 @@ function renderQuiz() {
       "</div>" +
       '<div class="quiz-card">' +
         (cq.anim ? '<div class="banim-mount quiz-anim" data-quiz="' + esc(cq.anim) + '" data-gx="0"></div>' : "") +
+        (cq.effort ? '<div class="ef-quiz-mount quiz-anim" data-eff="' + (+cq.effort) + '"></div>' : "") +
         '<div class="quiz-q">' + esc(cq.q) + "</div>" + optsHtml +
         (preview && hasAnswer && answered !== cq.correct && cq.explain ? '<div class="quiz-explain">' + esc(cq.explain) + "</div>" : "") +
       "</div>" +
@@ -5607,6 +5612,24 @@ function renderWarmups() {
     if (window.trainerWireCamCard) trainerWireCamCard();
     return;
   }
+  // «Сила голоса»: громкометр 1–10 с видео Николаю (28.11)
+  if (LESSON && LESSON.warmups && LESSON.warmups.meter && window.meterCardsHtml) {
+    app.innerHTML =
+      stepHeader("Распевки «" + esc(LESSON.title) + "»", 3) +
+      '<div class="warmups-body">' +
+        '<div class="instruction-note">' + LESSON.warmups.instruction + "</div>" +
+        (window.trainerCamCardHtml ? trainerCamCardHtml() : "") +
+        meterCardsHtml() +
+        '<div class="section-label" style="margin:22px 0 8px;">Или прикрепи готовое видео</div>' +
+        '<div id="hw-zone"></div>' +
+      "</div>" +
+      '<div class="bottom-cta" style="padding-top:0;"><button class="cta" data-act="finish-warmups">Продолжить: упражнение с песней</button></div>';
+    renderHwZone();
+    wireActs();
+    meterWireCards();
+    if (window.trainerWireCamCard) trainerWireCamCard();
+    return;
+  }
   var cards = "";
   LESSON.warmups.exercises.forEach(function (ex) {
     var extra =
@@ -5808,6 +5831,8 @@ function stopAllMedia() {
   if (window.pitchStopAll) window.pitchStopAll();
   if (window.byloStopAll) window.byloStopAll();
   if (window.trainerStopAll) window.trainerStopAll();
+  if (window.meterStopAll) window.meterStopAll();
+  if (window.effortSongStop) window.effortSongStop();
 }
 
 /* ---------- упражнение с песней ---------- */
@@ -6221,6 +6246,14 @@ function placeMark(ti, li, index, type) {
 }
 
 function submitSongMarks() {
+  if (LESSON && LESSON.song && LESSON.song.effort && window.effortSongText) {
+    var fe = baseSubmitFields();
+    fe.append("kind", "song-marks");
+    fe.append("marksTitle", "Усилие по строкам (песня)");
+    fe.append("text", effortSongText());
+    fetch("/api/submit", { method: "POST", body: fe }).catch(function () {});
+    return;
+  }
   var tracks = (LESSON.song && LESSON.song.tracks) || [];
   if (!tracks.length) return;   // урок из плана: разметки нет, отправлять нечего
   var lines = [];
@@ -6338,6 +6371,7 @@ function renderSongWithoutTracks(song) {
 function renderSong() {
   var s = state;
   var song = LESSON.song || {};
+  if (song.effort && window.renderEffortSong) { renderEffortSong(); return; }
 
   // У уроков из планов песня описана задачей и списком-подсказкой (trackIdeas),
   // готовых треков с mp3 там нет. Без этой ветки song.tracks.forEach падал бы
@@ -6867,6 +6901,7 @@ function render() {
     case "pitch": case "pitch-topic": case "pitch-sing": case "pitch-score": renderPitchScreen(); break;
     case "bylo": renderByloScreen(); break;
     case "trainer": case "trainer-ex": case "trainer-rec": case "trainer-done": if (window.renderTrainerScreen) renderTrainerScreen(); break;
+    case "meter": if (window.renderMeterScreen) renderMeterScreen(); break;
     case "lesson-home": renderLessonHome(); break;
     case "lesson-soon": renderLessonSoon(); break;
     case "blocked": renderBlocked(); break;

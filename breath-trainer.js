@@ -794,7 +794,7 @@
 
   /* Большое видео — как в «Поддержке»: в хранилище по частям, затем бот
      пересылает Николаю с подписью. */
-  function sendBig(blob, name, note, meta, onProgress) {
+  function sendBig(blob, name, note, meta, onProgress, head) {
     var ext = (String(name).match(/\.([A-Za-z0-9]{1,5})$/) || [])[1] || "mp4";
     var who = supportIdentity();
     if (!who.initData && !who.accessToken) return Promise.reject(new Error("who"));
@@ -805,7 +805,7 @@
         onUploadProgress: function (ev) { onProgress(Math.min(99, Math.round((ev.loaded || 0) / blob.size * 100))); }
       });
     }).then(function (up) {
-      return supportPost({ action: "start", text: "🎤 Распевки (видео) · урок «" + (LESSON ? LESSON.title : "") + "»\n" + note, counts: { photo: 0, video: 1 },
+      return supportPost({ action: "start", text: (head || "🎤 Распевки (видео)") + " · урок «" + (LESSON ? LESSON.title : "") + "»\n" + note, counts: { photo: 0, video: 1 },
         firstName: state.firstName || "", lastName: state.lastName || "" })
         .then(function (d) {
           return supportPost({ action: "send", headerId: d.headerId, name: d.name || "",
@@ -813,6 +813,8 @@
         });
     });
   }
+
+  window.trainerSendBig = sendBig;
 
   function recStop() {
     clearInterval(REC.timeTimer);

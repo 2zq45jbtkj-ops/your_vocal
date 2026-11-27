@@ -181,10 +181,11 @@ export default async function handler(req) {
 
     if (kind === "song-marks") {
       var text = (form.get("text") || "").toString();
-      var r2 = await tgSendMessage(token, chatId, "🎼 Разметка дыхания (песни)\n" + head + "\n\n" + text);
+      var marksTitle = (form.get("marksTitle") || "").toString().slice(0, 60) || "Разметка дыхания (песни)";
+      var r2 = await tgSendMessage(token, chatId, "🎼 " + marksTitle + "\n" + head + "\n\n" + text);
       if (!r2.ok) return json({ ok: false, error: r2.description || "Telegram отклонил сообщение" }, 502);
       if (r2.result) await rememberMessage(r2.result.message_id, tagKey).catch(function () {});
-      await save("markup", "Разметка дыхания в песне", text);
+      await save("markup", marksTitle === "Разметка дыхания (песни)" ? "Разметка дыхания в песне" : marksTitle, text);
       return json({ ok: true });
     }
 

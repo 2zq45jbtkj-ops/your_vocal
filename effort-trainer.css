@@ -1,0 +1,78 @@
+/* «Сила голоса»: громкометр в распевках и разметка усилия в песне (effort-trainer.js).
+   Шкала — те же клетки и нюансы, что в лекции (effort-anim.css). */
+.mt-rec { --tr-c: #AE5F3F; --tr-on: #fff; }
+.mt-head { flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 12px 0; }
+.mt-time { flex: none; font: 600 13px 'JetBrains Mono', monospace; color: #FF8A80; padding: 0 4px; }
+.mt-view { padding-top: 8px; }
+.mt-panel { flex: none; padding: 10px 14px 0; }
+.mt-panel.big { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center; }
+.mt-stage { background: #1b2024; border-radius: 18px; padding: 12px 14px; margin-bottom: 10px; }
+.mt-stage-top { display: flex; align-items: baseline; gap: 8px; }
+.mt-stage-n { font: 600 12px 'JetBrains Mono', monospace; color: #8b969d; }
+.mt-stage-t { font: 800 17px 'Manrope', sans-serif; color: #F2ECE7; }
+.mt-stage-row { display: flex; align-items: center; gap: 12px; margin-top: 6px; }
+.mt-stage-d { flex: 1; font: 400 14px/1.45 'Inter', sans-serif; color: #c9d1d6; min-height: 40px; }
+.mt-goal { flex: none; display: flex; flex-direction: column; align-items: center; gap: 2px; color: #e07a4a; }
+.mt-goal b { width: 46px; height: 46px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font: 800 24px 'Manrope', sans-serif; }
+.mt-goal b + b { margin-top: 4px; }
+.mt-cnt { width: 46px; height: 46px; border-radius: 23px; border: 2px solid #6C91A6; font: 800 22px 'Manrope', sans-serif; color: #F2ECE7; justify-content: center; }
+.mt-hold { height: 6px; border-radius: 3px; background: rgba(242,236,231,.1); margin-top: 10px; overflow: hidden; }
+.mt-hold i { display: block; height: 100%; width: 0; background: #6C91A6; border-radius: 3px; transition: background .2s; }
+.mt-hold i.ok { background: #7FC8A0; }
+.mt-scale .ef-cells { position: relative; }
+.mt-cell { position: relative; transition: transform .15s, box-shadow .15s; cursor: default; }
+.mt-cell.no::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(-45deg, rgba(14,18,22,.35) 0 4px, transparent 4px 8px); }
+.mt-cell.tgt { box-shadow: inset 0 0 0 3px #F2ECE7; }
+.mt-cell.cur { transform: scaleY(1.08); }
+.mt-warn { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 9px 12px; border-radius: 14px; background: rgba(226,75,74,.16); color: #f7c1c1; font: 600 13px/1.35 'Inter', sans-serif; }
+.mt-warn[hidden] { display: none; }
+.mt-bar { display: flex; align-items: center; gap: 14px; padding: 12px 4px 0; }
+.mt-bar-tx { flex: 1; min-width: 0; font: 400 13px/1.35 'Inter', sans-serif; color: #9FB2BF; }
+.mt-review { overflow-y: auto; }
+.mt-rec .tr-rec-view.mt-view { max-height: 42vh; }
+
+/* карточка в «Распевках» */
+.mt-card { margin: 14px 0 0; padding: 14px 14px 12px; border-radius: 20px; background: #1b2024; color: #e3e7ea; box-shadow: var(--raised-sm); }
+.mt-card-head { display: flex; align-items: center; gap: 12px; }
+.mt-card-head b { display: block; font: 800 17px 'Manrope', sans-serif; color: #fff; }
+.mt-card-head small { display: block; margin-top: 2px; font-size: 13px; color: #c9d1d6; line-height: 1.35; }
+.mt-card-ic { flex: none; width: 42px; height: 42px; border-radius: 13px; background: rgba(174,95,63,.3); display: flex; align-items: center; justify-content: center; }
+.mt-card-scale { margin: 14px 0 12px; }
+.mt-card .ef-track { display: none; }
+.mt-cta { margin: 0; }
+.mt-alt { display: block; width: 100%; margin-top: 8px; padding: 12px; border: 1px solid #3d474d; border-radius: 16px; background: transparent; color: #e3e7ea; font: 600 15px 'Inter', sans-serif; cursor: pointer; }
+.mt-ex { display: flex; gap: 12px; padding: 12px 14px; margin-bottom: 8px; border-radius: 16px; background: var(--card, var(--bg)); box-shadow: var(--raised-sm); }
+.mt-ex-n { flex: none; width: 26px; height: 26px; border-radius: 13px; background: var(--blue); color: #fff; font: 700 13px 'Inter', sans-serif; display: flex; align-items: center; justify-content: center; }
+.mt-ex b { display: block; font: 700 15.3px 'Manrope', sans-serif; color: var(--ink); }
+.mt-ex p { margin: 4px 0 0; font-size: 14.3px; line-height: 1.45; color: var(--ink2, var(--ink)); }
+.mt-ex .mt-ex-how { color: var(--gray); }
+.mt-ex .mt-ex-err b { display: inline; font: 600 14px 'Inter', sans-serif; color: var(--terra); }
+
+/* «Складка в разрезе» и тест */
+.xs-modes { gap: 5px; margin-top: 6px; }
+.xs-modes .ef-btn { font-size: 12px; min-height: 38px; line-height: 1.15; }
+.xs-desc { padding: 12px; border-radius: 14px; background: #1b1e23; }
+.ef.ef-quiz { margin: 0 0 14px; padding: 8px; }
+
+/* песня: усилие по строкам */
+.es-legend { display: grid; gap: 6px; margin: 10px 0 12px; }
+.es-leg { display: flex; gap: 10px; align-items: baseline; font-size: 14px; line-height: 1.4; }
+.es-leg b { flex: none; min-width: 38px; font: 800 14px 'Manrope', sans-serif; color: var(--terra); }
+.es-meter { margin: 0 0 14px; padding: 12px; border-radius: 18px; background: #1b2024; color: #c9d1d6; }
+.es-meter-tx { margin-top: 10px; font-size: 13px; line-height: 1.45; }
+.es-cal { margin-top: 10px; width: 100%; padding: 11px; border-radius: 14px; border: 1px solid #3d474d; background: #2b3236; color: #e3e7ea; font: 600 14px 'Inter', sans-serif; cursor: pointer; }
+.es-line { margin-bottom: 10px; }
+.es-line.hi { box-shadow: inset 0 0 0 1.5px oklch(60% 0.13 38 / .55), var(--raised-sm); }
+.es-text { display: flex; align-items: center; gap: 10px; font-size: 16px; line-height: 1.4; }
+.es-badge { flex: none; width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font: 800 16px 'Manrope', sans-serif; }
+.es-badge.empty { background: var(--bgmuted, rgba(0,0,0,.06)); color: var(--gray); }
+.es-chips { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; margin-top: 10px; }
+.es-chip { height: 32px; padding: 0; border-radius: 9px; border: 0; background: var(--c); color: var(--t); font: 700 14px 'Inter', sans-serif; opacity: .45; cursor: pointer; transition: opacity .15s, transform .15s; }
+.es-chip.on { opacity: 1; transform: scale(1.08); box-shadow: 0 0 0 2px var(--ink); }
+.es-chip.hot { background-image: repeating-linear-gradient(-45deg, rgba(14,18,22,.25) 0 3px, transparent 3px 6px), linear-gradient(var(--c), var(--c)); }
+.es-meas { margin-top: 8px; padding: 7px 12px; border-radius: 12px; border: 1px solid var(--line, rgba(0,0,0,.12)); background: transparent; color: var(--blue); font: 600 13px 'Inter', sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.es-meas.live { color: #fff; background: #e24b4a; border-color: #e24b4a; }
+.es-live { min-width: 18px; font: 800 15px 'Manrope', sans-serif; }
+.es-again { display: flex; gap: 8px; align-items: flex-start; margin-top: 12px; font-size: 14px; line-height: 1.4; color: var(--terra); }
+.es-again svg { flex: none; margin-top: 1px; }
+.es-diff { margin-top: 8px; font-size: 13.5px; line-height: 1.4; color: var(--gray); }

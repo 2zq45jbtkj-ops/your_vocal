@@ -195,7 +195,7 @@
       o += '<line x1="' + F(l[0] + Fd.n[0] * 30) + '" y1="' + F(l[1] - 6) + '" x2="' + F(l[0] + Fd.n[0] * 7) + '" y2="' + F(l[1] - 2) + '" stroke="#e07a4a" stroke-width="2.4" marker-end="url(#$mo)"/>';
     });
     var tc = cen(TR);
-    if (S.cmp) {
+    if (S.cmp && !S.nl) {
       o += pill("сила смыкания: " + e + " из 10", 150, 16, "middle", e >= 9 ? "#f09595" : e >= 6 ? "#f3b08f" : "#e3e7ea");
       if (e >= 8) o += pill("ложные связки сжимают", 150, 306, "middle", "#f3b08f");
     }
@@ -337,10 +337,227 @@
     });
   }
 
+
+  /* ---------- «Голосовая складка в разрезе» (фронтальный разрез) ----------
+     Кнопка в лекции → полноэкранный слой, как «Дыхательные мышцы» в «Дыхании».
+     Вид спереди, разрез через середину голосовых складок. Слои кнопками:
+     нажатие подсвечивает слой и даёт подпись. Режимы: вдох / звук на 3, 5, 7, 9. */
+  var XS = [
+    { id: "muc", name: "Слизистая", d: "Тонкий наружный слой — эпителий. Его постоянно увлажняет слизь: сухая слизистая колеблется хуже, поэтому пьём воду и не сидим долго в сухом воздухе." },
+    { id: "rei", name: "Мягкий слой", d: "Пространство Рейнке — рыхлый, почти желеобразный слой под слизистой. При каждом колебании он волной скользит поверх связки снизу вверх — это и есть слизистая волна. При перегрузке сюда набирается жидкость: появляется отёк, и голос садится." },
+    { id: "lig", name: "Голосовая связка", d: "Плотные эластические и коллагеновые волокна у самого края складки. Держит натяжение и форму края; книзу переходит в эластический конус до перстневидного хряща." },
+    { id: "voc", name: "Голосовая мышца", d: "Внутренняя часть щиточерпаловидной мышцы — «тело» складки. Сокращаясь, укорачивает и утолщает складку: смыкание становится плотнее и выше по высоте края, звук — полнее." },
+    { id: "ta", name: "Щиточерпаловидная мышца", d: "Наружная часть мышцы складки, идёт к щитовидному хрящу. Вместе с голосовой мышцей определяет, насколько складка толстая и плотная." },
+    { id: "ven", name: "Желудочек гортани", d: "Карман между ложной и голосовой складками. Даёт голосовой складке свободно колебаться; его железы увлажняют складки слизью." },
+    { id: "ff", name: "Ложные складки", d: "Преддверные складки над голосовыми. В нормальном пении расслаблены и разведены. На крике и при зажиме сближаются и давят на звук сверху — он становится сдавленным и хриплым." },
+    { id: "thy", name: "Щитовидный хрящ", d: "Самый крупный хрящ гортани, спереди образует кадык. Изнутри к нему крепятся голосовые и ложные складки." },
+    { id: "cri", name: "Перстневидный хрящ", d: "Кольцо под щитовидным хрящом — основание гортани. Между ними — перстнещитовидная мышца: она наклоняет хрящи и натягивает складки на высоких нотах." },
+    { id: "tra", name: "Трахея и давление", d: "Отсюда идёт воздух из лёгких. Под сомкнутыми складками он создаёт подсвязочное давление: оно раскрывает складки снизу — сначала нижний край, потом верхний, — и складки упруго смыкаются обратно. Так рождается каждое колебание." }
+  ];
+  var XM = [
+    { n: "Вдох", e: 0, t: "Складки разведены, щель открыта — воздух свободно идёт в лёгкие. Ложные складки тоже разведены." },
+    { n: "3 · говорю", e: 3, t: "Давления немного: складки раскрываются снизу вверх и мягко смыкаются обратно. Удара почти нет, контакт короткий." },
+    { n: "5 · рабочая", e: 5, t: "Рабочая зона: давление умеренное, складки закрыты чуть дольше, смыкание плотное, но без удара. Так можно петь долго." },
+    { n: "7 · громко", e: 7, t: "Давление растёт: размах колебаний больше, складки дольше сомкнуты и встречаются сильнее. Долго так петь тяжело." },
+    { n: "9 · кричу", e: 9, t: "Крик: давление и удар максимальные, ложные складки сближаются и давят сверху. Так появляются отёки и узелки — в пении этот уровень не используем." }
+  ];
+  var xsOpen = null;
+  var SEC_ICON = '<svg viewBox="0 0 32 32" width="28" height="28"><path d="M5 4 L9 28" stroke="#cfdade" stroke-width="2.4" stroke-linecap="round"/><path d="M27 4 L23 28" stroke="#cfdade" stroke-width="2.4" stroke-linecap="round"/>' +
+    '<path d="M8 15 Q12 14 15.4 17 Q12 19 8.6 19 Z" fill="#f4efe6"/><path d="M24 15 Q20 14 16.6 17 Q20 19 23.4 19 Z" fill="#f4efe6"/><path d="M8 10 Q11 10 13 12 Q11 13 8 13 Z" fill="#d39893"/><path d="M24 10 Q21 10 19 12 Q21 13 24 13 Z" fill="#d39893"/></svg>';
+
+  function secButton(m) {
+    var b = h("button", "banim-gx bmus-open",
+      '<span class="banim-gx-ico">' + SEC_ICON + '</span><span><b>Голосовая складка в разрезе</b><small>Из каких слоёв она состоит и как смыкается</small></span><span class="banim-gx-go">›</span>');
+    b.type = "button";
+    b.addEventListener("click", openSection);
+    m.appendChild(b);
+  }
+  function closeSection() {
+    if (!xsOpen) return false;
+    var g = xsOpen; xsOpen = null;
+    g.ov.classList.remove("show");
+    setTimeout(function () { g.stop(); g.ov.remove(); }, 220);
+    return true;
+  }
+  function mk(tag, cls, parent, html) { var e = h(tag, cls, html); parent.appendChild(e); return e; }
+
+  function openSection() {
+    if (xsOpen) return;
+    var ov = h("div", "gx-ov"); document.body.appendChild(ov);
+    var sheet = mk("div", "gx-sheet", ov);
+    var head = mk("div", "gx-head", sheet);
+    mk("div", "gx-title", head, "Складка в разрезе");
+    var close = mk("button", "gx-close", head, "×"); close.type = "button"; close.setAttribute("aria-label", "Закрыть");
+    close.addEventListener("click", closeSection);
+    var S = { mode: 2, sel: null, e: 5 };
+    var modes = mk("div", "ef-modes xs-modes", sheet);
+    XM.forEach(function (m, i) { var b = mk("button", "ef-btn" + (i === S.mode ? " on" : ""), modes, m.n); b.type = "button"; b.dataset.m = i; });
+    var fig = mk("div", "gx-fig xs-fig", sheet);
+    var cap = mk("div", "gx-cap", sheet);
+    mk("div", "gx-sec", sheet, "Слои и хрящи — нажми, чтобы подсветить");
+    var grid = mk("div", "banim-modes bmus-grid xs-grid", sheet);
+    XS.forEach(function (x) { var b = mk("button", "banim-mode bmus-btn", grid, x.name); b.type = "button"; b.dataset.x = x.id; });
+    var desc = mk("div", "gx-cap xs-desc", sheet, "");
+    mk("div", "gx-notes", sheet,
+      "<p>Вид спереди: гортань разрезана вертикально через середину голосовых складок (фронтальный разрез). Сверху — путь к глотке, снизу — трахея.</p>" +
+      "<p>Колебания на схеме замедлены: в жизни складки смыкаются и размыкаются сотни раз в секунду (≈ 100–150 у мужчин, ≈ 200–250 у женщин в разговоре).</p>");
+    function paintCap() {
+      cap.innerHTML = "<b>" + XM[S.mode].n + ".</b> " + XM[S.mode].t;
+      if (S.sel) { var x = XS.filter(function (q) { return q.id === S.sel; })[0]; desc.innerHTML = "<b>" + x.name + ".</b> " + x.d; desc.style.display = ""; }
+      else { desc.innerHTML = ""; desc.style.display = "none"; }
+    }
+    modes.addEventListener("click", function (ev) {
+      var b = ev.target.closest("[data-m]"); if (!b) return;
+      S.mode = +b.dataset.m; S.e = XM[S.mode].e;
+      Array.prototype.forEach.call(modes.children, function (c) { c.classList.toggle("on", c === b); });
+      paintCap();
+    });
+    grid.addEventListener("click", function (ev) {
+      var b = ev.target.closest("[data-x]"); if (!b) return;
+      S.sel = S.sel === b.dataset.x ? null : b.dataset.x;
+      Array.prototype.forEach.call(grid.children, function (c) { c.classList.toggle("on", c.dataset.x === S.sel); });
+      paintCap();
+    });
+    paintCap();
+    // плавные переходы между режимами
+    var cur = { ab: 0, e: 5, ff: 0 }, raf = 0, t0 = 0;
+    function loop(now) {
+      raf = 0;
+      if (!ov.isConnected) return;
+      var tgtAb = S.mode === 0 ? 1 : 0, tgtE = S.mode === 0 ? cur.e : S.e, tgtFF = S.e >= 8 && S.mode ? (S.e - 7) / 3 : 0;
+      cur.ab += (tgtAb - cur.ab) * 0.07; cur.e += (tgtE - cur.e) * 0.08; cur.ff += (tgtFF - cur.ff) * 0.06;
+      fig.innerHTML = drawSection(cur, S, (now - t0) / 1000);
+      raf = requestAnimationFrame(loop);
+    }
+    t0 = performance.now();
+    raf = requestAnimationFrame(loop);
+    requestAnimationFrame(function () { ov.classList.add("show"); });
+    xsOpen = { ov: ov, stop: function () { if (raf) cancelAnimationFrame(raf); } };
+  }
+
+  /* Геометрия левой половины; правая — зеркало относительно x = 160. */
+  function drawSection(cur, S, t) {
+    var e = Math.max(1, cur.e), ph = S.mode === 0 ? 0 : 1 - cur.ab;
+    var cq = cqOf(e), open = 1 - cq, per = 1.25, phs = (t / per) % 1;
+    function puls(p) { p = ((p % 1) + 1) % 1; return p < open ? Math.sin(Math.PI * p / open) : 0; }
+    var A = 6 + e * 0.9;                       // размах колебаний растёт с громкостью
+    var lowO = puls(phs) * A * ph, upO = puls(phs - 0.1) * A * ph;  // нижний край раскрывается раньше верхнего
+    var abd = cur.ab * 30;
+    var xl = 159.2 - abd - lowO, xu = 159.2 - abd - upO;
+    var thick = 14 + Math.min(4, (e - 3) * 0.7) * ph;   // высота контакта: голосовая мышца толще на громком
+    var yu = 196, yl = yu + thick;
+    var xff = 130 + cur.ff * 24 - cur.ab * 4;
+    var closing = ph > 0.5 && phs > open - 0.02 && phs < open + 0.08;
+
+    function qp(p0, c, p1, t0, t1, n) {
+      var r = [];
+      for (var i = 0; i <= n; i++) {
+        var t = t0 + (t1 - t0) * i / n, u = 1 - t;
+        r.push([u * u * p0[0] + 2 * u * t * c[0] + t * t * p1[0], u * u * p0[1] + 2 * u * t * c[1] + t * t * p1[1]]);
+      }
+      return r;
+    }
+    function offs(P, dd) { // смещение ломаной внутрь ткани (влево от края)
+      return P.map(function (p, i) {
+        var a = P[Math.max(0, i - 1)], b = P[Math.min(P.length - 1, i + 1)], tx = b[0] - a[0], ty = b[1] - a[1], l = Math.hypot(tx, ty) || 1;
+        var nx = -ty / l, ny = tx / l;
+        if (nx > 0) { nx = -nx; ny = -ny; }
+        return [p[0] + nx * dd, p[1] + ny * dd];
+      });
+    }
+    var E1 = [94, 176], C1 = [xu - 30, 180], U = [xu, yu], C2 = [xu + 1.5, (yu + yl) / 2], Lw = [xl, yl], C3 = [xl - 20, yl + 14], E3 = [110, 240];
+    var lumD = "M108 -2 L106 92 Q" + F(xff + 2) + " 100 " + F(xff) + " 126 Q" + F(xff - 1) + " 150 114 156 Q100 160 92 152 Q84 146 82 156 Q82 172 94 176" +
+      " Q" + F(C1[0]) + " " + F(C1[1]) + " " + F(U[0]) + " " + F(U[1]) + " Q" + F(C2[0]) + " " + F(C2[1]) + " " + F(Lw[0]) + " " + F(Lw[1]) +
+      " Q" + F(C3[0]) + " " + F(C3[1]) + " 110 240 Q94 266 88 300 L86 372 L88 430";
+    var tissue = lumD + " L74 430 L72 372 L62 304 L44 302 L28 44 L32 -2 Z";
+    var ffD = "M104 96 Q" + F(xff + 2) + " 100 " + F(xff) + " 126 Q" + F(xff - 1) + " 150 114 156 Q104 150 100 128 Q100 108 104 96 Z";
+    var venD = "M114 156 Q100 160 92 152 Q84 146 82 156 Q82 172 94 176";
+    var foldD = "M52 176 L94 176 Q" + F(C1[0]) + " " + F(C1[1]) + " " + F(U[0]) + " " + F(U[1]) + " Q" + F(C2[0]) + " " + F(C2[1]) + " " + F(Lw[0]) + " " + F(Lw[1]) +
+      " Q" + F(C3[0]) + " " + F(C3[1]) + " 110 240 Q94 266 88 300 L62 296 Z";
+    var edge = qp(E1, C1, U, 0.5, 1, 8).concat(qp(U, C2, Lw, 0.1, 1, 5)).concat(qp(Lw, C3, E3, 0.1, 0.62, 6));
+    var inner = offs(edge, 4.6);
+    var reiD = PL(edge) + " " + PL(inner.slice().reverse()).replace(/^M/, "L") + "Z";
+    var ligC = [xu - 9.5, yu + 5.5];
+    var vocD = "M" + F(xu - 42) + " " + F(yu - 3) + " Q" + F(xu - 18) + " " + F(yu) + " " + F(ligC[0] - 4) + " " + F(ligC[1] + 3) +
+      " Q" + F(xl - 9) + " " + F(yl - 1) + " " + F(xl - 13) + " " + F(yl + 6) + " Q" + F(xl - 26) + " " + F(yl + 16) + " " + F(xl - 44) + " " + F(yl + 24) +
+      " Q" + F(xu - 52) + " " + F(yu + 16) + " " + F(xu - 42) + " " + F(yu - 3) + "Z";
+    var taD = "M54 182 Q86 180 " + F(xu - 42) + " " + F(yu - 3) + " Q" + F(xu - 52) + " " + F(yu + 16) + " " + F(xl - 44) + " " + F(yl + 24) + " Q92 256 58 266 Z";
+    var conP = offs(qp(Lw, C3, E3, 0.15, 1, 8).concat([[96, 266], [89, 298]]), 6.5);
+    var conD = "M" + F(ligC[0] - 3) + " " + F(ligC[1] + 3) + " " + PL(conP).replace(/^M/, "L") + " L84 304";
+    var thyD = "M30 44 Q38 38 46 40 L60 294 Q54 302 46 300 Z";
+    var criD = "M64 306 Q72 300 80 304 L84 366 Q76 372 70 368 Z";
+    var ctD = "M46 300 L60 294 L66 338 L56 330 Z";
+
+    var sel = S.sel, dim = function (id) { return sel && sel !== id ? ' opacity=".28"' : ""; };
+    var glow = function (id) { return sel === id ? ' stroke="#ffd7a8" stroke-width="2.2"' : ""; };
+    var g = "";
+    g += '<path d="' + tissue + '" fill="#b8706b"' + dim("muc") + "/>";
+    g += '<path d="' + thyD + '" fill="' + CA + '" stroke="' + CS + '"' + dim("thy") + glow("thy") + "/>";
+    g += '<path d="' + ctD + '" fill="#a8463d"' + dim("cri") + "/>";
+    g += '<path d="' + criD + '" fill="' + CA + '" stroke="' + CS + '"' + dim("cri") + glow("cri") + "/>";
+    [372, 400, 428].forEach(function (y) { g += '<ellipse cx="80" cy="' + y + '" rx="5" ry="8" fill="' + CA + '" stroke="' + CS + '"' + dim("tra") + glow("tra") + "/>"; });
+    g += '<path d="' + ffD + '" fill="#d39893" stroke="' + ML + '" stroke-width=".8"' + dim("ff") + glow("ff") + "/>";
+    if (!sel || sel === "ff") for (var k = 0; k < 7; k++) g += '<circle cx="' + F(106 + (k % 4) * 6 + (k > 3 ? 3 : 0)) + '" cy="' + (114 + (k > 3 ? 18 : 0)) + '" r="1.5" fill="#f1c8c2" opacity=".8"/>';
+    if (sel === "ven") g += '<path d="' + venD + '" fill="none" stroke="#ffd7a8" stroke-width="3" stroke-linecap="round"/>';
+    g += '<path d="' + foldD + '" fill="#d39893"' + dim("muc") + "/>";
+    g += '<path d="' + taD + '" fill="#a8463d"' + dim("ta") + glow("ta") + "/>";
+    g += '<path d="' + vocD + '" fill="#c4554a"' + dim("voc") + glow("voc") + "/>";
+    if (!sel || sel === "voc" || sel === "ta") for (var j = 0; j < 9; j++) {
+      var fx = 64 + (j % 5) * 13 + (j > 4 ? 6 : 0), fy = 194 + (j > 4 ? 26 : 0) + (j % 2) * 7;
+      g += '<circle cx="' + F(fx) + '" cy="' + F(fy) + '" r="1.1" fill="#e9978a" opacity=".7"/>';
+    }
+    g += '<path d="' + reiD + '" fill="#f6e3c6" opacity=".92"' + dim("rei") + glow("rei") + "/>";
+    g += '<path d="' + conD + '" fill="none" stroke="#efe9dd" stroke-width="1.6" stroke-dasharray="3 2"' + dim("lig") + "/>";
+    g += '<ellipse cx="' + F(ligC[0]) + '" cy="' + F(ligC[1]) + '" rx="5" ry="3.6" fill="#fbf8f1" stroke="#cdbdb0" stroke-width=".7"' + dim("lig") + glow("lig") + "/>";
+    g += '<path d="' + lumD + '" fill="none" stroke="#f3d6d0" stroke-width="' + (sel === "muc" ? 2.6 : 1.3) + '"' + (sel && sel !== "muc" ? ' opacity=".45"' : "") + "/>";
+
+    var o = '<defs><linearGradient id="xsbg" x2="0" y2="1"><stop offset="0" stop-color="#1d262b"/><stop offset="1" stop-color="#0f1518"/></linearGradient>';
+    [["b", "#3a8bb8"], ["o", "#e07a4a"], ["r", "#e24b4a"], ["w", "#cfdade"]].forEach(function (c) {
+      o += '<marker id="xsm' + c[0] + '" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="' + c[1] + '" stroke-width="2"/></marker>';
+    });
+    o += '</defs><rect width="320" height="420" rx="14" fill="url(#xsbg)"/>';
+    o += "<g>" + g + '</g><g transform="translate(320,0) scale(-1,1)">' + g + "</g>";
+
+    // стрелки: давление снизу, удар при смыкании, поток / вдох
+    var hot = e >= 9 ? "r" : e >= 6 ? "o" : "b", hc = { r: "#e24b4a", o: "#e07a4a", b: "#3a8bb8" }[hot];
+    if (S.mode === 0) {
+      [-14, 0, 14].forEach(function (dx, i) { var y0 = 40 + ((t * 60 + i * 30) % 90); o += '<line x1="' + (160 + dx) + '" y1="' + F(y0) + '" x2="' + (160 + dx) + '" y2="' + F(y0 + 26) + '" stroke="#cfdade" stroke-width="2" opacity=".7" marker-end="url(#xsmw)"/>'; });
+    } else {
+      var sw = F(1.4 + e * 0.32), len = 26 + e * 4;
+      [-16, 0, 16].forEach(function (dx) { o += '<line x1="' + (160 + dx) + '" y1="' + F(330) + '" x2="' + (160 + dx) + '" y2="' + F(330 - len) + '" stroke="' + (e >= 9 ? "#e24b4a" : "#3a8bb8") + '" stroke-width="' + sw + '" marker-end="url(#xsm' + (e >= 9 ? "r" : "b") + ')" opacity=".9"/>'; });
+      if (lowO > 1.5 && upO > 1.5) o += '<line x1="160" y1="' + F(yu - 4) + '" x2="160" y2="' + F(yu - 18 - e) + '" stroke="#cfdade" stroke-width="1.6" opacity=".75" marker-end="url(#xsmw)"/>';
+      if (closing) [[-1, 120], [1, 200]].forEach(function (s) {
+        o += '<line x1="' + s[1] + '" y1="' + F(yu + thick / 2) + '" x2="' + F(160 - s[0] * 18) + '" y2="' + F(yu + thick / 2) + '" stroke="' + hc + '" stroke-width="' + F(1.2 + e * 0.28) + '" marker-end="url(#xsm' + hot + ')"/>';
+      });
+      o += pill("давление снизу: " + (e >= 9 ? "предельное" : e >= 7 ? "высокое" : e >= 5 ? "умеренное" : "небольшое"), 160, 352, "middle", e >= 9 ? "#f09595" : "#9fd0ee");
+      if (cur.ff > 0.3) o += pill("ложные складки давят сверху", 160, 92, "middle", "#f3b08f");
+    }
+    // подпись выбранного слоя
+    if (sel) {
+      var P = { muc: [xff, 126], rei: [xu - 2, yu + 3], lig: ligC, voc: [xu - 30, yu + 10], ta: [74, 224], ven: [86, 160], ff: [116, 124], thy: [52, 150], cri: [76, 336], tra: [80, 400] }[sel];
+      var nm = XS.filter(function (q) { return q.id === sel; })[0].name;
+      o += label(nm.toLowerCase(), 316, sel === "tra" || sel === "cri" ? 392 : 24, "end", P, "#ffd7a8");
+    }
+    return '<svg viewBox="0 0 320 420" role="img" aria-label="Фронтальный разрез гортани через голосовые складки">' + o + "</svg>";
+  }
+
+  /* ---------- тест: связки на заданном усилии, без подписи числа ---------- */
+  function buildQuizFig(mount) {
+    var S = { st: 0, ph: 1, op: 0, eff: +(mount.getAttribute("data-eff") || 5), lm: 0, cmp: 1, nl: 1 };
+    var card = h("div", "ef ef-quiz");
+    var fig = h("div", "ef-fig");
+    fig.style.marginTop = "0";
+    card.appendChild(fig);
+    mount.appendChild(card);
+    addFig(fig, S);
+  }
+
   /* ---------- автомонтаж ---------- */
   function scan(root) {
     Array.prototype.forEach.call((root || document).querySelectorAll(".ef-scale-mount:not([data-ef])"), function (m) { m.setAttribute("data-ef", "1"); buildScale(m); });
     Array.prototype.forEach.call((root || document).querySelectorAll(".ef-anatomy-mount:not([data-ef])"), function (m) { m.setAttribute("data-ef", "1"); buildAnatomy(m); });
+    Array.prototype.forEach.call((root || document).querySelectorAll(".ef-section-mount:not([data-ef])"), function (m) { m.setAttribute("data-ef", "1"); secButton(m); });
+    Array.prototype.forEach.call((root || document).querySelectorAll(".ef-quiz-mount:not([data-ef])"), function (m) { m.setAttribute("data-ef", "1"); buildQuizFig(m); });
   }
   function start() {
     scan(document);
@@ -348,5 +565,5 @@
     new MutationObserver(function () { scan(app); }).observe(app, { childList: true, subtree: true });
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
-  window.EffortAnim = { mount: scan };
+  window.EffortAnim = { mount: scan, openSection: openSection, closeOverlay: closeSection, dyn: dyn };
 })();
