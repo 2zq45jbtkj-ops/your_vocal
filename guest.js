@@ -243,26 +243,28 @@
       if (G.on) { G.toast("Это пример заданий. Свои задания появятся после первого урока."); return; }
       return origHw(i);
     };
-    // «Домашние задания» у гостя: открыто только то, что про «Дыхание»,
-    // остальные задания закрыты замком (Коля, 20.11: «открыть доступ только к теме дыхания»)
+    // «Домашние задания» у гостя (Коля, 27.11): вместо настоящих заданий — тот же список
+    // знакомства с приложением, что в окне «Тест-драйв» при входе (с галочками «посмотрел»).
     var origCabHw = window.renderCabHw;
     if (origCabHw) window.renderCabHw = function (data, homework) {
       if (!G.on) return origCabHw(data, homework);
-      var open = [], shut = [];
-      (homework || []).forEach(function (hw) { (/дыхан/i.test(String((hw && hw.title) || "")) ? open : shut).push(hw); });
-      var html = origCabHw(data, open);
-      if (!shut.length) return html;
-      var rows = shut.map(function (hw) {
-        return '<div class="cab-hw gd-hw-shut"><div class="gd-hw-lock">' + LOCK_ICO + '</div>' +
-          '<div style="flex:1;min-width:0;"><div class="hw-title cab-hw-title">' + esc(hw.title || "") + '</div>' +
-          '<div class="cab-hw-due">Закрыто в тест-драйве</div></div></div>';
+      var n = SECTIONS.filter(function (s) { return seen(s.id); }).length;
+      var rows = SECTIONS.map(function (s) {
+        var ok = seen(s.id);
+        return '<button type="button" class="gd-row gd-hw-row' + (ok ? " ok" : "") + '" data-gd-hwgo="' + s.id + '">' +
+          '<span class="gd-row-m">' + (ok ? "✓" : "") + "</span>" +
+          '<span class="gd-row-t"><b>' + esc(s.label) + "</b><span>" + esc(s.sub) + "</span></span>" +
+          '<span class="gd-row-c">›</span></button>';
       }).join("");
-      var block = '<div class="cab-hw-sub">Закрыто в тест-драйве</div>' +
-        G.blockHtml("В тест-драйве открыта только тема «Дыхание». Остальные задания откроются после записи на занятия.") +
-        '<div class="cab-hw-list">' + rows + '</div>' +
-        '<button type="button" class="cta terra gd-cta" data-gd-trial="hw" style="margin-top:14px;">Записаться на пробный урок</button>';
-      var k = html.lastIndexOf("</div>");
-      return html.slice(0, k) + block + html.slice(k);
+      return '<div class="cab-card">' +
+          '<div class="cab-card-title">Знакомство с приложением<small>' + n + " из " + SECTIONS.length + "</small></div>" +
+          '<div class="gd-prog"><i style="width:' + Math.round(n * 100 / SECTIONS.length) + '%"></i></div>' +
+          '<div class="cab-mute" style="margin-bottom:12px;">' + esc(n === SECTIONS.length
+            ? "Ты посмотрел все разделы. Следующий шаг — живой урок."
+            : "Загляни в каждый раздел. После первого урока здесь будут твои домашние задания.") + "</div>" +
+          '<div class="gd-rows">' + rows + "</div>" +
+          '<button type="button" class="cta terra gd-cta" data-gd-trial="hw">Записаться на пробный урок</button>' +
+        "</div>";
     };
     // уроки кроме «Дыхания» гостю закрыты по любому входу (плитка, дорожная карта, «следующий урок»)
     var lockMsg = "В тест-драйве открыт только урок «Дыхание». Остальные откроются после записи на занятия.";
@@ -313,8 +315,26 @@
     if (sc === "cab-wheel") mark("progress");
     if (sc === "warmups" || sc === "song") lockUploads();
     if (sc === "cab-hw") {
+      Array.prototype.forEach.call(app.querySelectorAll("[data-gd-hwgo]"), function (b) {
+        if (b.getAttribute("data-gd-w")) return;
+        b.setAttribute("data-gd-w", "1");
+        b.addEventListener("click", function (e) {
+          e.stopPropagation();
+          var id = b.getAttribute("data-gd-hwgo");
+          var s = SECTIONS.filter(function (x) { return x.id === id; })[0];
+          if (s) s.go();
+        });
+      });
       var hb = app.querySelector('[data-gd-trial="hw"]');
       if (hb && !hb.getAttribute("data-gd-w")) { hb.setAttribute("data-gd-w", "1"); hb.addEventListener("click", function (e) { e.stopPropagation(); goTrial("hw"); }); }
+    }
+    if (sc === "profile" && typeof cabRing === "function") {
+      var tile = app.querySelector(".cab-tile-hw");
+      if (tile && !tile.getAttribute("data-gd-t")) {
+        var seenN = SECTIONS.filter(function (x) { return seen(x.id); }).length;
+        tile.setAttribute("data-gd-t", "1");
+        tile.innerHTML = '<div class="cab-tile-h">Знакомство</div>' + cabRing(seenN / SECTIONS.length, 88, 9, seenN + "\u00a0из\u00a0" + SECTIONS.length, "посмотрено");
+      }
     }
     // «Пополнить уроки» у гостя — запись на пробный
     Array.prototype.forEach.call(app.querySelectorAll('[data-act="cab-renew"]'), function (b) {
@@ -324,7 +344,7 @@
     paintChip();
     // окно тест-драйва «что посмотреть»: при первом входе в Кабинет и в «Домашние задания»
     // за каждое открытие приложения, пока не посмотрены все 7 разделов (Коля, 20.11)
-    if (!G.replay && (sc === "profile" || sc === "cab-hw") && !G.allDone && !G.trkShown[sc] && !document.querySelector(".gd-sheet")) {
+    if (!G.replay && sc === "profile" && !G.allDone && !G.trkShown[sc] && !document.querySelector(".gd-sheet")) {
       G.trkShown[sc] = true;
       var first = !G.store.welcomed;
       if (first) { G.store.welcomed = true; saveStore(); }
