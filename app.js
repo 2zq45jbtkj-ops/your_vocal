@@ -494,6 +494,8 @@ function backTarget() {
     case "admin-vac": return "admin-week";
     case "admin-groups": return "admin-hub";
     case "admin-ext": return "admin-active";
+    case "admin-hw": return "admin-active";
+    case "admin-hw-st": return "admin-hw";
     case "admin-dash": return "admin-hub";
     case "admin-guests": return "admin-hub";
     case "admin-plans": return "admin-hub";
@@ -3729,11 +3731,14 @@ function renderAdminHub() {
   var d = state.adminToday && state.adminToday.ok ? state.adminToday : null;
   var waiting = d ? d.receipts.length + d.questions : 0;
   var newc = d ? d.trials.length : 0;
+  if (window.loadHwSummary) loadHwSummary();
+  var hwNew = window.hwFreshCount ? hwFreshCount() : 0;
   var items = [
     { label: "Сегодня", act: "admin-hub-today", icon: ADM_ICONS["Сегодня"], badge: waiting, badgeColor: "oklch(70% 0.13 80)",
       sub: d ? (d.lessons.length + " " + plural(d.lessons.length, "урок", "урока", "уроков") + " сегодня" + (waiting ? " · ждут: чеки " + d.receipts.length + ", вопросы " + d.questions : "")) : "Уроки дня, чеки и вопросы, которые ждут" },
     { label: "Расписание", act: "admin-hub-week", icon: ADM_ICONS["Расписание"], sub: "Неделя сеткой: твои уроки, студия, обед и английский" },
-    { label: "Действующие ученики", act: "admin-hub-active", icon: ADM_ICONS["Выбор ученика"], sub: "Продлить абонемент, урок глазами ученика, дни рождения, караоке" },
+    { label: "Действующие ученики", act: "admin-hub-active", icon: ADM_ICONS["Выбор ученика"], badge: hwNew,
+      sub: hwNew ? "Новых ДЗ: " + hwNew + " · абонементы, дни рождения, караоке" : "Домашние задания, абонементы, урок глазами ученика, караоке" },
     { label: "Финансы", act: "admin-hub-money", icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="4" width="12" height="8.5" rx="2" stroke="var(--gray)" stroke-width="1.4"/><circle cx="8" cy="8.2" r="1.7" stroke="var(--terra)" stroke-width="1.3"/></svg>', sub: "Доход за месяц: студия и свои ученики, траты, план" },
     { label: "Группы", act: "admin-hub-groups", icon: "<svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\"><circle cx=\"5.5\" cy=\"5.5\" r=\"2.2\" stroke=\"var(--gray)\" stroke-width=\"1.4\"/><circle cx=\"11\" cy=\"6\" r=\"1.8\" stroke=\"var(--gray)\" stroke-width=\"1.3\"/><path d=\"M1.6 13.5c0-2.2 1.7-3.9 3.9-3.9s3.9 1.7 3.9 3.9\" stroke=\"var(--gray)\" stroke-width=\"1.4\" stroke-linecap=\"round\"/><path d=\"M10.2 9.7c.3-.1.5-.1.8-.1 1.9 0 3.4 1.5 3.4 3.4\" stroke=\"var(--terra)\" stroke-width=\"1.3\" stroke-linecap=\"round\"/></svg>", sub: "Заявки в группу и показ групповых новичкам и ученикам" },
     { label: "Новые клиенты", act: "admin-hub-guests", icon: ADM_ICONS["Тестовые клиенты"], badge: newc,
@@ -3747,7 +3752,12 @@ function renderAdminHub() {
   wireActs();
 }
 function renderAdminActive() {
+  if (window.loadHwSummary) loadHwSummary();
+  var hwNew = window.hwFreshCount ? hwFreshCount() : 0;
+  var hwIco = window.hwBall ? '<span style="display:grid;grid-template-columns:12px 12px;gap:2px;">' + hwBall("lecture", 12) + hwBall("song", 12) + hwBall("warmup", 12) + hwBall("karaoke", 12) + "</span>" : ADM_ICONS["Выбор ученика"];
   var items = [
+    { label: "Домашние задания", act: "admin-hub-hw", icon: hwIco, badge: hwNew,
+      sub: hwNew ? "Ждут проверки: " + hwNew + " — лекция, песня, распевки, караоке" : "Всё, что сдали ученики: лекция, песня, распевки, караоке" },
     { label: "Выбор ученика", act: "admin-hub-students", icon: ADM_ICONS["Выбор ученика"], sub: "Пройти урок глазами ученика" },
     { label: "Дни рождения", act: "admin-hub-birthdays", icon: ADM_ICONS["Дни рождения"], sub: "Ближайшие 30 дней" },
     { label: "Разметка караоке", act: "admin-hub-karaoke", icon: ADM_ICONS["Разметка караоке"], sub: "Минус, текст и тайминг строк для песен ученика" },
@@ -6748,6 +6758,7 @@ var ACTS = {
   "admin-hub-birthdays": function () { go("admin-birthdays"); },
   "admin-hub-today": function () { state.adminToday = null; go("admin-today"); },
   "admin-hub-active": function () { go("admin-active"); },
+  "admin-hub-hw": function () { if (window.ADMHW) ADMHW.filter = "new"; go("admin-hw"); },
   "admin-hub-money": function () { state.adminMoney = null; go("admin-money"); },
   "admin-hub-week": function () { state.adminWeek = null; state.admMove = null; go("admin-week"); },
   "admin-week-prev": function () { shiftAdminWeek(-7); },
@@ -6892,6 +6903,8 @@ function render() {
     case "admin-vac": if (window.renderAdminVac) renderAdminVac(); break;
     case "admin-groups": if (window.renderAdminGroups) renderAdminGroups(); break;
     case "admin-ext": if (window.renderAdminExt) renderAdminExt(); break;
+    case "admin-hw": if (window.renderAdminHw) renderAdminHw(); break;
+    case "admin-hw-st": if (window.renderAdminHwStudent) renderAdminHwStudent(); break;
     case "admin-dash": if (window.renderAdminDash) renderAdminDash(); break;
     case "admin-guests": if (window.renderAdminGuests) renderAdminGuests(); break;
     case "admin-plans": renderAdminPlans(); break;

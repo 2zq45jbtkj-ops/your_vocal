@@ -9,7 +9,8 @@
    быстрых ответов ученику через api/telegram-webhook.js). */
 
 import { kvSet } from "./_lib.js";
-import { verifyInitData } from "./_db.js";
+import { verifyInitData, db } from "./_db.js";
+import { ensureHw, hwCat, tgStore, notifyShort } from "./_hw.js";
 
 export const config = { runtime: "edge" };
 
@@ -149,6 +150,71 @@ export default async function handler(req) {
   // подставить чужое имя и свой chat_id и получать ответы Николая вместо ученика.
   var verifiedId = await verifyInitData(initData).catch(function () { return null; });
   if (verifiedId) await rememberStudent(tagKey, verifiedId, firstName, lastName, tgId).catch(function () {});
+
+  /* 28.11: домашка → в приложение (Админ → Домашние задания), в бот — короткое
+     «Новое ДЗ: Имя». Если база недоступна — старый путь ниже (всё целиком в бот),
+     чтобы сдача не потерялась. */
+  if (kind === "quiz" || kind === "song-marks" || kind === "song" || kind === "warmup" || kind === "karaoke-take") {
+    var sql = db();
+    if (sql) {
+      try {
+        var res = await toApp(sql);
+        if (res) return res;
+      } catch (e) {
+        console.log("submit: app path failed, fallback to bot", String(e && e.message ? e.message : e));
+      }
+    }
+  }
+
+  async function toApp(sql) {
+    await ensureHw(sql);
+    var cat = hwCat(kind);
+    var title = "", body = "", msg = null, meta = {};
+    if (kind === "quiz") {
+      var sc = (form.get("score") || "").toString(), tt = (form.get("total") || "").toString();
+      var det = (form.get("details") || "").toString();
+      title = "Тест: " + sc + " из " + tt;
+      body = det;
+      meta = { score: Number(sc) || 0, total: Number(tt) || 0 };
+    } else if (kind === "song-marks") {
+      title = (form.get("marksTitle") || "").toString().slice(0, 60) || "Разметка дыхания в песне";
+      body = (form.get("text") || "").toString();
+    } else {
+      var file = form.get("file");
+      if (!file) return null;
+      var note = (form.get("note") || "").toString().slice(0, 400);
+      body = note;
+      if (kind === "karaoke-take") {
+        title = "Дубль из караоке";
+        msg = await tgStore(token, chatId, "sendAudio", "audio", file);
+        if (!msg.ok) msg = await tgStore(token, chatId, "sendDocument", "document", file);
+      } else {
+        var isPhoto = /^image\//.test(file.type || "") || (kind === "song" && !/^video\//.test(file.type || ""));
+        title = kind === "warmup" ? "Распевки, видео" : isPhoto ? "Разметка песни, фото" : "Задание с песней, видео";
+        var vx = { width: form.get("width"), height: form.get("height"), duration: form.get("duration"), supports_streaming: "true" };
+        msg = isPhoto
+          ? await tgStore(token, chatId, "sendPhoto", "photo", file)
+          : await tgStore(token, chatId, "sendVideo", "video", file, vx);
+        if (!msg.ok) msg = await tgStore(token, chatId, "sendDocument", "document", file);
+        meta = { width: Number(form.get("width")) || 0, height: Number(form.get("height")) || 0, duration: Number(form.get("duration")) || 0 };
+      }
+      if (!msg.ok) return json({ ok: false, error: msg.description || "Telegram отклонил файл" }, 502);
+      msg = msg.result;
+    }
+    var f = fileOf(msg);
+    var skey = verifiedId ? "tg:" + verifiedId : accessToken ? "code:" + accessToken : "name:" + tagKey;
+    var shown = ((firstName + " " + lastName).trim()) || "Без имени";
+    await sql`INSERT INTO hw_items (skey, name, tg_id, is_test, cat, kind, lesson_no, topic, title, body, file_id, file_type, meta)
+      VALUES (${skey}, ${shown}, ${verifiedId || ""}, ${isAdminTest}, ${cat}, ${kind}, ${lessonNo}, ${lessonTitle},
+              ${title}, ${body}, ${f.fileId || ""}, ${f.fileType || ""}, ${JSON.stringify(meta)})`;
+    var lessonLine = lessonTitle ? (lessonNo ? "Урок " + lessonNo + " «" + lessonTitle + "»" : "«" + lessonTitle + "»") : "";
+    var mid = await notifyShort(token, chatId, { skey: skey, name: shown, cat: cat, lesson: lessonLine, isTest: isAdminTest }).catch(function () { return null; });
+    if (mid) await rememberMessage(mid, tagKey).catch(function () {});
+    // бот записи: «Ученики → ДЗ» и «Мои записи» ученика (file_id тот же бот)
+    await save(f.fileType === "audio" || kind === "karaoke-take" ? "audio" : kind === "quiz" ? "test" : kind === "song-marks" || f.fileType === "photo" ? "markup" : "video",
+      kind === "song-marks" && title === "Разметка дыхания (песни)" ? "Разметка дыхания в песне" : title, body, msg);
+    return json({ ok: true, inApp: true });
+  }
 
   try {
     if (kind === "quiz") {
