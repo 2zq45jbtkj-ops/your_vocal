@@ -214,6 +214,12 @@ function cleanOwnName(n) { return String(n || "").replace(/\s*\((admin|тест|
 function loadState() {
   loadStateRaw();
   var t = readAdminKey();
+  // 27.11: «📱 Открыть в приложении» под уведомлениями бота — сразу в режим админа
+  if (t && /[?&]adm=1(&|$)/.test(location.search)) {
+    adminOnSet(true);
+    state.isAdmin = true; state._siteAuth = t; state.screen = "admin-hub"; state._admOpen = true;
+    return;
+  }
   if (t) {
     if (!state.accessToken) {
       // своей карточки на телефоне ещё нет — находим её (нужен доступ админа)
@@ -485,6 +491,9 @@ function backTarget() {
     case "admin-money": return "admin-hub";
     case "book": return window.GUEST_ON ? "courses" : "profile";
     case "admin-week": return "admin-hub";
+    case "admin-vac": return "admin-week";
+    case "admin-groups": return "admin-hub";
+    case "admin-ext": return "admin-active";
     case "admin-dash": return "admin-hub";
     case "admin-guests": return "admin-hub";
     case "admin-plans": return "admin-hub";
@@ -3721,8 +3730,9 @@ function renderAdminHub() {
     { label: "Сегодня", act: "admin-hub-today", icon: ADM_ICONS["Сегодня"], badge: waiting, badgeColor: "oklch(70% 0.13 80)",
       sub: d ? (d.lessons.length + " " + plural(d.lessons.length, "урок", "урока", "уроков") + " сегодня" + (waiting ? " · ждут: чеки " + d.receipts.length + ", вопросы " + d.questions : "")) : "Уроки дня, чеки и вопросы, которые ждут" },
     { label: "Расписание", act: "admin-hub-week", icon: ADM_ICONS["Расписание"], sub: "Неделя сеткой: твои уроки, студия, обед и английский" },
-    { label: "Действующие ученики", act: "admin-hub-active", icon: ADM_ICONS["Выбор ученика"], sub: "Пройти урок глазами ученика, дни рождения, песни для караоке" },
+    { label: "Действующие ученики", act: "admin-hub-active", icon: ADM_ICONS["Выбор ученика"], sub: "Продлить абонемент, урок глазами ученика, дни рождения, караоке" },
     { label: "Финансы", act: "admin-hub-money", icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="4" width="12" height="8.5" rx="2" stroke="var(--gray)" stroke-width="1.4"/><circle cx="8" cy="8.2" r="1.7" stroke="var(--terra)" stroke-width="1.3"/></svg>', sub: "Доход за месяц: студия и свои ученики, траты, план" },
+    { label: "Группы", act: "admin-hub-groups", icon: "<svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\"><circle cx=\"5.5\" cy=\"5.5\" r=\"2.2\" stroke=\"var(--gray)\" stroke-width=\"1.4\"/><circle cx=\"11\" cy=\"6\" r=\"1.8\" stroke=\"var(--gray)\" stroke-width=\"1.3\"/><path d=\"M1.6 13.5c0-2.2 1.7-3.9 3.9-3.9s3.9 1.7 3.9 3.9\" stroke=\"var(--gray)\" stroke-width=\"1.4\" stroke-linecap=\"round\"/><path d=\"M10.2 9.7c.3-.1.5-.1.8-.1 1.9 0 3.4 1.5 3.4 3.4\" stroke=\"var(--terra)\" stroke-width=\"1.3\" stroke-linecap=\"round\"/></svg>", sub: "Заявки в группу и показ групповых новичкам и ученикам" },
     { label: "Новые клиенты", act: "admin-hub-guests", icon: ADM_ICONS["Тестовые клиенты"], badge: newc,
       sub: newc ? "Заявок на пробный: " + newc + " · кто открывал тест-драйв и что нажимал" : "Кто открывал тест-драйв и что нажимал — анимацией" }
   ];
@@ -3737,7 +3747,8 @@ function renderAdminActive() {
   var items = [
     { label: "Выбор ученика", act: "admin-hub-students", icon: ADM_ICONS["Выбор ученика"], sub: "Пройти урок глазами ученика" },
     { label: "Дни рождения", act: "admin-hub-birthdays", icon: ADM_ICONS["Дни рождения"], sub: "Ближайшие 30 дней" },
-    { label: "Разметка караоке", act: "admin-hub-karaoke", icon: ADM_ICONS["Разметка караоке"], sub: "Минус, текст и тайминг строк для песен ученика" }
+    { label: "Разметка караоке", act: "admin-hub-karaoke", icon: ADM_ICONS["Разметка караоке"], sub: "Минус, текст и тайминг строк для песен ученика" },
+    { label: "Продлить абонемент", act: "admin-hub-ext", icon: "<svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\"><rect x=\"2.5\" y=\"3.5\" width=\"11\" height=\"10\" rx=\"2\" stroke=\"var(--gray)\" stroke-width=\"1.4\"/><path d=\"M2.5 6.5h11M5.5 2v3M10.5 2v3\" stroke=\"var(--gray)\" stroke-width=\"1.4\" stroke-linecap=\"round\"/><path d=\"M6 10h4M8.5 8.6 10 10l-1.5 1.4\" stroke=\"var(--terra)\" stroke-width=\"1.3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>", sub: "Ученик заболел или не может заниматься — срок +N дней" }
   ];
   app.innerHTML =
     '<div class="top pb8">' + backBtn("back") +
@@ -4004,7 +4015,9 @@ function renderAdminWeek() {
     var banner = mv ? '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:10px;border-radius:12px;background:oklch(60% 0.13 38 / .12);border:1px solid oklch(60% 0.13 38 / .35);">' +
       '<div style="flex:1;font-size:13px;line-height:1.3;"><b>Перенос: ' + esc(mv.name || "") + '</b><br><span style="color:var(--gray)">Нажми на новое место в сетке — время округлю до 15 минут</span></div>' +
       '<button class="filter-btn" id="admw-mv-x">Отмена</button></div>' : '';
-    body = banner + nav + '<div id="admw-grid">' + grid + '</div>' + legend +
+    body = banner + nav +
+      (mv ? '' : '<button class="filter-btn" data-act="admin-week-vac" style="width:100%;margin-bottom:10px;">🌴 Отпуск: закрыть дни</button>') +
+      '<div id="admw-grid">' + grid + '</div>' + legend +
       (mv ? '' : '<div class="lesson-sub" style="margin-top:8px;font-size:11.5px;">Нажми на занятие — подробности. Удерживай — перенести или отменить.</div>');
     state._admWk = { H0: H0, PX: PX };
   }
@@ -6842,6 +6855,9 @@ function render() {
     case "admin-money": renderAdminMoney(); break;
     case "book": renderBook(); break;
     case "admin-week": renderAdminWeek(); break;
+    case "admin-vac": if (window.renderAdminVac) renderAdminVac(); break;
+    case "admin-groups": if (window.renderAdminGroups) renderAdminGroups(); break;
+    case "admin-ext": if (window.renderAdminExt) renderAdminExt(); break;
     case "admin-dash": if (window.renderAdminDash) renderAdminDash(); break;
     case "admin-guests": if (window.renderAdminGuests) renderAdminGuests(); break;
     case "admin-plans": renderAdminPlans(); break;

@@ -6,7 +6,7 @@
 import { json, isAdminReq, verifiedTgId } from "./_db.js";
 export const config = { runtime: "edge" };
 var BOT = "https://vocal-bot.vercel.app/api/";
-var PATHS = { app_admin: 1, app_book: 1, studio_sync: 1 };
+var PATHS = { app_admin: 1, app_book: 1, studio_sync: 1, app_extra: 1 };
 function hex(buf) { return Array.prototype.map.call(new Uint8Array(buf), function (b) { return ("0" + b.toString(16)).slice(-2); }).join(""); }
 async function hmac(key, msg) {
   var k = await crypto.subtle.importKey("raw", key, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
