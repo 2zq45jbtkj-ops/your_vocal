@@ -333,7 +333,7 @@
       if (tile && !tile.getAttribute("data-gd-t")) {
         var seenN = SECTIONS.filter(function (x) { return seen(x.id); }).length;
         tile.setAttribute("data-gd-t", "1");
-        tile.innerHTML = '<div class="cab-tile-h">Знакомство</div>' + cabRing(seenN / SECTIONS.length, 88, 9, seenN + "\u00a0из\u00a0" + SECTIONS.length, "посмотрено");
+        tile.innerHTML = '<div class="cab-tile-h">Домашние задания<span class="gd-tile-sub">знакомство</span></div>' + cabRing(seenN / SECTIONS.length, 88, 9, seenN + "\u00a0из\u00a0" + SECTIONS.length, "посмотрено");
       }
     }
     // «Пополнить уроки» у гостя — запись на пробный
