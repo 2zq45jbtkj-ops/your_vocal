@@ -805,12 +805,17 @@
         onUploadProgress: function (ev) { onProgress(Math.min(99, Math.round((ev.loaded || 0) / blob.size * 100))); }
       });
     }).then(function (up) {
-      return supportPost({ action: "start", text: (head || "🎤 Распевки (видео)") + " · урок «" + (LESSON ? LESSON.title : "") + "»\n" + note, counts: { photo: 0, video: 1 },
-        firstName: state.firstName || "", lastName: state.lastName || "" })
-        .then(function (d) {
-          return supportPost({ action: "send", headerId: d.headerId, name: d.name || "",
-            items: [{ pathname: up.pathname, size: blob.size, kind: "video", name: name, width: meta && meta.width, height: meta && meta.height, duration: meta && meta.duration }] });
-        });
+      // 28.11: большое видео ложится в «Домашние задания» админа (api/hw-big.mjs),
+      // в бот Николаю — только короткое «Новое ДЗ: Имя»
+      var song = /Песня/.test(head || "");
+      return fetch("/api/hw-big", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
+        initData: who.initData, accessToken: who.accessToken, pathname: up.pathname, size: blob.size,
+        title: song ? "Задание с песней, видео" : "Распевки, видео", note: note,
+        firstName: state.firstName || "", lastName: state.lastName || "", adminTest: state.adminMode ? 1 : 0,
+        lessonNo: LESSON && LESSON.id ? String(LESSON.id) : "", lessonTitle: LESSON ? LESSON.title : "",
+        width: meta && meta.width, height: meta && meta.height, duration: meta && meta.duration, cat: song ? "song" : "warmup"
+      }) }).then(function (r) { return r.json().catch(function () { return { ok: false }; }); })
+        .then(function (d) { if (!d || !d.ok) throw new Error((d && d.error) || "hw-big"); return d; });
     });
   }
 

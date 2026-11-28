@@ -57,7 +57,7 @@ export default async function handler(req) {
   var skey = u.searchParams.get("student");
   if (skey) {
     var items = await sql`SELECT id, created_at, name, tg_id, is_test, cat, kind, lesson_no, topic, title, body,
-        file_type, (file_id <> '') AS has_file, meta, status, checked_at, reply
+        file_type, (file_id <> '' OR meta ? 'blob') AS has_file, meta, status, checked_at, reply
       FROM hw_items WHERE skey = ${skey} ORDER BY created_at DESC LIMIT 300`;
     var out = [];
     for (var i = 0; i < items.length; i++) {

@@ -1,0 +1,45 @@
+/* Распевки «Силы голоса» (voice-trainer.js) — поверх стилей тренажёра «Дыхания» */
+.vt-ringw { position: relative; }
+.vt-badge { position: absolute; right: -4px; top: -4px; width: 34px; height: 34px; border-radius: 17px; display: flex; align-items: center; justify-content: center; font: 800 16px 'Manrope', sans-serif; color: #12171C; box-shadow: 0 2px 8px rgba(0,0,0,.35); border: 2px solid var(--bg); transition: background .3s; }
+.vt-badge:empty { display: none; }
+.vt-cue { font-size: 30px; }
+.vt-cue.small { font-size: 22px; }
+.vt-cue.rest { background: var(--bgmuted); color: var(--ink); font-size: 17px; box-shadow: none; }
+.vt-lane { overflow: hidden; }
+.vt-strip { position: absolute; left: 0; top: 0; will-change: transform; overflow: visible; }
+.vt-guide { stroke: var(--line); stroke-width: 1; }
+.vt-note { fill: var(--tr-c); }
+.vt-note-tx { fill: var(--tr-on); font: 800 12.5px 'Manrope', sans-serif; }
+.vt-glide { stroke: var(--tr-c); }
+.vt-glide-tx { fill: var(--ink); font: 700 14px 'Inter', sans-serif; }
+.vt-gap-tx { fill: var(--gray); font: 600 11px 'Inter', sans-serif; }
+
+.vt-keys { position: relative; height: 58px; margin-top: 10px; display: flex; }
+.vt-w { flex: 1; border: 1px solid #2b3238; border-radius: 0 0 6px 6px; background: #e8e4dc; margin-right: 1px; transition: background .12s; }
+.vt-w.ton { background: color-mix(in srgb, var(--tr-c) 50%, #e8e4dc); }
+.vt-w.on { background: var(--tr-c); }
+.vt-b { position: absolute; top: 0; width: 5.2%; height: 60%; background: #1a1f24; border-radius: 0 0 4px 4px; z-index: 2; transition: background .12s; }
+.vt-b.ton { background: color-mix(in srgb, var(--tr-c) 55%, #1a1f24); }
+.vt-b.on { background: var(--tr-c); }
+.vt-cap { font: 600 12px 'Inter', sans-serif; color: var(--gray); margin-top: 6px; display: flex; justify-content: space-between; }
+
+.vt-meter { margin-top: 14px; }
+.vt-meter-row { display: flex; justify-content: space-between; font: 600 12.5px 'Inter', sans-serif; color: var(--gray); margin-bottom: 6px; }
+.vt-meter-row b { color: var(--ink); }
+.vt-bar { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; height: 14px; }
+.vt-bar i { border-radius: 4px; opacity: .28; transition: opacity .1s; }
+.vt-bar i.on { opacity: 1; }
+.vt-bar i.tgt { opacity: 1; outline: 2px solid var(--ink); outline-offset: 1px; }
+.vt-bar-n { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; margin-top: 4px; font: 600 10.5px 'Inter', sans-serif; color: var(--gray); text-align: center; }
+.vt-msg { margin-top: 8px; display: flex; align-items: center; gap: 8px; padding: 8px 11px; border-radius: 12px; background: var(--bgmuted); font: 600 12.5px/1.35 'Inter', sans-serif; color: var(--ink); }
+.vt-msg.cal { background: color-mix(in srgb, var(--blue) 16%, transparent); }
+.vt-msg.ok { background: color-mix(in srgb, #3a9a63 20%, transparent); }
+.vt-msg svg { flex: none; }
+.vt-voice { margin-top: 10px; grid-template-columns: 1fr 1fr !important; }
+.vt-voice button { white-space: nowrap; }
+
+/* запись */
+.vt-cam-ring { position: absolute; right: 6px; bottom: 6px; transform: scale(.66); transform-origin: right bottom; }
+.vt-rec-meter { flex: none; padding: 0 18px; }
+.vt-rec-meter .vt-meter { margin-top: 8px; }
+.vt-rec .tr-lane-rec { margin-top: 8px; }

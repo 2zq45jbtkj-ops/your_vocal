@@ -507,6 +507,7 @@ function backTarget() {
     case "pitch": return "profile";
     case "bylo": return "profile";
     case "trainer": case "trainer-ex": case "trainer-rec": case "trainer-done": return window.trainerBackTarget ? trainerBackTarget() : "profile";
+    case "vt-ex": case "vt-rec": case "vt-done": return window.voiceTrainerBackTarget ? voiceTrainerBackTarget() : "warmups";
     case "pitch-topic": return "pitch";
     case "pitch-sing": case "pitch-score": return "pitch-topic";
     case "admin-karaoke": return "admin-active";
@@ -4615,6 +4616,7 @@ function activeDockTab() {
   if (MAIN_TAB_SCREENS.indexOf(state.screen) !== -1) return state.screen;
   if (LESSON_SUB_SCREENS.indexOf(state.screen) !== -1) return "courses";
   if (CAB_SCREENS.indexOf(state.screen) !== -1 || state.screen === "karaoke" || state.screen === "pitch" || state.screen === "pitch-topic" || state.screen === "bylo") return "profile";
+  if (state.screen === "vt-ex" || state.screen === "vt-rec" || state.screen === "vt-done") return "courses";
   if (state.screen === "trainer" || state.screen === "trainer-ex" || state.screen === "trainer-rec" || state.screen === "trainer-done") return (window.TRAINER && (TRAINER.from === "lesson-home" || TRAINER.from === "warmups")) ? "courses" : "profile";
   return null;
 }
@@ -5622,6 +5624,25 @@ function renderWarmups() {
     if (window.trainerWireCamCard) trainerWireCamCard();
     return;
   }
+  // «Сила голоса» (28.11, вариант В): распевки под пианино — глиссандо и секвенции
+  // с цифрой громкости у каждого упражнения, как тренажёр «Дыхания»
+  if (LESSON && LESSON.warmups && LESSON.warmups.voice && window.voiceSectionsHtml) {
+    app.innerHTML =
+      stepHeader("Распевки «" + esc(LESSON.title) + "»", 3) +
+      '<div class="warmups-body">' +
+        '<div class="instruction-note">' + LESSON.warmups.instruction + "</div>" +
+        (window.trainerCamCardHtml ? trainerCamCardHtml() : "") +
+        voiceSectionsHtml() +
+        '<div class="section-label" style="margin:22px 0 8px;">Или прикрепи готовое видео</div>' +
+        '<div id="hw-zone"></div>' +
+      "</div>" +
+      '<div class="bottom-cta" style="padding-top:0;"><button class="cta" data-act="finish-warmups">Продолжить: упражнение с песней</button></div>';
+    renderHwZone();
+    wireActs();
+    voiceWireSections();
+    if (window.trainerWireCamCard) trainerWireCamCard();
+    return;
+  }
   // «Сила голоса»: громкометр 1–10 с видео Николаю (28.11)
   if (LESSON && LESSON.warmups && LESSON.warmups.meter && window.meterCardsHtml) {
     app.innerHTML =
@@ -5842,6 +5863,7 @@ function stopAllMedia() {
   if (window.byloStopAll) window.byloStopAll();
   if (window.trainerStopAll) window.trainerStopAll();
   if (window.meterStopAll) window.meterStopAll();
+  if (window.voiceTrainerStopAll) window.voiceTrainerStopAll();
   if (window.effortSongStop) window.effortSongStop();
 }
 
@@ -6914,6 +6936,7 @@ function render() {
     case "pitch": case "pitch-topic": case "pitch-sing": case "pitch-score": renderPitchScreen(); break;
     case "bylo": renderByloScreen(); break;
     case "trainer": case "trainer-ex": case "trainer-rec": case "trainer-done": if (window.renderTrainerScreen) renderTrainerScreen(); break;
+    case "vt-ex": case "vt-rec": case "vt-done": if (window.renderVoiceTrainer) renderVoiceTrainer(); break;
     case "meter": if (window.renderMeterScreen) renderMeterScreen(); break;
     case "lesson-home": renderLessonHome(); break;
     case "lesson-soon": renderLessonSoon(); break;

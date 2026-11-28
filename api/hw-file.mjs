@@ -4,21 +4,24 @@
 
 import { db } from "./_db.js";
 import { fileSigOk } from "./_hw.js";
-
-export const config = { runtime: "edge" };
+import { fileLink } from "./_support.mjs";
 
 var TYPES = { video: "video/mp4", photo: "image/jpeg", audio: "audio/mpeg" };
 
 function txt(t, s) { return new Response(t, { status: s, headers: { "content-type": "text/plain; charset=utf-8" } }); }
 
-export default async function handler(req) {
+export async function GET(req) {
   var u = new URL(req.url);
   var id = u.searchParams.get("id") || "";
   if (!/^\d+$/.test(id) || !(await fileSigOk(id, u.searchParams.get("e"), u.searchParams.get("s")))) return txt("Ссылка устарела — обнови экран", 403);
   var sql = db();
   if (!sql) return txt("База не подключена", 500);
-  var rows = await sql`SELECT file_id, file_type FROM hw_items WHERE id = ${Number(id)}`;
-  if (!rows.length || !rows[0].file_id) return txt("Файла нет", 404);
+  var rows = await sql`SELECT file_id, file_type, meta FROM hw_items WHERE id = ${Number(id)}`;
+  if (!rows.length) return txt("Файла нет", 404);
+  // большое видео лежит в хранилище (api/hw-big.mjs) — отдаёт support-file по подписи
+  var blob = rows[0].meta && rows[0].meta.blob;
+  if (blob) return new Response(null, { status: 302, headers: { location: fileLink(u.origin, blob), "cache-control": "no-store" } });
+  if (!rows[0].file_id) return txt("Файла нет", 404);
   var token = String(process.env.TELEGRAM_BOT_TOKEN || "").trim();
   var g = await fetch("https://api.telegram.org/bot" + token + "/getFile?file_id=" + encodeURIComponent(rows[0].file_id)).then(function (r) { return r.json(); }).catch(function () { return null; });
   if (!g || !g.ok) return txt("Telegram не отдал файл" + (g && g.description ? ": " + g.description : ""), 502);
